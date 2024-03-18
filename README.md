@@ -3,10 +3,12 @@
 Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designed for simulating global illumination and complex lighting effects, featuring a lot of post-processing effects. Renders that you create can be easly saved to disk as PNG images.
 
 # Gallery
+![BlackDragon](./Gallery/BlackDragon.png)
+![Dogs](./Gallery/Dogs.png)
 ![Monster](./Gallery/MonsterRough.png)
 ![MonsterInk](./Gallery/MonsterInk.png)
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
-![Dragon](./Gallery/DisneyDragon.png)
+![TranslucentDragon](./Gallery/TranslucentDragon.png)
 ![CornellBox](./Gallery/CornellBox.png)
 
 # Features
