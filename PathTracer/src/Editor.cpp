@@ -243,6 +243,7 @@ void Editor::RenderImGui()
 			ImGui::Separator();
 			ImGui::Checkbox("Show Denoised Image", &State::ShowDenoised);
 
+			ImGui::Text("Files Are Saved To PathTracer/Rendered_Images/");
 			if (ImGui::Button("Save to file"))
 			{
 				m_DrawFileInfo.SaveToFile = true;

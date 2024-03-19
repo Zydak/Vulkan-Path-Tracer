@@ -10,6 +10,7 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
 ![CornellBox](./Gallery/CornellBox.png)
+![Editor](./Gallery/Editor.png)
 
 # Features
 - Complex Materials
@@ -45,3 +46,28 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
 - Camera made using quaternions
+
+# Building
+## Windows Only :(
+
+- Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
+- Go to Releases and download Shaderc.zip
+- Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
+- Run `setup.bat` in main directory.
+- Open generated solution in Visual Studio.
+
+# Credits
+## Resources
+- https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/ - Introduction to Vulkan Ray Tracing Pipeline
+- https://www.youtube.com/@Acerola_t - Post Processing Effects
+- https://github.com/knightcrawler25/GLSL-PathTracer - Great Resource for BSDFs
+- https://github.com/nvpro-samples/vk_denoise - Integrating Optix
+- https://www.scratchapixel.com/ - Great Resources for learning math behind path tracing
+
+## Models
+- https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
+- https://pbrt.org/scenes-v3 - Glass & Small Dragon
+- https://www.blender.org/download/demo-files/ - Monster
+- https://polyhaven.com/hdris - Env Maps
+- https://polyhaven.com/a/ship_pinnace - Ship
+- https://benedikt-bitterli.me/resources/ - Dragon

@@ -1,4 +1,4 @@
-workspace "Vulture"
+workspace "PathTracer"
     configurations { "Debug", "Release", "Distribution" }
     platforms { "Windows" }
 
@@ -28,5 +28,4 @@ globalIncludes =
 }
 	
 include "Vulture"
-include "2D"
 include "PathTracer"

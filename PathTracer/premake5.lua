@@ -24,6 +24,8 @@ project "PathTracer"
 		"Vulture",
 	}
 
+	defines {"_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS"}
+
 	filter "system:windows"
 		defines "WIN"
 		systemversion "latest"
