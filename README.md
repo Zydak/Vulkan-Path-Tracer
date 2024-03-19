@@ -47,6 +47,10 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 - Image Denoising using Nvidia Optix Denoiser
 - Camera made using quaternions
 
+# Running
+- Download [Win64.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Win64.zip) from Releases.
+- Unzip and run `Release/PathTracer/PathTracer.exe`.
+
 # Building
 ## Windows Only :(
 
