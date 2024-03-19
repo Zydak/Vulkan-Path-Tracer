@@ -48,12 +48,13 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 - Camera made using quaternions
 
 # Running
+- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Download [Win64.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Win64.zip) from Releases.
 - Unzip and run `Release/PathTracer/PathTracer.exe`.
 
 # Building
 ## Windows Only :(
-
+- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
 - Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Shaderc/Shaderc.zip)
 - Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
