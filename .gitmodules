@@ -1,0 +1,3 @@
+[submodule "Vulture"]
+	path = Vulture
+	url = https://github.com/Zydak/Vulture
