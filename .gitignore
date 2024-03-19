@@ -1,0 +1,11 @@
+bin/
+bin-int/
+.vs/
+**/*.vcxproj.*
+**/*.vcxproj
+**.sln
+**/Vulture.log
+PathTracer/assets/panther.obj
+**/CachedShaders/**
+PathTracer/assets/SmallDragon.obj
+PathTracer/assets/SmallDragon.mtl
