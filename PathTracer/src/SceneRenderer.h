@@ -71,7 +71,8 @@ public:
 	inline Vulture::PushConstant<PushConstantRay>& GetRTPush() { return m_PushContantRayTrace; };
 	inline Vulture::PushConstant<InkPushConstant>& GetInkPush() { return m_InkEffect.GetPush(); };
 	inline Vulture::PushConstant<PosterizePushConstant>& GetPosterizePush() { return m_PosterizeEffect.GetPush(); };
-	inline Vulture::Ref<Vulture::DescriptorSet> GetRTSet() { return m_RayTracingDescriptorSet; };
+	inline Vulture::Ref<Vulture::Buffer> GetMaterialBuffer() { return m_RayTracingMaterialsBuffer; };
+	inline Vulture::Ref<Vulture::Buffer> GetMeshBuffer() { return m_RayTracingMeshesBuffer; };
 
 	inline Vulture::Bloom* GetBloom() { return &m_Bloom; };
 
@@ -138,7 +139,14 @@ private:
 	Vulture::Ref<Vulture::Image> m_DenoisedImage;
 	Vulture::Ref<Vulture::Image> m_PathTracingImage;
 
-	Vulture::Ref<Vulture::DescriptorSet> m_RayTracingDescriptorSet; // there is only one set for ray tracing
+	// Descriptor buffers
+	Vulture::Ref<Vulture::Buffer> m_GlobalSetBuffer;
+	Vulture::Ref<Vulture::Buffer> m_RayTracingSetBuffer;
+	Vulture::Ref<Vulture::Buffer> m_RayTracingMaterialsBuffer;
+	Vulture::Ref<Vulture::Buffer> m_RayTracingMeshesBuffer;
+	Vulture::Ref<Vulture::Buffer> m_RayTracingDoFBuffer;
+
+	Vulture::Ref<Vulture::DescriptorSet> m_RayTracingDescriptorSet;
 	std::vector<Vulture::Ref<Vulture::DescriptorSet>> m_GlobalDescriptorSets;
 	Vulture::Pipeline m_RtPipeline;
 	

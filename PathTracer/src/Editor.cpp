@@ -449,7 +449,7 @@ void Editor::ImGuiSceneSettings()
 		if (valuesChanged)
 		{
 			// Upload to GPU
-			m_SceneRenderer->GetRTSet()->GetBuffer(3)->WriteToBuffer(
+			m_SceneRenderer->GetMaterialBuffer()->WriteToBuffer(
 				m_CurrentMaterials->data(),
 				sizeof(Vulture::Material) * (*m_CurrentMaterials).size(),
 				0
@@ -463,7 +463,7 @@ void Editor::ImGuiSceneSettings()
 		if (valuesChanged)
 		{
 			// Upload to GPU
-			m_SceneRenderer->GetRTSet()->GetBuffer(3)->WriteToBuffer(
+			m_SceneRenderer->GetMaterialBuffer()->WriteToBuffer(
 				((uint8_t*)m_CurrentMaterials->data()) + (uint8_t)sizeof(Vulture::Material) * (uint8_t)currentMaterialItem,
 				sizeof(Vulture::Material),
 				sizeof(Vulture::Material) * currentMaterialItem

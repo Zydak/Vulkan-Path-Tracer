@@ -96,7 +96,7 @@ SceneRenderer::~SceneRenderer()
 
 void SceneRenderer::RecreateRayTracingDescriptorSets()
 {
-	m_RayTracingDescriptorSet->UpdateImageSampler(1, Vulture::Renderer::GetSamplerHandle(), m_PathTracingImage->GetImageView(), VK_IMAGE_LAYOUT_GENERAL);
+	m_RayTracingDescriptorSet->UpdateImageSampler(1, { Vulture::Renderer::GetSamplerHandle(), m_PathTracingImage->GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
 }
 
 // TODO description
@@ -158,7 +158,7 @@ bool SceneRenderer::RayTrace(const glm::vec4& clearColor)
 
 	if (m_DrawInfo.AutoDoF)
 	{
-		memcpy(&m_DrawInfo.FocalLength, m_RayTracingDescriptorSet->GetBuffer(8)->GetMappedMemory(), sizeof(float));
+		memcpy(&m_DrawInfo.FocalLength, m_RayTracingDoFBuffer->GetMappedMemory(), sizeof(float));
 	}
 
 	return true;
@@ -403,6 +403,13 @@ void SceneRenderer::CreateDescriptorSets()
 {
 	m_GlobalDescriptorSets.clear();
 
+	m_GlobalSetBuffer = std::make_shared<Vulture::Buffer>();
+	Vulture::Buffer::CreateInfo bufferInfo{};
+	bufferInfo.InstanceSize = sizeof(GlobalUbo);
+	bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	bufferInfo.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	m_GlobalSetBuffer->Init(bufferInfo);
+
 	// Global Set
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
@@ -412,28 +419,18 @@ void SceneRenderer::CreateDescriptorSets()
 
 		m_GlobalDescriptorSets.push_back(std::make_shared<Vulture::DescriptorSet>());
 		m_GlobalDescriptorSets[i]->Init(&Vulture::Renderer::GetDescriptorPool(), { bin, bin1, bin2 });
-		m_GlobalDescriptorSets[i]->AddUniformBuffer(0, sizeof(GlobalUbo));
+		m_GlobalDescriptorSets[i]->AddBuffer(0, m_GlobalSetBuffer->DescriptorInfo());
 
 		m_GlobalDescriptorSets[i]->AddImageSampler(
 			1,
-			Vulture::Renderer::GetSamplerHandle(),
+			{ Vulture::Renderer::GetSamplerHandle(),
 			Vulture::Renderer::GetEnv()->GetImageView(),
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
-		m_GlobalDescriptorSets[i]->AddStorageBuffer(2, (uint32_t)Vulture::Renderer::GetEnv()->GetAccelBuffer()->GetBufferSize(), true, true);
+		m_GlobalDescriptorSets[i]->AddBuffer(2, Vulture::Renderer::GetEnv()->GetAccelBuffer()->DescriptorInfo());
 
 		m_GlobalDescriptorSets[i]->Build();
-
-		Vulture::Buffer::CopyBuffer(
-			Vulture::Renderer::GetEnv()->GetAccelBuffer()->GetBuffer(),
-			m_GlobalDescriptorSets[i]->GetBuffer(2)->GetBuffer(),
-			Vulture::Renderer::GetEnv()->GetAccelBuffer()->GetBufferSize(),
-			0, 0,
-			Vulture::Device::GetGraphicsQueue(),
-			0,
-			Vulture::Device::GetGraphicsCommandPool()
-		);
 	}
 
 	
@@ -451,12 +448,39 @@ void SceneRenderer::CreateDescriptorSets()
 
 void SceneRenderer::CreateRayTracingDescriptorSets()
 {
+	{
+		m_RayTracingMeshesBuffer = std::make_shared<Vulture::Buffer>();
+		Vulture::Buffer::CreateInfo meshesBufferInfo{};
+		meshesBufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000;
+		meshesBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		meshesBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_RayTracingMeshesBuffer->Init(meshesBufferInfo);
+	}
+
+	{
+		m_RayTracingMaterialsBuffer = std::make_shared<Vulture::Buffer>();
+		Vulture::Buffer::CreateInfo materialBufferInfo{};
+		materialBufferInfo.InstanceSize = sizeof(Vulture::Material) * 50000;
+		materialBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		materialBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_RayTracingMaterialsBuffer->Init(materialBufferInfo);
+	}
+
+	{
+		m_RayTracingDoFBuffer = std::make_shared<Vulture::Buffer>();
+		Vulture::Buffer::CreateInfo materialBufferInfo{};
+		materialBufferInfo.InstanceSize = sizeof(float);
+		materialBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		materialBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		m_RayTracingDoFBuffer->Init(materialBufferInfo);
+	}
+
 	uint32_t texturesCount = m_CurrentSceneRendered->GetMeshCount();
 	{
 		Vulture::DescriptorSetLayout::Binding bin0{ 0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin3{ 3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin3{ 3, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin4{ 4, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin5{ 5, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
@@ -472,9 +496,9 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 		asInfo.pAccelerationStructures = &tlas;
 
 		m_RayTracingDescriptorSet->AddAccelerationStructure(0, asInfo);
-		m_RayTracingDescriptorSet->AddImageSampler(1, Vulture::Renderer::GetSamplerHandle(), m_PathTracingImage->GetImageView(), VK_IMAGE_LAYOUT_GENERAL);
-		m_RayTracingDescriptorSet->AddStorageBuffer(2, sizeof(MeshAdresses) * 50000, false, true);
-		m_RayTracingDescriptorSet->AddStorageBuffer(3, sizeof(Vulture::Material) * 50000, false, true);
+		m_RayTracingDescriptorSet->AddImageSampler(1, { Vulture::Renderer::GetSamplerHandle(), m_PathTracingImage->GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
+		m_RayTracingDescriptorSet->AddBuffer(2, m_RayTracingMeshesBuffer->DescriptorInfo());
+		m_RayTracingDescriptorSet->AddBuffer(3, m_RayTracingMaterialsBuffer->DescriptorInfo());
 
 		auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::ModelComponent>();
 		for (auto& entity : view)
@@ -484,39 +508,39 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					4,
-					Vulture::Renderer::GetSamplerHandle(),
+					{ Vulture::Renderer::GetSamplerHandle(),
 					modelComp.Model->GetAlbedoTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
 			for (int j = 0; j < (int)modelComp.Model->GetNormalTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					5,
-					Vulture::Renderer::GetSamplerHandle(),
+					{ Vulture::Renderer::GetSamplerHandle(),
 					modelComp.Model->GetNormalTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
 			for (int j = 0; j < (int)modelComp.Model->GetRoughnessTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					6,
-					Vulture::Renderer::GetSamplerHandle(),
+					{ Vulture::Renderer::GetSamplerHandle(),
 					modelComp.Model->GetRoughnessTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
 			for (int j = 0; j < (int)modelComp.Model->GetMetallnessTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					7,
-					Vulture::Renderer::GetSamplerHandle(),
+					{ Vulture::Renderer::GetSamplerHandle(),
 					modelComp.Model->GetMetallnessTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
-			m_RayTracingDescriptorSet->AddStorageBuffer(8, sizeof(float));
+			m_RayTracingDescriptorSet->AddBuffer(8, m_RayTracingDoFBuffer->DescriptorInfo());
 		}
 		
 		m_RayTracingDescriptorSet->Build();
@@ -549,11 +573,11 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 
 		VL_CORE_ASSERT(meshSizes, "No meshes found?");
 
-		m_RayTracingDescriptorSet->GetBuffer(2)->WriteToBuffer(meshAddresses.data(), meshSizes, 0);
-		m_RayTracingDescriptorSet->GetBuffer(3)->WriteToBuffer(materials.data(), materialSizes, 0);
+		m_RayTracingMeshesBuffer->WriteToBuffer(meshAddresses.data(), meshSizes, 0);
+		m_RayTracingMaterialsBuffer->WriteToBuffer(materials.data(), materialSizes, 0);
 
-		m_RayTracingDescriptorSet->GetBuffer(2)->Flush(meshSizes, 0);
-		m_RayTracingDescriptorSet->GetBuffer(3)->Flush(materialSizes, 0);
+		m_RayTracingMeshesBuffer->Flush(meshSizes, 0);
+		m_RayTracingMaterialsBuffer->Flush(materialSizes, 0);
 	}
 
 	CreateRayTracingPipeline();
@@ -569,23 +593,12 @@ void SceneRenderer::SetSkybox(Vulture::Entity& skyboxEntity)
 	{
 		m_GlobalDescriptorSets[i]->UpdateImageSampler(
 			1,
-			Vulture::Renderer::GetSamplerHandle(),
+			{ Vulture::Renderer::GetSamplerHandle(),
 			skybox.SkyboxImage->GetImageView(),
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
-		// Resize env map accel info because env map is probably different size
-		m_GlobalDescriptorSets[i]->Resize(2, skybox.SkyboxImage->GetAccelBuffer()->GetBufferSize());
-
-		Vulture::Buffer::CopyBuffer(
-			skybox.SkyboxImage->GetAccelBuffer()->GetBuffer(),
-			m_GlobalDescriptorSets[i]->GetBuffer(2)->GetBuffer(),
-			skybox.SkyboxImage->GetAccelBuffer()->GetBufferSize(),
-			0, 0,
-			Vulture::Device::GetGraphicsQueue(),
-			0,
-			Vulture::Device::GetGraphicsCommandPool()
-		);
+		m_GlobalDescriptorSets[i]->UpdateBuffer(2, skybox.SkyboxImage->GetAccelBuffer()->DescriptorInfo());
 	}
 
 	State::RecreateRayTracingPipeline = true;
@@ -669,9 +682,9 @@ void SceneRenderer::RecreateDescriptorSets()
 	{
 		m_RayTracingDescriptorSet->UpdateImageSampler(
 			1,
-			Vulture::Renderer::GetSamplerHandle(),
+			{ Vulture::Renderer::GetSamplerHandle(),
 			m_PathTracingImage->GetImageView(),
-			VK_IMAGE_LAYOUT_GENERAL
+			VK_IMAGE_LAYOUT_GENERAL }
 		);
 	}
 
@@ -965,7 +978,7 @@ void SceneRenderer::UpdateDescriptorSetsData()
 	ubo.ProjInverse = glm::inverse(camComp->ProjMat);
 	ubo.ViewInverse = glm::inverse(camComp->ViewMat);
 	ubo.ViewProjectionMat = camComp->GetViewProj();
-	m_GlobalDescriptorSets[Vulture::Renderer::GetCurrentFrameIndex()]->GetBuffer(0)->WriteToBuffer(&ubo);
+	m_GlobalSetBuffer->WriteToBuffer(&ubo);
 
-	m_GlobalDescriptorSets[Vulture::Renderer::GetCurrentFrameIndex()]->GetBuffer(0)->Flush();
+	m_GlobalSetBuffer->Flush();
 }
