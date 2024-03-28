@@ -13,8 +13,6 @@
 
 SceneRenderer::SceneRenderer()
 {
-	//Vulture::Ref<Vulture::Image> tempImage = std::make_shared<Vulture::Image>("../Vulture/assets/black.hdr");
-	//
 	Vulture::Image::CreateInfo imageInfo = {};
 	imageInfo.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -27,8 +25,6 @@ SceneRenderer::SceneRenderer()
 	imageInfo.Type = Vulture::Image::ImageType::Image2D;
 	imageInfo.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	m_Skybox = std::make_shared<Vulture::Image>(imageInfo);
-	//
-	//Vulture::Renderer::EnvMapToCubemapPass(tempImage, m_Skybox, 1);
 
 	CreateRenderPasses();
 
@@ -885,12 +881,11 @@ void SceneRenderer::CreateFramebuffers()
 			Vulture::FramebufferAttachment::ColorRGBA32, // This has to be 32 per channel otherwise optix won't work
 			Vulture::FramebufferAttachment::ColorRG8,
 			Vulture::FramebufferAttachment::ColorRGBA32,
-			Vulture::FramebufferAttachment::Depth
+			Vulture::FramebufferAttachment::Depth16
 		};
 		
 		Vulture::Framebuffer::CreateInfo info{};
 		info.AttachmentsFormats = &attachments;
-		info.DepthFormat = Vulture::Swapchain::FindDepthFormat();
 		info.Extent = m_ViewportContentSize;
 		info.CustomBits = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		Vulture::Framebuffer::RenderPassCreateInfo rPassInfo{};

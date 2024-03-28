@@ -53,7 +53,7 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 - Unzip and run `Release/PathTracer/PathTracer.exe`.
 
 # Building
-## Windows Only :(
+## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
 - Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Shaderc/Shaderc.zip)
@@ -65,9 +65,9 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 ## Resources
 - https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/ - Introduction to Vulkan Ray Tracing Pipeline
 - https://www.youtube.com/@Acerola_t - Post Processing Effects
-- https://github.com/knightcrawler25/GLSL-PathTracer - Great Resource for BSDFs
 - https://github.com/nvpro-samples/vk_denoise - Integrating Optix
-- https://www.scratchapixel.com/ - Great Resource for learning math behind path tracing
+- https://www.scratchapixel.com/ - Math behind path tracing
+- https://github.com/knightcrawler25/GLSL-PathTracer
 
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
