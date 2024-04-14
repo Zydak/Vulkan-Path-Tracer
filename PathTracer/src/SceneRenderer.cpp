@@ -330,7 +330,9 @@ void SceneRenderer::ResetFrameAccumulation()
 
 void SceneRenderer::RecreateResources()
 {
+	std::unique_lock<std::mutex> lock(Vulture::Device::GetGraphicsQueueMutex());
 	vkDeviceWaitIdle(Vulture::Device::GetDevice());
+	lock.unlock();
 	ResetFrameAccumulation();
 	m_PushContantRayTrace.GetDataPtr()->frame = -1;
 

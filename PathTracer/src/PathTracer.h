@@ -20,4 +20,5 @@ private:
 
 	Vulture::Scope<Vulture::Scene> m_Scene;
 	Vulture::Scope<Editor> m_Editor;
+	Vulture::AssetManager m_AssetManager;
 };

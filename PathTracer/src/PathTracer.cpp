@@ -3,11 +3,26 @@
 #include "CameraScript.h"
 
 PathTracer::PathTracer(Vulture::ApplicationInfo appInfo, float width, float height)
-	: Vulture::Application(appInfo, width, height)
+	: Vulture::Application(appInfo, width, height), m_AssetManager({4})
 {
 	m_Scene = std::make_unique<Vulture::Scene>(m_Window);
 	Init();
 	InitScripts();
+
+	{
+		Vulture::Timer timer;
+		Vulture::AssetHandle handle1(m_AssetManager.LoadAsset("assets/dragon.obj"));
+		Vulture::AssetHandle handle2(m_AssetManager.LoadAsset("assets/Dog.gltf"));
+		Vulture::AssetHandle handle3(m_AssetManager.LoadAsset("assets/ship.gltf"));
+		Vulture::AssetHandle handle4(m_AssetManager.LoadAsset("assets/monster.gltf"));
+
+		//handle1.WaitToLoad();
+		//handle2.WaitToLoad();
+		//handle3.WaitToLoad();
+		//handle4.WaitToLoad();
+
+		VL_ERROR("LOAD TIME: {}s", timer.ElapsedSeconds());
+	}
 }
 
 PathTracer::~PathTracer()
@@ -18,6 +33,7 @@ PathTracer::~PathTracer()
 void PathTracer::Destroy()
 {
 	DestroyScripts();
+	m_AssetManager.Destroy();
 	m_Scene.reset();
 
 	m_Editor.reset();
