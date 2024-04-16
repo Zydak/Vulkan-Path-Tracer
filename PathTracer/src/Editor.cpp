@@ -7,9 +7,10 @@
 #include "Vulture.h"
 
 
-void Editor::Init()
+void Editor::Init(Vulture::AssetManager* assetManager)
 {
-	m_SceneRenderer = std::make_unique<SceneRenderer>();
+	m_AssetManager = assetManager;
+	m_SceneRenderer = std::make_unique<SceneRenderer>(assetManager);
 
 	Vulture::Renderer::RenderImGui([this]() { RenderImGui(); });
 }
@@ -344,8 +345,6 @@ void Editor::ImGuiInfoHeader()
 	ImGui::SeparatorText("Info");
 
 	ImGui::Text("ms %f | fps %f", m_Timer.ElapsedMillis(), 1.0f / m_Timer.ElapsedSeconds());
-	ImGui::Text("Total vertices: %i", m_CurrentScene->GetVertexCount());
-	ImGui::Text("Total indices: %i", m_CurrentScene->GetIndexCount());
 
 	ImGui::Text("Frame: %i", m_SceneRenderer->GetRTPush().GetDataPtr()->frame + 1); // renderer starts counting from 0 so add 1
 	ImGui::Text("Time: %fs", m_Time);
@@ -408,8 +407,8 @@ void Editor::ImGuiSceneSettings()
 	ImGui::SeparatorText("Materials");
 
 	Vulture::ModelComponent comp = State::CurrentModelEntity.GetComponent<Vulture::ModelComponent>();
-	 m_CurrentMaterials = &comp.Model->GetMaterials();
-	 m_CurrentMeshesNames = comp.Model->GetNames();
+	 m_CurrentMaterials = &comp.ModelHandle.GetModel()->GetMaterials();
+	 m_CurrentMeshesNames = comp.ModelHandle.GetModel()->GetNames();
 
 	std::vector<const char*> meshesNames(m_CurrentMeshesNames.size());
 	for (int i = 0; i < meshesNames.size(); i++)

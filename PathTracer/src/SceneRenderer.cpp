@@ -11,8 +11,9 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/compatibility.hpp"
 
-SceneRenderer::SceneRenderer()
+SceneRenderer::SceneRenderer(Vulture::AssetManager* assetManager)
 {
+	m_AssetManager = assetManager;
 	Vulture::Image::CreateInfo imageInfo = {};
 	imageInfo.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -29,15 +30,9 @@ SceneRenderer::SceneRenderer()
 	CreateRenderPasses();
 
 	CreateFramebuffers();
-
-	m_BlueNoiseImage = std::make_shared<Vulture::Image>("assets/BlueNoise.png");
-	m_BlueNoiseImage->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	m_PaperTexture = std::make_shared<Vulture::Image>("assets/paper.png");
-	m_PaperTexture->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	m_InkTexture = std::make_shared<Vulture::Image>("assets/ink.png");
-	m_InkTexture->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_BlueNoiseImage = m_AssetManager->LoadAsset("assets/BlueNoise.png");
+	m_PaperTexture = m_AssetManager->LoadAsset("assets/paper.png");
+	m_InkTexture = m_AssetManager->LoadAsset("assets/ink.png");
 
 	Vulture::Tonemap::CreateInfo tonemapInfo{};
 	tonemapInfo.InputImages = { m_BloomImage };
@@ -54,18 +49,23 @@ SceneRenderer::SceneRenderer()
 	bloomInfo.OutputImages = { m_BloomImage };
 	m_DenoisedBloom.Init(bloomInfo);
 
+	// Wait for textures to load before we use them
+	m_BlueNoiseImage.WaitToLoad();
+	m_PaperTexture.WaitToLoad();
+	m_InkTexture.WaitToLoad();
+
 	Vulture::Effect<InkPushConstant>::CreateInfo inkInfo{};
 	inkInfo.DebugName = "Ink Effect";
-	inkInfo.InputImages = { m_TonemappedImage };
-	inkInfo.OutputImages = { m_TonemappedImage };
-	inkInfo.AdditionalTextures = { m_BlueNoiseImage, m_PaperTexture, m_InkTexture, m_GBufferFramebuffer->GetImageNoVk(4) };
+	inkInfo.InputImages = { m_TonemappedImage.get() };
+	inkInfo.OutputImages = { m_TonemappedImage.get() };
+	inkInfo.AdditionalTextures = { m_BlueNoiseImage.GetImage(), m_PaperTexture.GetImage(), m_InkTexture.GetImage(), m_GBufferFramebuffer->GetImageNoVk(4).get() };
 	inkInfo.ShaderPath = "src/shaders/InkEffect.comp";
 	m_InkEffect.Init(inkInfo);
 
 	Vulture::Effect<PosterizePushConstant>::CreateInfo posterizeInfo{};
 	posterizeInfo.DebugName = "Posterize Effect";
-	posterizeInfo.InputImages = { m_TonemappedImage };
-	posterizeInfo.OutputImages = { m_TonemappedImage };
+	posterizeInfo.InputImages = { m_TonemappedImage.get() };
+	posterizeInfo.OutputImages = { m_TonemappedImage.get() };
 	posterizeInfo.ShaderPath = "src/shaders/Posterize.comp";
 	m_PosterizeEffect.Init(posterizeInfo);
 
@@ -80,8 +80,6 @@ SceneRenderer::SceneRenderer()
 
 	VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 	vkCreateFence(Vulture::Device::GetDevice(), &createInfo, nullptr, &m_DenoiseFence);
-
-	//Vulture::Renderer::RenderImGui([this](){ImGuiPass(); });
 }
 
 SceneRenderer::~SceneRenderer()
@@ -226,11 +224,12 @@ void SceneRenderer::DrawGBuffer()
 	{
 		auto& [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::ModelComponent, Vulture::TransformComponent>(entity);
 		
-		std::vector<Vulture::Ref<Vulture::Mesh>> meshes = modelComp.Model->GetMeshes();
-		std::vector<Vulture::Ref<Vulture::DescriptorSet>> sets = modelComp.Model->GetDescriptors();
-		for (uint32_t i = 0; i < modelComp.Model->GetMeshCount(); i++)
+		Vulture::Model* model = modelComp.ModelHandle.GetModel();
+		std::vector<Vulture::Ref<Vulture::Mesh>> meshes = model->GetMeshes();
+		std::vector<Vulture::Ref<Vulture::DescriptorSet>> sets = model->GetDescriptors();
+		for (uint32_t i = 0; i < model->GetMeshCount(); i++)
 		{
-			m_PushContantGBuffer.GetDataPtr()->Material = modelComp.Model->GetMaterial(i);
+			m_PushContantGBuffer.GetDataPtr()->Material = model->GetMaterial(i);
 			m_PushContantGBuffer.GetDataPtr()->Model = TransformComp.transform.GetMat4();
 			
 			m_PushContantGBuffer.Push(m_GBufferPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
@@ -355,16 +354,16 @@ void SceneRenderer::RecreateResources()
 
 	Vulture::Effect<InkPushConstant>::CreateInfo inkInfo{};
 	inkInfo.DebugName = "Stippling";
-	inkInfo.InputImages = { m_TonemappedImage };
-	inkInfo.OutputImages = { m_TonemappedImage };
-	inkInfo.AdditionalTextures = { m_BlueNoiseImage, m_PaperTexture, m_InkTexture, m_GBufferFramebuffer->GetImageNoVk(4) };
+	inkInfo.InputImages = { m_TonemappedImage.get() };
+	inkInfo.OutputImages = { m_TonemappedImage.get() };
+	inkInfo.AdditionalTextures = { m_BlueNoiseImage.GetImage(), m_PaperTexture.GetImage(), m_InkTexture.GetImage(), m_GBufferFramebuffer->GetImageNoVk(4).get() };
 	inkInfo.ShaderPath = "src/shaders/InkEffect.comp";
 	m_InkEffect.Init(inkInfo);
 
 	Vulture::Effect<PosterizePushConstant>::CreateInfo posterizeInfo{};
 	posterizeInfo.DebugName = "Posterize Effect";
-	posterizeInfo.InputImages = { m_TonemappedImage };
-	posterizeInfo.OutputImages = { m_TonemappedImage };
+	posterizeInfo.InputImages = { m_TonemappedImage.get() };
+	posterizeInfo.OutputImages = { m_TonemappedImage.get() };
 	posterizeInfo.ShaderPath = "src/shaders/Posterize.comp";
 	if (State::ReplacePalletDefineInPosterizeShader)
 		posterizeInfo.Defines = { "REPLACE_PALLET" };
@@ -416,17 +415,8 @@ void SceneRenderer::CreateDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 
 		m_GlobalDescriptorSets.push_back(std::make_shared<Vulture::DescriptorSet>());
-		m_GlobalDescriptorSets[i]->Init(&Vulture::Renderer::GetDescriptorPool(), { bin, bin1, bin2 });
+		m_GlobalDescriptorSets[i]->Init(&Vulture::Renderer::GetDescriptorPool(), { bin, bin1, bin2 }, &Vulture::Renderer::GetSampler());
 		m_GlobalDescriptorSets[i]->AddBuffer(0, m_GlobalSetBuffer->DescriptorInfo());
-
-		m_GlobalDescriptorSets[i]->AddImageSampler(
-			1,
-			{ Vulture::Renderer::GetSamplerHandle(),
-			Vulture::Renderer::GetEnv()->GetImageView(),
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-		);
-
-		m_GlobalDescriptorSets[i]->AddBuffer(2, Vulture::Renderer::GetEnv()->GetAccelBuffer()->DescriptorInfo());
 
 		m_GlobalDescriptorSets[i]->Build();
 	}
@@ -473,20 +463,30 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 		m_RayTracingDoFBuffer->Init(materialBufferInfo);
 	}
 
-	uint32_t texturesCount = m_CurrentSceneRendered->GetMeshCount();
+	uint32_t texturesCount = 0;
+	{
+		auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::ModelComponent>();
+		for (auto& entity : view)
+		{
+			auto& modelComp = m_CurrentSceneRendered->GetRegistry().get<Vulture::ModelComponent>(entity);
+			Vulture::Model* model = modelComp.ModelHandle.GetModel();
+			texturesCount += 4 * model->GetMeshCount(); // Each mesh has 4 textures: albedo, normal, rough, metal
+		}
+	}
+
 	{
 		Vulture::DescriptorSetLayout::Binding bin0{ 0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin3{ 3, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin4{ 4, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin5{ 5, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin7{ 7, texturesCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin4{ 4, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR }; // / 4 because we only care about single texture type like Albedo and not all 4 of them
+		Vulture::DescriptorSetLayout::Binding bin5{ 5, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin7{ 7, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin8{ 8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 		
 		m_RayTracingDescriptorSet = std::make_shared<Vulture::DescriptorSet>();
-		m_RayTracingDescriptorSet->Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8 });
+		m_RayTracingDescriptorSet->Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8 }, &Vulture::Renderer::GetSampler());
 
 		VkAccelerationStructureKHR tlas = m_CurrentSceneRendered->GetAccelerationStructure()->GetTlas().Accel;
 		VkWriteDescriptorSetAccelerationStructureKHR asInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
@@ -502,39 +502,40 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 		for (auto& entity : view)
 		{
 			auto& modelComp = m_CurrentSceneRendered->GetRegistry().get<Vulture::ModelComponent>(entity);
-			for (int j = 0; j < (int)modelComp.Model->GetAlbedoTextureCount(); j++)
+			Vulture::Model* model = modelComp.ModelHandle.GetModel();
+			for (int j = 0; j < (int)model->GetAlbedoTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					4,
 					{ Vulture::Renderer::GetSamplerHandle(),
-					modelComp.Model->GetAlbedoTexture(j)->GetImageView(),
+					model->GetAlbedoTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
-			for (int j = 0; j < (int)modelComp.Model->GetNormalTextureCount(); j++)
+			for (int j = 0; j < (int)model->GetNormalTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					5,
 					{ Vulture::Renderer::GetSamplerHandle(),
-					modelComp.Model->GetNormalTexture(j)->GetImageView(),
+					model->GetNormalTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
-			for (int j = 0; j < (int)modelComp.Model->GetRoughnessTextureCount(); j++)
+			for (int j = 0; j < (int)model->GetRoughnessTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					6,
 					{ Vulture::Renderer::GetSamplerHandle(),
-					modelComp.Model->GetRoughnessTexture(j)->GetImageView(),
+					model->GetRoughnessTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
-			for (int j = 0; j < (int)modelComp.Model->GetMetallnessTextureCount(); j++)
+			for (int j = 0; j < (int)model->GetMetallnessTextureCount(); j++)
 			{
 				m_RayTracingDescriptorSet->AddImageSampler(
 					7,
 					{ Vulture::Renderer::GetSamplerHandle(),
-					modelComp.Model->GetMetallnessTexture(j)->GetImageView(),
+					model->GetMetallnessTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
 			}
@@ -554,19 +555,21 @@ void SceneRenderer::CreateRayTracingDescriptorSets()
 		for (auto& entity : modelView)
 		{
 			auto& [modelComp, transformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::ModelComponent, Vulture::TransformComponent>(entity);
-			for (int i = 0; i < (int)modelComp.Model->GetMeshCount(); i++)
+
+			Vulture::Model* model = modelComp.ModelHandle.GetModel();
+			for (int i = 0; i < (int)model->GetMeshCount(); i++)
 			{
 				MeshAdresses adr{};
-				adr.VertexAddress = modelComp.Model->GetMesh(i).GetVertexBuffer()->GetDeviceAddress();
-				adr.IndexAddress = modelComp.Model->GetMesh(i).GetIndexBuffer()->GetDeviceAddress();
+				adr.VertexAddress = model->GetMesh(i).GetVertexBuffer()->GetDeviceAddress();
+				adr.IndexAddress = model->GetMesh(i).GetIndexBuffer()->GetDeviceAddress();
 
-				Vulture::Material material = modelComp.Model->GetMaterial(i);
+				Vulture::Material material = model->GetMaterial(i);
 
 				materials.push_back(material);
 				meshAddresses.push_back(adr);
 			}
-			meshSizes += sizeof(MeshAdresses) * modelComp.Model->GetMeshCount();
-			materialSizes += sizeof(Vulture::Material) * modelComp.Model->GetMeshCount();
+			meshSizes += sizeof(MeshAdresses) * model->GetMeshCount();
+			materialSizes += sizeof(Vulture::Material) * model->GetMeshCount();
 		}
 
 		VL_CORE_ASSERT(meshSizes, "No meshes found?");
@@ -586,17 +589,18 @@ void SceneRenderer::SetSkybox(Vulture::Entity& skyboxEntity)
 {
 	State::CurrentSkyboxEntity = skyboxEntity;
 	Vulture::SkyboxComponent skybox = skyboxEntity.GetComponent<Vulture::SkyboxComponent>();
+	skybox.ImageHandle.WaitToLoad();
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		m_GlobalDescriptorSets[i]->UpdateImageSampler(
 			1,
 			{ Vulture::Renderer::GetSamplerHandle(),
-			skybox.SkyboxImage->GetImageView(),
+			skybox.ImageHandle.GetImage()->GetImageView(),
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
-		m_GlobalDescriptorSets[i]->UpdateBuffer(2, skybox.SkyboxImage->GetAccelBuffer()->DescriptorInfo());
+		m_GlobalDescriptorSets[i]->UpdateBuffer(2, skybox.ImageHandle.GetImage()->GetAccelBuffer()->DescriptorInfo());
 	}
 
 	State::RecreateRayTracingPipeline = true;
@@ -621,7 +625,8 @@ void SceneRenderer::UpdateResources()
 		m_CurrentSceneRendered->DestroyEntity(State::CurrentSkyboxEntity);
 
 		State::CurrentSkyboxEntity = m_CurrentSceneRendered->CreateEntity();
-		auto& skyboxComponent = State::CurrentSkyboxEntity.AddComponent<Vulture::SkyboxComponent>(State::CurrentSkyboxPath);
+		Vulture::AssetHandle handle = m_AssetManager->LoadAsset(State::CurrentSkyboxPath);
+		auto& skyboxComponent = State::CurrentSkyboxEntity.AddComponent<Vulture::SkyboxComponent>(handle);
 
 		SetSkybox(State::CurrentSkyboxEntity);
 	}
@@ -631,17 +636,16 @@ void SceneRenderer::UpdateResources()
 		State::ModelChanged = false;
 		vkDeviceWaitIdle(Vulture::Device::GetDevice());
 
+		State::CurrentModelEntity.GetComponent<Vulture::ModelComponent>().ModelHandle.Unload();
 		auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::ModelComponent>();
 		for (auto entity : view)
 		{
 			m_CurrentSceneRendered->GetRegistry().destroy(entity);
 		}
-		m_CurrentSceneRendered->ResetMeshCount();
 		m_CurrentSceneRendered->ResetModelCount();
-		m_CurrentSceneRendered->ResetVertexCount();
-		m_CurrentSceneRendered->ResetIndexCount();
 
 		State::CurrentModelEntity = m_CurrentSceneRendered->CreateModel(State::ModelPath, Vulture::Transform(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(State::ModelScale)));
+		State::CurrentModelEntity.GetComponent<Vulture::ModelComponent>().ModelHandle.WaitToLoad();
 
 		m_CurrentSceneRendered->InitAccelerationStructure();
 		CreateRayTracingDescriptorSets();

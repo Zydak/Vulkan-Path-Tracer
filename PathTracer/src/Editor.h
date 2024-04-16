@@ -9,7 +9,7 @@ class Vulture::Scene;
 class Editor
 {
 public:
-	void Init();
+	void Init(Vulture::AssetManager* assetManager);
 	void Destroy();
 
 	std::function<void()> GetRenderFunction() { return [this]() { RenderImGui(); }; }; // pozdro
@@ -38,6 +38,7 @@ private:
 	void ImGuiDenoiserSettings();
 	void ImGuiShowGBuffer();
 
+	Vulture::AssetManager* m_AssetManager;
 	Vulture::Scope<SceneRenderer> m_SceneRenderer;
 
 	Vulture::Scene* m_CurrentScene;

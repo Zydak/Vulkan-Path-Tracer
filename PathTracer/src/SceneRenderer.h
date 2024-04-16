@@ -54,7 +54,7 @@ struct MeshAdresses
 class SceneRenderer
 {
 public:
-	SceneRenderer();
+	SceneRenderer(Vulture::AssetManager* assetManager);
 	~SceneRenderer();
 
 	void CreateRayTracingDescriptorSets();
@@ -131,6 +131,7 @@ private:
 		Depth,
 		Count
 	};
+	Vulture::AssetManager* m_AssetManager;
 	Vulture::Ref<Vulture::Framebuffer> m_GBufferFramebuffer;
 	Vulture::Pipeline m_GBufferPipeline;
 
@@ -154,9 +155,9 @@ private:
 	Vulture::Ref<Vulture::Image> m_TonemappedImage;
 	Vulture::Ref<Vulture::Image> m_BloomImage;
 
-	Vulture::Ref<Vulture::Image> m_BlueNoiseImage;
-	Vulture::Ref<Vulture::Image> m_PaperTexture;
-	Vulture::Ref<Vulture::Image> m_InkTexture;
+	Vulture::AssetHandle m_BlueNoiseImage;
+	Vulture::AssetHandle m_PaperTexture;
+	Vulture::AssetHandle m_InkTexture;
 
 	PostProcessEffects m_CurrentEffect = PostProcessEffects::None;
 
