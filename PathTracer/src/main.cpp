@@ -99,6 +99,7 @@ Vulture::Application* Vulture::CreateApplication()
 	rayQueryFeatures.pNext = nullptr;
 
 	appInfo.Features = features;
+	appInfo.UseMemoryAddress = true;
 
 	return new PathTracer(appInfo, 1600, 900);
 }

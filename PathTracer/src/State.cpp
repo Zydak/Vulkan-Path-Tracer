@@ -9,8 +9,6 @@ bool State::Denoised = false;
 
 bool State::ShowDenoised = false;
 
-bool State::RunTonemapping = false;
-
 bool State::RecreateRayTracingPipeline = false;
 
 bool State::RecompilePosterizeShader = false;
@@ -32,6 +30,4 @@ Vulture::Tonemap::Tonemappers State::CurrentTonemapper = Vulture::Tonemap::Tonem
 Vulture::Entity State::CurrentSkyboxEntity;
 
 std::string State::CurrentSkyboxPath;
-
-Vulture::Entity State::CurrentModelEntity;
 

@@ -135,8 +135,6 @@ private:
 	Vulture::Ref<Vulture::Framebuffer> m_GBufferFramebuffer;
 	Vulture::Pipeline m_GBufferPipeline;
 
-	Vulture::Ref<Vulture::Image> m_Skybox;
-
 	Vulture::Ref<Vulture::Image> m_DenoisedImage;
 	Vulture::Ref<Vulture::Image> m_PathTracingImage;
 
@@ -212,6 +210,9 @@ public:
 		bool UseClearcoat			= true;
 		bool UseFireflies			= true;
 		bool ShowSkybox				= true;
+
+		bool UseTestShaders			= true;
+		bool UseCosineWeight		= true;
 
 		bool SampleEnvMap   = true;
 		float EnvAzimuth	= 0.0f;

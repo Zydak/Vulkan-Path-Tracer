@@ -133,16 +133,52 @@ vec3 sphericalEnvmapToDirection(vec2 tex)
     return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 }
 
-vec3 SamplingHemisphere(inout uint seed, in vec3 x, in vec3 y, in vec3 z)
+vec3 CosineSamplingHemisphere(inout uint seed, in vec3 tangent, in vec3 bitangent, in vec3 normal)
 {
     float r1 = Rnd(seed);
     float r2 = Rnd(seed);
     float sq = sqrt(r1);
-    
-    vec3 direction = vec3(cos(2 * M_PI * r2) * sq, sin(2 * M_PI * r2) * sq, sqrt(1. - r1));
-    direction      = direction.x * x + direction.y * y + direction.z * z;
-    
+
+    const float phi = 2 * M_PI * r2;
+    vec3 direction = vec3(cos(phi) * sq, sin(phi) * sq, sqrt(1.0f - r1));
+    //direction = direction.x * tangent + direction.y * bitangent + direction.z * normal;
+
+    if (dot(direction, normal) < 0.0)
+        direction = -direction;
+
     return direction;
+}
+
+vec3 UniformSamplingHemisphere(inout uint seed, in vec3 tangent, in vec3 bitangent, in vec3 normal)
+{
+#if 0
+    float r1 = Rnd(seed);
+    float r2 = Rnd(seed);
+
+    const float phi = 2 * M_PI * r1;
+
+    vec3 direction;
+    direction.x = cos(phi) * 2 * sqrt(r2 * (1 - r2));
+    direction.y = sin(phi) * 2 * sqrt(r2 * (1 - r2));
+    direction.z = 1 - 2 * r2;
+
+    direction = direction.x * tangent + direction.y * bitangent + direction.z * normal;
+    //if (dot(direction, normal) < 0.0)
+    //    direction = -direction;
+
+    return direction;
+#else
+    float r1 = Rnd(seed) * 2.0f - 1.0f;
+    float r2 = Rnd(seed) * 2.0f - 1.0f;
+    float r3 = Rnd(seed) * 2.0f - 1.0f;
+
+    vec3 direction = normalize(vec3(r1, r2, r3));
+    if (dot(direction, normal) < 0.0)
+        direction = -direction;
+    //direction = direction.x * tangent + direction.y * bitangent + direction.z * normal;
+
+    return direction;
+#endif
 }
 
 // Return the tangent and binormal from the incoming normal

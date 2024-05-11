@@ -21,7 +21,6 @@ public:
 	static bool RunDenoising;
 	static bool Denoised;
 	static bool ShowDenoised;
-	static bool RunTonemapping;
 	static bool RecreateRayTracingPipeline;
 	static bool RecompilePosterizeShader;
 	static bool ModelChanged;
@@ -36,6 +35,4 @@ public:
 
 	static Vulture::Entity CurrentSkyboxEntity;
 	static std::string CurrentSkyboxPath;
-
-	static Vulture::Entity CurrentModelEntity;
 };

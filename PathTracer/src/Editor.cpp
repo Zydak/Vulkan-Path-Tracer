@@ -12,7 +12,7 @@ void Editor::Init(Vulture::AssetManager* assetManager)
 	m_AssetManager = assetManager;
 	m_SceneRenderer = std::make_unique<SceneRenderer>(assetManager);
 
-	Vulture::Renderer::RenderImGui([this]() { RenderImGui(); });
+	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 }
 
 void Editor::Destroy()
@@ -30,12 +30,6 @@ void Editor::SetCurrentScene(Vulture::Scene* scene)
 
 void Editor::Render()
 {
-	auto view = m_CurrentScene->GetRegistry().view<Vulture::ModelComponent>();
-	for (auto entity : view)
-	{
-		State::CurrentModelEntity = { entity, m_CurrentScene };
-	}
-
 	m_SceneRenderer->UpdateResources();
 
 	if (m_RecreateRendererResources)
@@ -134,9 +128,6 @@ Editor::~Editor()
 
 void Editor::RenderImGui()
 {
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
 	{
@@ -209,8 +200,7 @@ void Editor::RenderImGui()
 	}
 	else
 	{
-		Vulture::Entity cameraEntity;
-		m_CurrentScene->GetMainCamera(&cameraEntity);
+		Vulture::Entity cameraEntity = m_CurrentScene->GetMainCameraEntity();
 
 		Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 		Vulture::CameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<Vulture::CameraComponent>(cameraEntity);
@@ -281,15 +271,11 @@ void Editor::RenderImGui()
 	}
 
 	ImGui::End();
-
-	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), Vulture::Renderer::GetCurrentCommandBuffer());
 }
 
 void Editor::ImGuiRenderViewport()
 {
-	Vulture::Entity cameraEntity;
-	m_CurrentScene->GetMainCamera(&cameraEntity);
+	Vulture::Entity cameraEntity = m_CurrentScene->GetMainCameraEntity();
 
 	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	Vulture::CameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<Vulture::CameraComponent>(cameraEntity);
@@ -399,16 +385,25 @@ void Editor::ImGuiSceneSettings()
 	static int currentMaterialItem = 0;
 	if (ImGui::ListBox("Current Scene", &currentSceneItem, scenes.data(), (int)scenes.size(), scenes.size() > 10 ? 10 : (int)scenes.size()))
 	{
-		State::ModelPath = "assets/" + scenesString[currentSceneItem];
-		State::ModelChanged = true;
-		currentMaterialItem = 0;
+		if (State::ModelPath != "assets/" + scenesString[currentSceneItem])
+		{
+			State::ModelPath = "assets/" + scenesString[currentSceneItem];
+			State::ModelChanged = true;
+			currentMaterialItem = 0;
+		}
 	}
 
 	ImGui::SeparatorText("Materials");
 
-	Vulture::ModelComponent comp = State::CurrentModelEntity.GetComponent<Vulture::ModelComponent>();
-	 m_CurrentMaterials = &comp.ModelHandle.GetModel()->GetMaterials();
-	 m_CurrentMeshesNames = comp.ModelHandle.GetModel()->GetNames();
+	auto view = m_CurrentScene->GetRegistry().view<Vulture::ModelComponent>();
+	Vulture::ModelComponent* comp = nullptr;
+	for (auto entity : view)
+	{
+		VL_CORE_ASSERT(comp == nullptr, "Can't have more than one model!");
+		comp = &m_CurrentScene->GetRegistry().get<Vulture::ModelComponent>(entity);
+	}
+	m_CurrentMaterials = &comp->ModelHandle.GetModel()->GetMaterials();
+	m_CurrentMeshesNames = comp->ModelHandle.GetModel()->GetNames();
 
 	std::vector<const char*> meshesNames(m_CurrentMeshesNames.size());
 	for (int i = 0; i < meshesNames.size(); i++)
@@ -476,8 +471,7 @@ void Editor::ImGuiSceneSettings()
 
 void Editor::ImGuiCameraSettings()
 {
-	Vulture::Entity cameraEntity;
-	m_CurrentScene->GetMainCamera(&cameraEntity);
+	Vulture::Entity cameraEntity = m_CurrentScene->GetMainCameraEntity();
 
 	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	Vulture::CameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<Vulture::CameraComponent>(cameraEntity);
@@ -716,6 +710,14 @@ void Editor::ImGuiPathTracingSettings()
 	{
 		State::RecreateRayTracingPipeline = true;
 	}
+	if (ImGui::Checkbox("Use COSINE WEIGHT", &drawInfo.UseCosineWeight))
+	{
+		State::RecreateRayTracingPipeline = true;
+	}
+	if (ImGui::Checkbox("Use Test Shaders", &drawInfo.UseTestShaders))
+	{
+		State::RecreateRayTracingPipeline = true;
+	}
 	if (ImGui::Checkbox("Use Glossy Reflections", &drawInfo.UseGlossy))
 	{
 		State::RecreateRayTracingPipeline = true;
@@ -757,8 +759,7 @@ void Editor::ImGuiPathTracingSettings()
 
 void Editor::ImGuiFileSettings()
 {
-	Vulture::Entity cameraEntity;
-	m_CurrentScene->GetMainCamera(&cameraEntity);
+	Vulture::Entity cameraEntity = m_CurrentScene->GetMainCameraEntity();
 	
 	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	Vulture::CameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<Vulture::CameraComponent>(cameraEntity);
@@ -809,8 +810,7 @@ void Editor::ImGuiDenoiserSettings()
 
 void Editor::ImGuiShowGBuffer()
 {
-	Vulture::Entity cameraEntity;
-	m_CurrentScene->GetMainCamera(&cameraEntity);
+	Vulture::Entity cameraEntity = m_CurrentScene->GetMainCameraEntity();
 
 	Vulture::CameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<Vulture::CameraComponent>(cameraEntity);
 

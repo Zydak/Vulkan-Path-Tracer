@@ -73,6 +73,16 @@ public:
 		}
 
 		// Rotation
+		// Roll
+		if (Vulture::Input::IsKeyPressed(VL_KEY_Q))
+		{
+			cameraComponent.AddRoll((float)deltaTime * m_RotationSpeed);
+		}
+		if (Vulture::Input::IsKeyPressed(VL_KEY_E))
+		{
+			cameraComponent.AddRoll(-(float)deltaTime * m_RotationSpeed);
+		}
+
 		glm::vec2 mousePosition = Vulture::Input::GetMousePosition();
 		if (Vulture::Input::IsMousePressed(0))
 		{
@@ -86,16 +96,6 @@ public:
 			if (m_LastMousePosition.x != mousePosition.x)
 			{
 				cameraComponent.AddYaw(-(m_LastMousePosition.x - mousePosition.x) * (m_RotationSpeed / 200.0f));
-			}
-
-			// Roll
-			if (Vulture::Input::IsKeyPressed(VL_KEY_Q))
-			{
-				cameraComponent.AddRoll((float)deltaTime * m_RotationSpeed);
-			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_E))
-			{
-				cameraComponent.AddRoll(-(float)deltaTime * m_RotationSpeed);
 			}
 		}
 		m_LastMousePosition = mousePosition;
