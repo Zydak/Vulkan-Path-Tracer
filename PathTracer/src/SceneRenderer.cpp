@@ -11,16 +11,14 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/compatibility.hpp"
 
-SceneRenderer::SceneRenderer(Vulture::AssetManager* assetManager)
+SceneRenderer::SceneRenderer()
 {
-	m_AssetManager = assetManager;
-
 	CreateRenderPasses();
 
 	CreateFramebuffers();
-	m_BlueNoiseImage = m_AssetManager->LoadAsset("assets/BlueNoise.png");
-	m_PaperTexture = m_AssetManager->LoadAsset("assets/paper.png");
-	m_InkTexture = m_AssetManager->LoadAsset("assets/ink.png");
+	m_BlueNoiseImage = Vulture::AssetManager::LoadAsset("assets/BlueNoise.png");
+	m_PaperTexture = Vulture::AssetManager::LoadAsset("assets/paper.png");
+	m_InkTexture = Vulture::AssetManager::LoadAsset("assets/ink.png");
 
 	Vulture::Tonemap::CreateInfo tonemapInfo{};
 	tonemapInfo.InputImages = { m_BloomImage };
@@ -81,9 +79,10 @@ void SceneRenderer::RecreateRayTracingDescriptorSets()
 	m_RayTracingDescriptorSet->UpdateImageSampler(1, { Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracingImage->GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
 }
 
-// TODO description
 bool SceneRenderer::RayTrace(const glm::vec4& clearColor)
 {
+	VL_CORE_ASSERT(m_CurrentSceneRendered != nullptr, "You have to set the scene before rendering! call SetScene()");
+
 	Vulture::Device::InsertLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Inserted label", { 0.0f, 1.0f, 0.0f, 1.0f });
 
 	m_PushContantRayTrace.GetDataPtr()->ClearColor = clearColor;
@@ -613,7 +612,7 @@ void SceneRenderer::UpdateResources()
 		m_CurrentSceneRendered->DestroyEntity(State::CurrentSkyboxEntity);
 
 		State::CurrentSkyboxEntity = m_CurrentSceneRendered->CreateEntity();
-		Vulture::AssetHandle handle = m_AssetManager->LoadAsset(State::CurrentSkyboxPath);
+		Vulture::AssetHandle handle = Vulture::AssetManager::LoadAsset(State::CurrentSkyboxPath);
 		auto& skyboxComponent = State::CurrentSkyboxEntity.AddComponent<Vulture::SkyboxComponent>(handle);
 
 		SetSkybox(State::CurrentSkyboxEntity);

@@ -35,7 +35,6 @@ struct GlobalUniforms
 
 struct PushConstantRay
 {
-    vec4 ClearColor;
     int64_t Frame;
     int MaxDepth;
     int SamplesPerFrame;

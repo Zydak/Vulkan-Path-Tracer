@@ -24,7 +24,11 @@ project "PathTracer"
 		"Vulture",
 	}
 
-	defines {"_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS"}
+	defines 
+	{
+		"_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS",
+		"IMGUI_DEFINE_MATH_OPERATORS"
+	}
 
 	filter "system:windows"
 		defines "WIN"

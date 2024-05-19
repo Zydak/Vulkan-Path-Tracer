@@ -54,7 +54,7 @@ struct MeshAdresses
 class SceneRenderer
 {
 public:
-	SceneRenderer(Vulture::AssetManager* assetManager);
+	SceneRenderer();
 	~SceneRenderer();
 
 	void CreateRayTracingDescriptorSets();
@@ -131,7 +131,6 @@ private:
 		Depth,
 		Count
 	};
-	Vulture::AssetManager* m_AssetManager;
 	Vulture::Ref<Vulture::Framebuffer> m_GBufferFramebuffer;
 	Vulture::Pipeline m_GBufferPipeline;
 
@@ -211,7 +210,7 @@ public:
 		bool UseFireflies			= true;
 		bool ShowSkybox				= true;
 
-		bool UseTestShaders			= true;
+		bool UseTestShaders			= false;
 		bool UseCosineWeight		= true;
 
 		bool SampleEnvMap   = true;

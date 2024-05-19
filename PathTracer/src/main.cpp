@@ -1,7 +1,7 @@
 #define VL_ENTRY_POINT
 
 #include <Vulture.h>
-#include "PathTracer.h"
+#include "Application.h"
 
 // Create VL Entry point definition
 Vulture::Application* Vulture::CreateApplication()
@@ -101,5 +101,5 @@ Vulture::Application* Vulture::CreateApplication()
 	appInfo.Features = features;
 	appInfo.UseMemoryAddress = true;
 
-	return new PathTracer(appInfo, 1600, 900);
+	return new ::Application(appInfo, 1600, 900);
 }

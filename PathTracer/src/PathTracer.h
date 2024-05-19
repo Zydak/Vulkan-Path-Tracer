@@ -1,24 +1,137 @@
 #pragma once
-#include "pch.h"
-#include <Vulture.h>
-#include "Editor.h"
+#include "Vulture.h"
 
-class PathTracer : public Vulture::Application
+struct GlobalUbo
+{
+	glm::mat4 ViewProjectionMat;
+	glm::mat4 ViewInverse;
+	glm::mat4 ProjInverse;
+};
+
+struct PushConstantRay
+{
+	int64_t frame = -1;
+	int maxDepth;
+	int SamplesPerFrame;
+	float EnvAzimuth;
+	float EnvAltitude;
+
+	float FocalLength;
+	float DoFStrength;
+	float AliasingJitter;
+};
+
+struct PushConstantGBuffer
+{
+	glm::mat4 Model;
+	Vulture::Material Material;
+};
+
+struct MeshAdresses
+{
+	uint64_t VertexAddress; // Address of the Vertex buffer
+	uint64_t IndexAddress; // Address of the index buffer
+};
+
+class PathTracer
 {
 public:
-	PathTracer(Vulture::ApplicationInfo appInfo, float width, float height);
-	~PathTracer();
+	PathTracer() = default;
 
-	void Destroy() override;
-
-	void OnUpdate(double deltaTime) override;
-	void InitScripts();
-	void UpdateScripts(double deltaTime);
-	void DestroyScripts();
-private:
 	void Init();
 
-	Vulture::Scope<Vulture::Scene> m_Scene;
-	Vulture::Scope<Editor> m_Editor;
-	Vulture::AssetManager m_AssetManager;
+	~PathTracer();
+	PathTracer(const PathTracer& other) = delete;
+	PathTracer(PathTracer&& other) noexcept = delete;
+	PathTracer& operator=(const PathTracer& other) = delete;
+	PathTracer& operator=(PathTracer&& other) noexcept = delete;
+
+	inline Vulture::Image* GetOutputImage() { return &m_PathTracingImage; };
+
+	void Resize(VkExtent2D newSize);
+	void SetScene(Vulture::Scene* scene);
+	bool Render();
+
+	void ResetFrameAccumulation();
+
+private:
+
+	// Initialization stuff
+	void CreateDescriptorSets();
+	void CreatePipelines();
+	void CreateRayTracingPipeline();
+	void CreateShaderBindingTable();
+	void CreateFramebuffers();
+	void CreateRayTracingDescriptorSets();
+	void CreateAccelerationStructure();
+
+	// Camera ubo update
+	void UpdateDescriptorSetsData();
+
+	// GBuffer
+	void DrawGBuffer();
+
+public:
+	// Draw Parameters
+	struct DrawInfo
+	{
+		float DOFStrength = 0.0f;
+		float FocalLength = 8.0f;
+		bool AutoDoF = false;
+		float AliasingJitterStr = 1.0f;
+		int TotalSamplesPerPixel = 15000;
+		int RayDepth = 20;
+		int SamplesPerFrame = 15;
+		bool UseNormalMaps = false;
+		bool UseAlbedo = true;
+		bool UseGlossy = true;
+		bool UseGlass = true;
+		bool UseClearcoat = true;
+		bool UseFireflies = true;
+		bool ShowSkybox = true;
+
+		bool UseTestShaders = false;
+		bool UseCosineWeight = true;
+
+		bool SampleEnvMap = true;
+		float EnvAzimuth = 0.0f;
+		float EnvAltitude = 0.0f;
+	};
+
+	DrawInfo m_DrawInfo{};
+
+private:
+	Vulture::AccelerationStructure m_AS;
+	Vulture::Scene* m_CurrentSceneRendered;
+	uint64_t m_CurrentSamplesPerPixel = 0;
+
+	// Output Image
+	Vulture::Image m_PathTracingImage;
+	VkExtent2D m_ViewportSize = { 900, 900 };
+
+	// GBuffer
+	Vulture::Framebuffer m_GBufferFramebuffer;
+	Vulture::Pipeline m_GBufferPipeline;
+	bool m_DrawGBuffer = true;
+
+	// Descriptor buffers
+	Vulture::Buffer m_GlobalSetBuffer;
+	Vulture::Buffer m_RayTracingSetBuffer;
+	Vulture::Buffer m_RayTracingMaterialsBuffer;
+	Vulture::Buffer m_RayTracingMeshesBuffer;
+	Vulture::Buffer m_RayTracingDoFBuffer;
+
+	// Descriptors
+	Vulture::DescriptorSet m_RayTracingDescriptorSet;
+	Vulture::DescriptorSet m_GlobalDescriptorSets;
+	
+	// Ray Tracing Pipeline
+	Vulture::Pipeline m_RtPipeline;
+
+	// Shader Binding Table
+	Vulture::SBT m_SBT;
+
+	// Push Contants
+	Vulture::PushConstant<PushConstantGBuffer> m_PushContantGBuffer;
+	Vulture::PushConstant<PushConstantRay> m_PushContantRayTrace;
 };
