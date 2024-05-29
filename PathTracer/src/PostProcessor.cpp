@@ -22,27 +22,77 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 
 		BlackImage.Init(info);
 		blackMade = true;
+
+		EmptyNodeOutput.Init(&BlackImage);
 	}
 
 	m_InputImage = inputImage;
 
 	m_Handler = std::make_unique<ImFlow::ImNodeFlow>("Main");
 
-	std::shared_ptr<OutputNode> outputNode = m_Handler->addNode<OutputNode>({ 0, 0 }, &m_NodeQueue, &m_OutputImage);
-	std::shared_ptr<PathTracerOutputNode> inputNode = m_Handler->addNode<PathTracerOutputNode>({ 0, 0 }, &m_NodeQueue, m_InputImage);
-	std::shared_ptr<BloomNode> bloomNode = m_Handler->addNode<BloomNode>({ 0, 0 }, &m_NodeQueue, VkExtent2D{ 900, 900 });
-
 	CreateImages();
 
-	outputNode->inPin("Output")->createLink(inputNode->outPin("Output"));
+	std::shared_ptr<PathTracerOutputNode> inputNode = m_Handler->addNode<PathTracerOutputNode>({ 0, 400 }, m_InputImage);
+	std::shared_ptr<BloomNode> bloomNode = m_Handler->addNode<BloomNode>({ 170, 400 }, VkExtent2D{ 900, 900 });
+	std::shared_ptr<TonemapNode> tonemapNode = m_Handler->addNode<TonemapNode>({ 370, 400 }, VkExtent2D{ 900, 900 });
+	std::shared_ptr<OutputNode> outputNode = m_Handler->addNode<OutputNode>({ 600, 400 }, &m_NodeQueue, &m_OutputImage);
+
+	bloomNode->inPin("Input")->createLink(inputNode->outPin("Output"));
+	tonemapNode->inPin("Input")->createLink(bloomNode->outPin("Output"));
+	outputNode->inPin("Window Output")->createLink(tonemapNode->outPin("Output"));
 }
 
 void PostProcessor::Render()
 {
+	// Just empty the dummy queue:
+	while (!EmptyNodeOutput.Queue.GetQueue()->empty())
+		EmptyNodeOutput.Queue.GetQueue()->pop();
+
 	m_NodeQueue.RunTasks();
 
 	if (m_OutputImage.GetLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		m_OutputImage.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+
+	// Reset all nodes
+	ImFlow::ImNodeFlow* handler = GetGridHandler();
+	for (auto& node : handler->getNodes())
+	{
+		// Update Input Nodes
+		{
+			PathTracerOutputNode* inputNode = dynamic_cast<PathTracerOutputNode*>(node.second.get());
+			if (inputNode != nullptr)
+			{
+				inputNode->SetPinsEvaluated(false);
+			}
+		}
+
+		// Update Output Nodes
+		{
+			OutputNode* outputNode = dynamic_cast<OutputNode*>(node.second.get());
+			if (outputNode != nullptr)
+			{
+				outputNode->SetPinsEvaluated(false);
+			}
+		}
+
+		// Update Bloom Nodes
+		{
+			BloomNode* bloomNode = dynamic_cast<BloomNode*>(node.second.get());
+			if (bloomNode != nullptr)
+			{
+				bloomNode->SetPinsEvaluated(false);
+			}
+		}
+
+		// Update Tonemap Nodes
+		{
+			TonemapNode* tonemapNode = dynamic_cast<TonemapNode*>(node.second.get());
+			if (tonemapNode != nullptr)
+			{
+				tonemapNode->SetPinsEvaluated(false);
+			}
+		}
+	}
 }
 
 void PostProcessor::RenderGraph()
@@ -92,4 +142,6 @@ void PostProcessor::CreateImages()
 }
 
 Vulture::Image PostProcessor::BlackImage;
+
+NodeOutput PostProcessor::EmptyNodeOutput;
 

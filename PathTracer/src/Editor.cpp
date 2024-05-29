@@ -32,7 +32,6 @@ void Editor::SetCurrentScene(Vulture::Scene* scene)
 
 void Editor::Render()
 {
-
 	if (m_ImGuiViewportResized)
 	{
 		m_PathTracer.Resize(m_ViewportSize);
@@ -123,7 +122,6 @@ void Editor::ImGuiRenderViewport()
 		prevViewportSize = viewportContentSize;
 	}
 
-	// Show raw path tracing image if it's being rendered to a file
 	ImGui::Image(m_PathTracerOutputImageSet, viewportContentSize);
 
 	ImGui::End();
@@ -161,6 +159,15 @@ void Editor::UpdateNodeImages()
 			if (bloomNode != nullptr)
 			{
 				bloomNode->CreateImage(m_ViewportSize);
+			}
+		}
+
+		// Update Tonemap Nodes
+		{
+			TonemapNode* tonemapNode = dynamic_cast<TonemapNode*>(node.second.get());
+			if (tonemapNode != nullptr)
+			{
+				tonemapNode->CreateImage(m_ViewportSize);
 			}
 		}
 	}
