@@ -47,11 +47,13 @@ void Editor::Render()
 			bool rayTracingFinished = !m_PathTracer.Render();
 			m_PathTracer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
 
+			m_PostProcessor.Evaluate();
 			m_PostProcessor.Render();
 
 			Vulture::Renderer::ImGuiPass();
 
 			Vulture::Renderer::EndFrame();
+			m_PostProcessor.EndFrame();
 		}
 		else
 		{

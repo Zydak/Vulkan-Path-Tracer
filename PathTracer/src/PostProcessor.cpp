@@ -32,22 +32,76 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 
 	CreateImages();
 
-	std::shared_ptr<PathTracerOutputNode> inputNode = m_Handler->addNode<PathTracerOutputNode>({ 0, 400 }, m_InputImage);
+	m_InputNode = m_Handler->addNode<PathTracerOutputNode>({ 0, 400 }, m_InputImage);
 	std::shared_ptr<BloomNode> bloomNode = m_Handler->addNode<BloomNode>({ 170, 400 }, VkExtent2D{ 900, 900 });
+	m_NodesRef.push_back(bloomNode);
 	std::shared_ptr<TonemapNode> tonemapNode = m_Handler->addNode<TonemapNode>({ 370, 400 }, VkExtent2D{ 900, 900 });
-	std::shared_ptr<OutputNode> outputNode = m_Handler->addNode<OutputNode>({ 600, 400 }, &m_NodeQueue, &m_OutputImage);
+	m_NodesRef.push_back(tonemapNode);
+	m_OutputNode = m_Handler->addNode<OutputNode>({ 600, 400 }, &m_NodeQueue, &m_OutputImage);
 
-	bloomNode->inPin("Input")->createLink(inputNode->outPin("Output"));
+	bloomNode->inPin("Input")->createLink(m_InputNode->outPin("Output"));
 	tonemapNode->inPin("Input")->createLink(bloomNode->outPin("Output"));
-	outputNode->inPin("Window Output")->createLink(tonemapNode->outPin("Output"));
+	m_OutputNode->inPin("Window Output")->createLink(tonemapNode->outPin("Output"));
+}
+
+void PostProcessor::Evaluate()
+{
+	m_OutputNode->Resolve();
 }
 
 void PostProcessor::Render()
 {
-	m_NodeQueue.RunTasks();
+	if (!NodeDeleted)
+		m_NodeQueue.RunTasks();
+	else
+		NodeDeleted = false;
+	m_NodeQueue.Clear();
 
 	if (m_OutputImage.GetLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		m_OutputImage.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+}
+
+void PostProcessor::RenderGraph()
+{
+	ImGui::Begin("Post Processing Graph");
+
+	m_Handler->update();
+
+	ImGui::End();
+}
+
+void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
+{
+	Vulture::Device::WaitIdle();
+	m_InputImage = inputImage;
+	m_ViewportSize = newSize;
+	m_NodeQueue.Clear();
+
+	CreateImages();
+
+	std::vector<int> data(m_OutputImage.GetImageSize().width * m_OutputImage.GetImageSize().height, 0);
+	m_OutputImage.WritePixels(data.data());
+}
+
+void PostProcessor::EndFrame()
+{
+	Vulture::Device::WaitIdle();
+
+	for (int i = 0; i < m_NodesRef.size(); i++)
+	{
+		if (m_NodesRef[i]->toDestroy())
+			m_NodesRef.erase(m_NodesRef.begin() + i);
+	}
+
+	// Check if user tried to delete output or input node node (they shouldn't be deletable)
+	if (m_OutputNode->toDestroy())
+	{
+		m_OutputNode = m_Handler->addNode<OutputNode>(m_OutputNode->getPos(), &m_NodeQueue, &m_OutputImage);
+	}
+	if (m_InputNode->toDestroy())
+	{
+		m_InputNode = m_Handler->addNode<PathTracerOutputNode>(m_InputNode->getPos(), m_InputImage);
+	}
 
 	// Reset all nodes
 	ImFlow::ImNodeFlow* handler = GetGridHandler();
@@ -91,28 +145,6 @@ void PostProcessor::Render()
 	}
 }
 
-void PostProcessor::RenderGraph()
-{
-	ImGui::Begin("Post Processing Graph");
-
-	m_Handler->update();
-
-	ImGui::End();
-}
-
-void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
-{
-	Vulture::Device::WaitIdle();
-	m_InputImage = inputImage;
-	m_ViewportSize = newSize;
-	m_NodeQueue.Clear();
-
-	CreateImages();
-
-	std::vector<int> data(m_OutputImage.GetImageSize().width * m_OutputImage.GetImageSize().height, 0);
-	m_OutputImage.WritePixels(data.data());
-}
-
 void PostProcessor::CreateImages()
 {
 	{
@@ -136,4 +168,6 @@ void PostProcessor::CreateImages()
 Vulture::Image PostProcessor::BlackImage;
 
 NodeOutput PostProcessor::EmptyNodeOutput;
+
+bool PostProcessor::NodeDeleted = false;
 

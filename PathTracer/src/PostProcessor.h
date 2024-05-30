@@ -32,6 +32,7 @@ private:
 };
 
 class OutputNode;
+class PathTracerOutputNode;
 
 class PostProcessor
 {
@@ -41,15 +42,19 @@ public:
 
 	void Init(Vulture::Image* inputImage);
 
+	void Evaluate();
 	void Render();
 	void RenderGraph();
 	void Resize(VkExtent2D newSize, Vulture::Image* inputImage);
+	void EndFrame();
 
 	inline ImFlow::ImNodeFlow* GetGridHandler() const { return m_Handler.get(); };
 	inline Vulture::Image* GetOutputImage() { return &m_OutputImage; };
 
 	static Vulture::Image BlackImage;
 	static NodeOutput EmptyNodeOutput;
+
+	static bool NodeDeleted;
 
 private:
 
@@ -59,13 +64,16 @@ private:
 	// ImGui Graph Stuff
 	Vulture::Scope<ImFlow::ImNodeFlow> m_Handler;
 	Vulture::FunctionQueue m_NodeQueue;
+	std::shared_ptr<OutputNode> m_OutputNode;
+	std::shared_ptr<PathTracerOutputNode> m_InputNode;
 
 	VkExtent2D m_ViewportSize = { 900, 900 };
 	Vulture::Image* m_InputImage;
 	Vulture::Image  m_OutputImage;
 	
-	std::shared_ptr<OutputNode> m_OutputNode;
 	void EvaluateNode(ImFlow::BaseNode* node);
+
+	std::vector<std::shared_ptr<ImFlow::BaseNode>> m_NodesRef;
 };
 
 //
@@ -139,7 +147,7 @@ public:
 		m_OutputImage = finalImage;
 	}
 
-	void draw() override
+	void Resolve()
 	{
 		if (PinsEvaluated())
 			return;
@@ -163,7 +171,7 @@ public:
 
 		m_NodeOutput = getInVal<NodeOutput>("Window Output");
 
-		auto func = [this](Vulture::Image* inputImage){
+		auto func = [this](Vulture::Image* inputImage) {
 
 			auto lastLayout = inputImage->GetLayout();
 			if (lastLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
@@ -178,11 +186,16 @@ public:
 
 			if (lastLayout != VK_IMAGE_LAYOUT_UNDEFINED)
 				inputImage->TransitionImageLayout(lastLayout, Vulture::Renderer::GetCurrentCommandBuffer());
-		};
+			};
 
 		m_NodeOutput.Queue.PushTask(func, m_NodeOutput.Image);
 
 		*m_Queue = std::move(m_NodeOutput.Queue);
+	}
+
+	void draw() override
+	{
+		
 	}
 
 private:
