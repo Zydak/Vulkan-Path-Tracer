@@ -12,13 +12,11 @@ struct NodeOutput
 	{ 
 		Image = image; 
 
-		while (!Queue.GetQueue()->empty())
-			Queue.GetQueue()->pop();
+		Queue.Clear();
 	};
 
 	Vulture::Image* Image;
 	Vulture::FunctionQueue Queue;
-	bool skip = true;
 };
 
 class BaseNodeVul
@@ -67,7 +65,7 @@ private:
 	Vulture::Image  m_OutputImage;
 	
 	std::shared_ptr<OutputNode> m_OutputNode;
-	Vulture::FunctionQueue&& EvaluateNode(ImFlow::BaseNode* node);
+	void EvaluateNode(ImFlow::BaseNode* node);
 };
 
 //
@@ -102,7 +100,6 @@ public:
 				}
 
 				m_NodeOutput.Init(m_PathTracerOutputImage);
-				m_NodeOutput.skip = false;
 				return m_NodeOutput;
 			});
 
@@ -152,7 +149,6 @@ public:
 			SetPinsEvaluated(true);
 		}
 
-
 		auto ins = this->getIns();
 
 		for (int i = 0; i < ins.size(); i++)
@@ -165,11 +161,7 @@ public:
 			leftPin->resolve();
 		}
 
-		NodeOutput nodeInput = getInVal<NodeOutput>("Window Output");
-		if (nodeInput.skip)
-		{
-			return;
-		}
+		m_NodeOutput = getInVal<NodeOutput>("Window Output");
 
 		auto func = [this](Vulture::Image* inputImage){
 
@@ -188,9 +180,7 @@ public:
 				inputImage->TransitionImageLayout(lastLayout, Vulture::Renderer::GetCurrentCommandBuffer());
 		};
 
-		m_NodeOutput = getInVal<NodeOutput>("Window Output");
 		m_NodeOutput.Queue.PushTask(func, m_NodeOutput.Image);
-		VL_CORE_INFO("Pushed Viewport Output");
 
 		*m_Queue = std::move(m_NodeOutput.Queue);
 	}
@@ -212,7 +202,6 @@ public:
 		addOUT<NodeOutput>("Output")->behaviour(
 			[this]() 
 			{
-				NodeOutput nodeInput = getInVal<NodeOutput>("Input");
 				if (PinsEvaluated())
 					return m_NodeOutput;
 				else
@@ -234,7 +223,7 @@ public:
 				}
 
 				auto func = [this](Vulture::Image* inputImage) {
-					static VkImage prevHandle = inputImage->GetImage();
+					static VkImage prevHandle = VK_NULL_HANDLE;
 					m_CachedHandle = inputImage->GetImage();
 					if (prevHandle != m_CachedHandle)
 					{
@@ -257,7 +246,6 @@ public:
 				m_NodeOutput = getInVal<NodeOutput>("Input");
 				m_NodeOutput.Queue.PushTask(func, m_NodeOutput.Image);
 				m_NodeOutput.Image = &m_OutputImage;
-				VL_CORE_INFO("Pushed Bloom");
 
 				return m_NodeOutput;
 			}
@@ -306,15 +294,6 @@ public:
 		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Bloom Output Image";
 		m_OutputImage.Init(info);
-
-		NodeOutput nodeInput = getInVal<NodeOutput>("Input");
-
-		Vulture::Bloom::CreateInfo bloomInfo{};
-		bloomInfo.InputImage = const_cast<Vulture::Image*>(nodeInput.Image);
-		bloomInfo.OutputImage = &m_OutputImage;
-		bloomInfo.MipsCount = 6;
-
-		m_Bloom.Init(bloomInfo);
 	}
 
 private:
@@ -338,10 +317,9 @@ public:
 		addOUT<NodeOutput>("Output")->behaviour(
 			[this]()
 			{
-				NodeOutput nodeInput = getInVal<NodeOutput>("Input");
-				if (PinsEvaluated())
+				if (PinsEvaluated()) // Node was already evaluated so just return node output
 					return m_NodeOutput;
-				else
+				else // Node is evaluated for the first time in the frame so reset m_NodeOutput from prev frame and continue
 				{
 					m_NodeOutput = {};
 					SetPinsEvaluated(true);
@@ -359,13 +337,14 @@ public:
 					leftPin->resolve();
 				}
 
-				auto func = [this](Vulture::Image* inputImage) {
-					static VkImage prevHandle = inputImage->GetImage();
+				auto func = [this](Vulture::Image* inputImage) 
+				{
+					static VkImage prevHandle = VK_NULL_HANDLE;
 					m_CachedHandle = inputImage->GetImage();
 					if (prevHandle != m_CachedHandle)
 					{
 						Vulture::Tonemap::CreateInfo info{};
-						info.InputImage = const_cast<Vulture::Image*>(inputImage);
+						info.InputImage = inputImage;
 						info.OutputImage = &m_OutputImage;
 
 						m_Tonemap.Init(info);
@@ -376,9 +355,8 @@ public:
 				};
 
 				m_NodeOutput = getInVal<NodeOutput>("Input");
-				m_NodeOutput.Queue.PushTask(func, nodeInput.Image);
+				m_NodeOutput.Queue.PushTask(func, m_NodeOutput.Image);
 				m_NodeOutput.Image = &m_OutputImage;
-				VL_CORE_INFO("Pushed Tonemapping");
 
 				return m_NodeOutput;
 			}
@@ -387,12 +365,6 @@ public:
 		CreateImage(size);
 
 		NodeOutput nodeInput = getInVal<NodeOutput>("Input");
-
-		Vulture::Tonemap::CreateInfo info{};
-		info.InputImage = const_cast<Vulture::Image*>(nodeInput.Image);
-		info.OutputImage = &m_OutputImage;
-
-		m_Tonemap.Init(info);
 	}
 
 	void draw() override

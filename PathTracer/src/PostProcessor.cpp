@@ -44,10 +44,6 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 
 void PostProcessor::Render()
 {
-	// Just empty the dummy queue:
-	while (!EmptyNodeOutput.Queue.GetQueue()->empty())
-		EmptyNodeOutput.Queue.GetQueue()->pop();
-
 	m_NodeQueue.RunTasks();
 
 	if (m_OutputImage.GetLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
@@ -109,11 +105,7 @@ void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
 	Vulture::Device::WaitIdle();
 	m_InputImage = inputImage;
 	m_ViewportSize = newSize;
-	auto* queue = m_NodeQueue.GetQueue();
-	while (queue->size() != 0)
-	{
-		queue->pop();
-	}
+	m_NodeQueue.Clear();
 
 	CreateImages();
 
