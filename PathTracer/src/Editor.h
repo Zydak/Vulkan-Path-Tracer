@@ -24,14 +24,29 @@ private:
 	void RenderImGui();
 
 	void ImGuiRenderViewport();
-	void UpdateNodeImages();
+	void ImGuiPathTracerSettings();
+	void ImGuiShaderSettings();
+	void ImGuiInfoHeader();
+	void ImGuiSceneEditor();
+	void ImGuiEnvMapSettings();
+	void ImGuiPathTracingSettings();
 
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
-
 	VkDescriptorSet m_PathTracerOutputImageSet;
-	Vulture::Scene* m_CurrentScene;
 
+	// Scene
+	Vulture::Scene* m_CurrentScene;
+	// Model
+	bool m_ModelChanged = false;
+	std::string m_ChangedModelFilepath = "";
+	void UpdateModel();
+	// Skybox
+	bool m_SkyboxChanged = false;
+	std::string m_ChangedSkyboxFilepath = "";
+	void UpdateSkybox();
+
+	Vulture::Timer m_Timer;
 	float m_Time = 0;
 	bool m_ImGuiViewportResized = false;
 	VkExtent2D m_ViewportSize = {900, 900};

@@ -35,7 +35,7 @@ struct GlobalUniforms
 
 struct PushConstantRay
 {
-    int64_t Frame;
+    uint64_t Frame;
     int MaxDepth;
     int SamplesPerFrame;
     float EnvAzimuth;
@@ -66,15 +66,20 @@ struct MeshAdresses
 
 struct Material
 {
-    vec4 Albedo;
-    vec4 Emissive;
+    vec4 Color;
     float Metallic;
     float Roughness;
+    float SubsurfaceScattering;
+    float Anisotropy;
+    float Sheen;
+    float SheenTint;
+    float SpeculatStrength;
 
     float Ior;
     float SpecTrans;
     float Clearcoat;
     float ClearcoatRoughness;
+
     float eta;
     float ax;
     float ay;

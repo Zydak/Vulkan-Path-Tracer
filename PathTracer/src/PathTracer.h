@@ -10,7 +10,7 @@ struct GlobalUbo
 
 struct PushConstantRay
 {
-	int64_t frame = -1;
+	uint64_t frame = 0;
 	int maxDepth;
 	int SamplesPerFrame;
 	float EnvAzimuth;
@@ -51,8 +51,15 @@ public:
 	void Resize(VkExtent2D newSize);
 	void SetScene(Vulture::Scene* scene);
 	bool Render();
+	void UpdateResources();
 
 	void ResetFrameAccumulation();
+	void RecreateRayTracingPipeline();
+
+	inline Vulture::Buffer* GetMaterialsBuffer() { return &m_RayTracingMaterialsBuffer; };
+
+	inline uint64_t GetSamplesAccumulated() { return m_CurrentSamplesPerPixel; };
+	inline uint64_t GetFrame() { return m_PushContantRayTrace.GetDataPtr()->frame; };
 
 private:
 
@@ -96,6 +103,10 @@ public:
 		bool SampleEnvMap = true;
 		float EnvAzimuth = 0.0f;
 		float EnvAltitude = 0.0f;
+
+		std::string HitShaderPath = "src/shaders/raytrace.rchit";
+		std::string MissShaderPath = "src/shaders/raytrace.rmiss";
+		std::string RayGenShaderPath = "src/shaders/raytrace.rgen";
 	};
 
 	DrawInfo m_DrawInfo{};
@@ -127,6 +138,7 @@ private:
 	
 	// Ray Tracing Pipeline
 	Vulture::Pipeline m_RtPipeline;
+	bool m_RecreateRTPipeline = false;
 
 	// Shader Binding Table
 	Vulture::SBT m_SBT;

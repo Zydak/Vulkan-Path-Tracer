@@ -161,7 +161,7 @@ vec3 EvalMicrofacetRefraction(Material mat, float eta, vec3 V, vec3 L, vec3 H, v
     float jacobian = abs(LDotH) / denom;
 
     pdf = G1 * max(0.0, VDotH) * D * jacobian / V.z;
-    return pow(mat.Albedo.xyz, vec3(0.5)) * (1.0 - F) * D * G2 * abs(VDotH) * jacobian * eta2 / abs(L.z * V.z);
+    return pow(mat.Color.xyz, vec3(0.5)) * (1.0 - F) * D * G2 * abs(VDotH) * jacobian * eta2 / abs(L.z * V.z);
 }
 
 float SchlickWeight(float u)
@@ -173,8 +173,8 @@ float SchlickWeight(float u)
 
 void TintColors(Material mat, float eta, out float F0, out vec3 Cspec0)
 {
-    float lum = CalculateLuminance(mat.Albedo.xyz);
-    vec3 ctint = lum > 0.0 ? mat.Albedo.xyz / lum : vec3(1.0);
+    float lum = CalculateLuminance(mat.Color.xyz);
+    vec3 ctint = lum > 0.0 ? mat.Color.xyz / lum : vec3(1.0);
 
     F0 = (1.0 - eta) / (1.0 + eta);
     F0 *= F0;
@@ -189,10 +189,10 @@ void BsdfEvaluate(inout BsdfEvaluateData data, in Surface surface, in Material m
     const vec3 surfaceNormal = surface.Normal;
     const vec3 tangent = surface.Tangent;
     const vec3 bitangent = surface.Bitangent;
-    vec3 albedo = mat.Albedo.rgb;
+    vec3 albedo = mat.Color.rgb;
     float metallic = mat.Metallic;
     float roughness = mat.Roughness;
-    vec3 f0 = mix(vec3(0.04f), mat.Albedo.xyz, metallic);
+    vec3 f0 = mix(vec3(0.04f), mat.Color.xyz, metallic);
     vec3 f90 = vec3(1.0F);
 
     // Specular roughness
@@ -241,9 +241,9 @@ void BsdfEvaluate(inout BsdfEvaluateData data, in Surface surface, in Material m
     // Lobe probabilities
     float schlickWeight = SchlickWeight(V.z);
 
-    float diffProbability = dielectricWeight * CalculateLuminance(mat.Albedo.xyz);
+    float diffProbability = dielectricWeight * CalculateLuminance(mat.Color.xyz);
     float dielectricProbability = dielectricWeight * CalculateLuminance(mix(Cspec0, vec3(1.0), schlickWeight));
-    float metalProbability = metalWeight * CalculateLuminance(mix(mat.Albedo.xyz, vec3(1.0), schlickWeight));
+    float metalProbability = metalWeight * CalculateLuminance(mix(mat.Color.xyz, vec3(1.0), schlickWeight));
     float glassProbability = glassWeight;
     float clearCoatProbability = 0.25 * mat.Clearcoat;
 
@@ -373,9 +373,9 @@ void BsdfSample(inout BsdfSampleData data, in Surface surface, in Material mat)
     // Lobe probabilities
     float schlickWeight = SchlickWeight(WorldToTangent(surface.Tangent, surface.Bitangent, surfaceNormal, data.View).z);
 
-    float diffProbability = dielectricWeight * CalculateLuminance(mat.Albedo.xyz);
+    float diffProbability = dielectricWeight * CalculateLuminance(mat.Color.xyz);
     float dielectricProbability = dielectricWeight * CalculateLuminance(mix(Cspec0, vec3(1.0), schlickWeight));
-    float metalProbability = metalWeight * CalculateLuminance(mix(mat.Albedo.xyz, vec3(1.0), schlickWeight));
+    float metalProbability = metalWeight * CalculateLuminance(mix(mat.Color.xyz, vec3(1.0), schlickWeight));
     float glassProbability = glassWeight;
     float clearCoatProbability = 0.25 * mat.Clearcoat;
 

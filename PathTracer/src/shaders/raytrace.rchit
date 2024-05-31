@@ -84,7 +84,7 @@ HitState ClosestHit(Material mat, Surface surface, vec3 worldPos)
 {
     HitState state;
     
-    vec3 hitValue = mat.Emissive.xyz;
+    vec3 hitValue = mat.Color.xyz * mat.Color.w;
     
     vec3 dirToLight;
     vec3 contribution = vec3(0.0f);
@@ -234,13 +234,10 @@ void main()
     material.Metallic  = max(material.Metallic, 0.001f);
 
 #ifdef USE_ALBEDO
-    material.Albedo *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
+    material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
 #else
-    material.Albedo = vec4(0.5f);
+    material.Color = vec4(0.5f);
 #endif
-
-    material.Emissive.xyz *= material.Emissive.a;
-    material.SpecTrans = 1.0f - material.Albedo.a;
     
     // -------------------------------------------
     // Hit

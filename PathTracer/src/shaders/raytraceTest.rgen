@@ -103,6 +103,11 @@ void main()
             
             hitValue += payload.HitValue * curWeight;
             curWeight *= payload.Weight;
+
+            float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
+            if(Rnd(payload.Seed) >= rrPcont)
+                break;  // paths with low throughput that won't contribute
+            curWeight /= rrPcont;
         }
 
         finalHitValue += hitValue;

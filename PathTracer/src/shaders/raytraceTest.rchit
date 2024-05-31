@@ -101,13 +101,12 @@ void main()
     material.Metallic  = max(material.Metallic, 0.001f);
 
 #ifdef USE_ALBEDO
-    material.Albedo *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
+    material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
 #else
-    material.Albedo = vec4(0.5f);
+    material.Color = vec4(0.5f);
 #endif
 
-    material.Emissive.xyz *= material.Emissive.a;
-    material.SpecTrans = 1.0f - material.Albedo.a;
+    material.SpecTrans = material.SpecTrans;
     
     // -------------------------------------------
     // Hit
@@ -118,8 +117,8 @@ void main()
     const float uniformScatteringPdf = 1 / (2 * M_PI);
     const float cosineScatteringPdf = dot(rayDirCos, surface.Normal) / M_PI;
 
-    const vec3 uniformBSDF = material.Albedo.xyz * uniformScatteringPdf;
-    const vec3 cosineBSDF = material.Albedo.xyz * cosineScatteringPdf;
+    const vec3 uniformBSDF = material.Color.xyz * uniformScatteringPdf;
+    const vec3 cosineBSDF = material.Color.xyz * cosineScatteringPdf;
 
 #ifdef COSINE_WEIGHT
     payload.Weight       = cosineBSDF / cosineScatteringPdf;
@@ -129,7 +128,5 @@ void main()
     payload.RayDirection = rayDirUni;
 #endif
     payload.RayOrigin    = worldPos;
-    payload.HitValue     = material.Emissive.xyz;
-    if (material.Emissive.xyz != vec3(0.0f))
-        payload.Depth = DEPTH_INFINITE;
+    payload.HitValue     = material.Color.xyz * material.Color.a;
 }

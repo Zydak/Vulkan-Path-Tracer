@@ -42,6 +42,16 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 	bloomNode->inPin("Input")->createLink(m_InputNode->outPin("Output"));
 	tonemapNode->inPin("Input")->createLink(bloomNode->outPin("Output"));
 	m_OutputNode->inPin("Window Output")->createLink(tonemapNode->outPin("Output"));
+
+	m_Handler->droppedLinkPopUpContent([this](ImFlow::Pin* dragged) 
+		{
+			SpawnFunction();
+		});
+
+	m_Handler->rightClickPopUpContent([this](ImFlow::BaseNode* node)
+		{
+			SpawnFunction();
+		});
 }
 
 void PostProcessor::Evaluate()
@@ -63,9 +73,8 @@ void PostProcessor::Render()
 
 void PostProcessor::RenderGraph()
 {
-	ImGui::Begin("Post Processing Graph");
-
-	m_Handler->update();
+	if(ImGui::Begin("Post Processing Graph"))
+		m_Handler->update();
 
 	ImGui::End();
 }
@@ -81,6 +90,45 @@ void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
 
 	std::vector<int> data(m_OutputImage.GetImageSize().width * m_OutputImage.GetImageSize().height, 0);
 	m_OutputImage.WritePixels(data.data());
+
+	for (auto& node : m_Handler->getNodes())
+	{
+		// Update Input Nodes
+		{
+			PathTracerOutputNode* inputNode = dynamic_cast<PathTracerOutputNode*>(node.second.get());
+			if (inputNode != nullptr)
+			{
+				inputNode->UpdateImage(m_InputImage);
+			}
+		}
+
+		// Update Output Nodes
+		{
+			OutputNode* outputNode = dynamic_cast<OutputNode*>(node.second.get());
+			if (outputNode != nullptr)
+			{
+				outputNode->UpdateImage(&m_OutputImage);
+			}
+		}
+
+		// Update Bloom Nodes
+		{
+			BloomNode* bloomNode = dynamic_cast<BloomNode*>(node.second.get());
+			if (bloomNode != nullptr)
+			{
+				bloomNode->CreateImage(m_ViewportSize);
+			}
+		}
+
+		// Update Tonemap Nodes
+		{
+			TonemapNode* tonemapNode = dynamic_cast<TonemapNode*>(node.second.get());
+			if (tonemapNode != nullptr)
+			{
+				tonemapNode->CreateImage(m_ViewportSize);
+			}
+		}
+	}
 }
 
 void PostProcessor::EndFrame()
@@ -163,6 +211,20 @@ void PostProcessor::CreateImages()
 		m_OutputImage.Init(info);
 		m_OutputImage.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
+}
+
+ImFlow::BaseNode* PostProcessor::SpawnFunction()
+{
+	std::shared_ptr<ImFlow::BaseNode> node;
+	if (ImGui::Button("Bloom"))
+		node = m_Handler->placeNode<BloomNode>(m_ViewportSize);
+	if (ImGui::Button("Tonemap"))
+		node = m_Handler->placeNode<TonemapNode>(m_ViewportSize);
+
+	if (node != nullptr)
+		m_NodesRef.push_back(node);
+
+	return node.get();
 }
 
 Vulture::Image PostProcessor::BlackImage;

@@ -62,6 +62,7 @@ private:
 	void CreateImages();
 
 	// ImGui Graph Stuff
+	ImFlow::BaseNode* SpawnFunction();
 	Vulture::Scope<ImFlow::ImNodeFlow> m_Handler;
 	Vulture::FunctionQueue m_NodeQueue;
 	std::shared_ptr<OutputNode> m_OutputNode;
@@ -70,12 +71,11 @@ private:
 	VkExtent2D m_ViewportSize = { 900, 900 };
 	Vulture::Image* m_InputImage;
 	Vulture::Image  m_OutputImage;
-	
-	void EvaluateNode(ImFlow::BaseNode* node);
 
 	std::vector<std::shared_ptr<ImFlow::BaseNode>> m_NodesRef;
 };
 
+// TODO: Move nodes to a separate file
 //
 // Nodes
 //
@@ -236,21 +236,21 @@ public:
 				}
 
 				auto func = [this](Vulture::Image* inputImage) {
-					static VkImage prevHandle = VK_NULL_HANDLE;
 					m_CachedHandle = inputImage->GetImage();
-					if (prevHandle != m_CachedHandle)
+					if (m_PrevHandle != m_CachedHandle)
 					{
 						Vulture::Bloom::CreateInfo info{};
+						info.MipsCount = m_RunInfo.MipCount;
 						info.InputImage = const_cast<Vulture::Image*>(inputImage);
 						info.OutputImage = &m_OutputImage;
 
 						m_Bloom.Init(info);
-						prevHandle = m_CachedHandle;
+						m_PrevHandle = m_CachedHandle;
 					}
 					else if (m_MipCountChanged)
 					{
 						m_Bloom.RecreateDescriptors(m_RunInfo.MipCount);
-						m_MipCountChanged = true;
+						m_MipCountChanged = false;
 					}
 
 					m_Bloom.Run(m_RunInfo, Vulture::Renderer::GetCurrentCommandBuffer());
@@ -317,6 +317,7 @@ private:
 	bool m_MipCountChanged = false;
 
 	VkImage m_CachedHandle = VK_NULL_HANDLE;
+	VkImage m_PrevHandle = VK_NULL_HANDLE;
 };
 
 class TonemapNode : public ImFlow::BaseNode, public  BaseNodeVul
@@ -352,16 +353,15 @@ public:
 
 				auto func = [this](Vulture::Image* inputImage) 
 				{
-					static VkImage prevHandle = VK_NULL_HANDLE;
 					m_CachedHandle = inputImage->GetImage();
-					if (prevHandle != m_CachedHandle)
+					if (m_PrevHandle != m_CachedHandle)
 					{
 						Vulture::Tonemap::CreateInfo info{};
 						info.InputImage = inputImage;
 						info.OutputImage = &m_OutputImage;
 
 						m_Tonemap.Init(info);
-						prevHandle = m_CachedHandle;
+						m_PrevHandle = m_CachedHandle;
 					}
 
 					m_Tonemap.Run(m_RunInfo, Vulture::Renderer::GetCurrentCommandBuffer());
@@ -455,4 +455,5 @@ private:
 	NodeOutput m_NodeOutput{};
 
 	VkImage m_CachedHandle = VK_NULL_HANDLE;
+	VkImage m_PrevHandle = VK_NULL_HANDLE;
 };

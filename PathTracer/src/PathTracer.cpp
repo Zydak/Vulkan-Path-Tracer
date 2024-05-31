@@ -100,7 +100,6 @@ bool PathTracer::Render()
 			return false;
 		}
 
-		m_PushContantRayTrace.GetDataPtr()->frame++;
 		m_CurrentSamplesPerPixel += m_DrawInfo.SamplesPerFrame;
 	}
 
@@ -123,6 +122,7 @@ bool PathTracer::Render()
 	m_PushContantRayTrace.Push(m_RtPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
 
 	Vulture::Renderer::RayTrace(Vulture::Renderer::GetCurrentCommandBuffer(), &m_SBT, m_PathTracingImage.GetImageSize());
+	m_PushContantRayTrace.GetDataPtr()->frame++;
 
 	Vulture::Device::EndLabel(Vulture::Renderer::GetCurrentCommandBuffer());
 
@@ -134,12 +134,26 @@ bool PathTracer::Render()
 	return true;
 }
 
+void PathTracer::UpdateResources()
+{
+	if (m_RecreateRTPipeline)
+	{
+		CreateRayTracingPipeline();
+		m_RecreateRTPipeline = false;
+	}
+}
+
 void PathTracer::ResetFrameAccumulation()
 {
-	m_PushContantRayTrace.GetDataPtr()->frame = -1;
+	m_PushContantRayTrace.GetDataPtr()->frame = 0;
 	m_CurrentSamplesPerPixel = 0;
 
 	m_DrawGBuffer = true;
+}
+
+void PathTracer::RecreateRayTracingPipeline()
+{
+	m_RecreateRTPipeline = true;
 }
 
 void PathTracer::DrawGBuffer()
@@ -156,9 +170,7 @@ void PathTracer::DrawGBuffer()
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	VkClearValue clearVal{};
-	clearVal.depthStencil = { 1.0f, 1 };
-	clearColors.push_back(clearVal);
+	clearColors.push_back({ 1.0f, 1 });
 
 	m_GBufferFramebuffer.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
 	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -279,6 +291,7 @@ void PathTracer::CreatePipelines()
 
 void PathTracer::CreateRayTracingPipeline()
 {
+	ResetFrameAccumulation();
 	{
 		Vulture::PushConstant<PushConstantRay>::CreateInfo pushInfo{};
 		pushInfo.Stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
@@ -308,28 +321,21 @@ void PathTracer::CreateRayTracingPipeline()
 		if (m_DrawInfo.UseCosineWeight)
 			defines.push_back({ "COSINE_WEIGHT" });
 
-		std::string rgenPath;
-		std::string rhitPath;
-		std::string rmisPath;
-		if (m_DrawInfo.UseTestShaders)
-		{
-			rgenPath = "src/shaders/raytraceTest.rgen";
-			rhitPath = "src/shaders/raytraceTest.rchit";
-			rmisPath = "src/shaders/raytraceTest.rmiss";
-		}
-		else
-		{
-			rgenPath = "src/shaders/raytrace.rgen";
-			rhitPath = "src/shaders/raytrace.rchit";
-			rmisPath = "src/shaders/raytrace.rmiss";
-		}
-		Vulture::Shader shader1({ rgenPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines });
-		Vulture::Shader shader2({ rhitPath, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines });
-		Vulture::Shader shader3({ rmisPath, VK_SHADER_STAGE_MISS_BIT_KHR, defines });
+		Vulture::Shader rgShader;
+		if (!rgShader.Init({ m_DrawInfo.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
+			return;
 
-		info.RayGenShaders.push_back(&shader1);
-		info.HitShaders.push_back(&shader2);
-		info.MissShaders.push_back(&shader3);
+		Vulture::Shader htShader;
+		if (!htShader.Init({ m_DrawInfo.HitShaderPath, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
+			return;
+
+		Vulture::Shader msShader;
+		if (!msShader.Init({ m_DrawInfo.MissShaderPath, VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
+			return;
+
+		info.RayGenShaders.push_back(&rgShader);
+		info.HitShaders.push_back(&htShader);
+		info.MissShaders.push_back(&msShader);
 
 		// Descriptor set layouts for the pipeline
 		std::vector<VkDescriptorSetLayout> layouts
@@ -420,27 +426,28 @@ void PathTracer::CreateFramebuffers()
 void PathTracer::CreateRayTracingDescriptorSets()
 {
 	{
-		Vulture::Buffer::CreateInfo meshesBufferInfo{};
-		meshesBufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000;
-		meshesBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		meshesBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-		m_RayTracingMeshesBuffer.Init(meshesBufferInfo);
+		Vulture::Buffer::CreateInfo bufferInfo{};
+		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000; // TODO: dynamic amount of meshes
+		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_RayTracingMeshesBuffer.Init(bufferInfo);
 	}
 
 	{
-		Vulture::Buffer::CreateInfo materialBufferInfo{};
-		materialBufferInfo.InstanceSize = sizeof(Vulture::Material) * 50000;
-		materialBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		materialBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-		m_RayTracingMaterialsBuffer.Init(materialBufferInfo);
+		Vulture::Buffer::CreateInfo bufferInfo{};
+		bufferInfo.InstanceSize = sizeof(Vulture::Material) * 50000; // TODO: dynamic amount of meshes
+		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		m_RayTracingMaterialsBuffer.Init(bufferInfo);
 	}
 
 	{
-		Vulture::Buffer::CreateInfo materialBufferInfo{};
-		materialBufferInfo.InstanceSize = sizeof(float);
-		materialBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-		materialBufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		m_RayTracingDoFBuffer.Init(materialBufferInfo);
+		Vulture::Buffer::CreateInfo bufferInfo{};
+		bufferInfo.InstanceSize = sizeof(float);
+		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		m_RayTracingDoFBuffer.Init(bufferInfo);
+		m_RayTracingDoFBuffer.Map();
 	}
 
 	uint32_t texturesCount = 0;
@@ -458,7 +465,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin0{ 0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin3{ 3, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin3{ 3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin4{ 4, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR }; // / 4 because we only care about single texture type like Albedo and not all 4 of them
 		Vulture::DescriptorSetLayout::Binding bin5{ 5, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
