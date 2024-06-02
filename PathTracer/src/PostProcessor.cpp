@@ -18,7 +18,6 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Post Processor Black Image";
 		m_OutputImage.Init(info);
-		m_OutputImage.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		BlackImage.Init(info);
 		blackMade = true;
@@ -29,6 +28,10 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 	m_InputImage = inputImage;
 
 	m_Handler = std::make_unique<ImFlow::ImNodeFlow>("Main");
+	m_Handler->getStyle().colors.subGrid = IM_COL32(25.5, 25.5, 25.5, 255);
+	m_Handler->getStyle().grid_size = 100.0f;
+	m_Handler->getStyle().colors.grid = IM_COL32(50, 50, 50, 255);
+	m_Handler->getGrid().config().color = IM_COL32(25.5, 25.5, 25.5, 255);
 
 	CreateImages();
 
@@ -209,7 +212,6 @@ void PostProcessor::CreateImages()
 		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Post Processor Output Image";
 		m_OutputImage.Init(info);
-		m_OutputImage.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 }
 

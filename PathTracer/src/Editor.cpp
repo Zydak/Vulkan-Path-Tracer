@@ -61,8 +61,6 @@ void Editor::Render()
 			if (!rayTracingFinished)
 				m_Time += m_Timer.ElapsedSeconds();
 
-			m_PathTracer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
-
 			m_PostProcessor.Evaluate();
 			m_PostProcessor.Render();
 
