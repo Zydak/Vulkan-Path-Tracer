@@ -73,9 +73,10 @@ void main()
 
         // Applying small jitter for anti aliasing
         vec2 antiAliasingJitter = (RandomPointInCircle(payload.Seed) * 0.25f / outputImageSize.x) * pcRay.AliasingJitter;
-        direction.xyz += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
+        vec4 directionCopy = direction;
+        directionCopy.xyz += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
 
-        vec3 focalPoint = origin.xyz + normalize(direction.xyz) * pcRay.FocalLenght;
+        vec3 focalPoint = origin.xyz + normalize(directionCopy.xyz) * pcRay.FocalLenght;
         vec2 jitter = RandomPointInCircle(payload.Seed) * pcRay.DoFStrenght / 500.0f;
         payload.RayOrigin = origin.xyz + camRight * jitter.x + camUp * jitter.y;
 
@@ -124,12 +125,6 @@ void main()
 
         seed = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + payload.Seed;
         payload.Seed = PCG(seed);
-
-        if (payload.MissedAllGeometry)
-		{
-			break;
-		}
-
     }
     finalHitValue /= float(samplesAccumulated);
 

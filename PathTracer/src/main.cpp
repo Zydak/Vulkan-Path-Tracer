@@ -100,6 +100,8 @@ Vulture::Application* Vulture::CreateApplication()
 
 	appInfo.Features = features;
 	appInfo.UseMemoryAddress = true;
+	appInfo.WindowHeight = 900;
+	appInfo.WindowWidth = 1600;
 
-	return new ::Application(appInfo, 1600, 900);
+	return new ::Application(appInfo);
 }

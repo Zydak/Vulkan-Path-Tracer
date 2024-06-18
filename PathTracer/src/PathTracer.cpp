@@ -1,8 +1,10 @@
 #include "PathTracer.h"
 #include "Components.h"
 
-void PathTracer::Init()
+void PathTracer::Init(VkExtent2D size)
 {
+	m_ViewportSize = size;
+
 	CreateFramebuffers();
 
 	CreateDescriptorSets();
@@ -29,13 +31,6 @@ void PathTracer::Resize(VkExtent2D newSize)
 		{ Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL }
 	);
 
-	float newAspectRatio = (float)m_ViewportSize.width / (float)m_ViewportSize.height;
-	auto view = m_CurrentSceneRendered->GetRegistry().view<PerspectiveCameraComponent>();
-	for (auto entity : view)
-	{
-		auto& cameraCp = view.get<PerspectiveCameraComponent>(entity);
-		cameraCp.Camera.SetPerspectiveMatrix(cameraCp.Camera.FOV, newAspectRatio, 0.1f, 1000.0f);
-	}
 	UpdateDescriptorSetsData();
 }
 
@@ -62,6 +57,8 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 	CreateAccelerationStructure();
 
 	CreateRayTracingDescriptorSets();
+
+	UpdateDescriptorSetsData();
 }
 
 bool PathTracer::Render()
@@ -85,13 +82,15 @@ bool PathTracer::Render()
 	// Draw Albedo, Roughness, Metallness, Normal into GBuffer
 	DrawGBuffer();
 
-	static glm::mat4 previousMat{ 0.0f };
-	auto test = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
-	if (previousMat != PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat) // if camera moved
+	static glm::mat4 previousViewMat{ 0.0f };
+	static glm::mat4 previousProjMat{ 0.0f };
+	if (previousViewMat != PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat ||
+		previousProjMat != PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ProjMat) // if camera moved
 	{
 		UpdateDescriptorSetsData();
 		ResetFrameAccumulation();
-		previousMat = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat;
+		previousViewMat = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat;
+		previousProjMat = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ProjMat;
 	}
 	else
 	{
@@ -105,7 +104,7 @@ bool PathTracer::Render()
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Ray Trace Pass", { 1.0f, 0.0f, 0.0f, 1.0f });
 
-	m_RtPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR);
+	m_RtPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
 	m_RayTracingDescriptorSet.Bind(
 		0,
 		m_RtPipeline.GetPipelineLayout(),
@@ -173,7 +172,7 @@ void PathTracer::DrawGBuffer()
 	clearColors.push_back({ 1.0f, 1 });
 
 	m_GBufferFramebuffer.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
-	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
+	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
 
 	m_GlobalDescriptorSets.Bind
 	(
@@ -531,7 +530,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.Build();
 	}
 
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	for (int i = 0; i < Vulture::Renderer::GetMaxFramesInFlight(); i++)
 	{
 		std::vector<MeshAdresses> meshAddresses;
 		std::vector<Vulture::Material> materials;
@@ -597,12 +596,15 @@ void PathTracer::CreateAccelerationStructure()
 
 void PathTracer::UpdateDescriptorSetsData()
 {
-	PerspectiveCameraComponent* camComp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
+	float newAspectRatio = (float)m_ViewportSize.width / (float)m_ViewportSize.height;
+	PerspectiveCameraComponent* cameraCp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
+	cameraCp->Camera.SetPerspectiveMatrix(cameraCp->Camera.FOV, newAspectRatio, 0.1f, 1000.0f);
+
 	GlobalUbo ubo{};
-	VL_CORE_ASSERT(camComp != nullptr, "No main camera found!");
-	ubo.ProjInverse = glm::inverse(camComp->Camera.ProjMat);
-	ubo.ViewInverse = glm::inverse(camComp->Camera.ViewMat);
-	ubo.ViewProjectionMat = camComp->Camera.GetProjView();
+	VL_CORE_ASSERT(cameraCp != nullptr, "No main camera found!");
+	ubo.ProjInverse = glm::inverse(cameraCp->Camera.ProjMat);
+	ubo.ViewInverse = glm::inverse(cameraCp->Camera.ViewMat);
+	ubo.ViewProjectionMat = cameraCp->Camera.GetProjView();
 	m_GlobalSetBuffer.WriteToBuffer(&ubo);
 
 	m_GlobalSetBuffer.Flush();

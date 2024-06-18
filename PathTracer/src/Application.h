@@ -6,7 +6,7 @@
 class Application : public Vulture::Application
 {
 public:
-	Application(Vulture::ApplicationInfo appInfo, float width, float height);
+	Application(Vulture::ApplicationInfo appInfo);
 	~Application();
 
 	void Destroy() override;

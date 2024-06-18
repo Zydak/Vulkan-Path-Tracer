@@ -21,6 +21,12 @@ public:
 	~Editor();
 
 private:
+	void CreateQuadPipeline();
+	void CreateQuadRenderTarget();
+	void RescaleQuad();
+	void CreateQuadDescriptor();
+
+	void RenderViewportImage();
 	void RenderImGui();
 
 	void ImGuiRenderViewport();
@@ -30,6 +36,10 @@ private:
 	void ImGuiSceneEditor();
 	void ImGuiEnvMapSettings();
 	void ImGuiPathTracingSettings();
+	void ImGuiViewportSettings();
+	void ImGuiCameraSettings();
+
+	void Resize();
 
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
@@ -49,5 +59,15 @@ private:
 	Vulture::Timer m_Timer;
 	float m_Time = 0;
 	bool m_ImGuiViewportResized = false;
+	bool m_ImageResized = false;
+	VkOffset2D m_ImageSize = {900, 900}; // Using offset so that components are ints and not uints for ImGui
 	VkExtent2D m_ViewportSize = {900, 900};
+
+	// Viewport Rendering
+	Vulture::OrthographicCamera m_QuadCamera;
+	Vulture::Pipeline m_QuadPipeline;
+	Vulture::PushConstant<glm::mat4> m_QuadPush;
+	Vulture::Transform m_ImageQuadTransform;
+	Vulture::Framebuffer m_QuadRenderTarget;
+	Vulture::DescriptorSet m_QuadDescriptor;
 };

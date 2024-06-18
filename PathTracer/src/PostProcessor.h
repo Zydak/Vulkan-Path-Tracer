@@ -166,6 +166,8 @@ public:
 				continue;
 
 			auto leftPin = link->left();
+			if (leftPin == nullptr)
+				continue;
 			leftPin->resolve();
 		}
 

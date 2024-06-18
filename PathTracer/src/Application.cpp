@@ -3,8 +3,8 @@
 #include "CameraScript.h"
 #include "Components.h"
 
-Application::Application(Vulture::ApplicationInfo appInfo, float width, float height)
-	: Vulture::Application(appInfo, width, height) // TODO: check for amount of cores
+Application::Application(Vulture::ApplicationInfo appInfo)
+	: Vulture::Application(appInfo) // TODO: check for amount of cores
 {
 	Vulture::AssetManager::Init({ 4 });
 	m_Scene = std::make_unique<Vulture::Scene>(m_Window);

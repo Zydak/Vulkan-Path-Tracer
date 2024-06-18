@@ -38,7 +38,7 @@ class PathTracer
 public:
 	PathTracer() = default;
 
-	void Init();
+	void Init(VkExtent2D size);
 
 	~PathTracer();
 	PathTracer(const PathTracer& other) = delete;

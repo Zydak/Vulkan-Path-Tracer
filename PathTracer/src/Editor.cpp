@@ -9,12 +9,18 @@
 
 void Editor::Init()
 {
-	m_PathTracer.Init();
+	m_PathTracer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
 
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
+
+	CreateQuadRenderTarget();
+	CreateQuadPipeline();
+	CreateQuadDescriptor();
 }
 
 void Editor::Destroy()
@@ -47,10 +53,19 @@ void Editor::Render()
 
 	if (m_ImGuiViewportResized)
 	{
-		m_PathTracer.Resize(m_ViewportSize);
-		m_PostProcessor.Resize(m_ViewportSize, m_PathTracer.GetOutputImage());
+		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+		m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
 		m_ImGuiViewportResized = false;
-		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		Resize();
+		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+	if (m_ImageResized)
+	{
+		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+		m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
+		m_ImageResized = false;
+		Resize();
+		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 	else
 	{
@@ -64,6 +79,8 @@ void Editor::Render()
 			m_PostProcessor.Evaluate();
 			m_PostProcessor.Render();
 
+			RenderViewportImage();
+
 			Vulture::Renderer::ImGuiPass();
 
 			Vulture::Renderer::EndFrame();
@@ -71,9 +88,10 @@ void Editor::Render()
 		}
 		else
 		{
-			m_PathTracer.Resize(m_ViewportSize);
-			m_PostProcessor.Resize(m_ViewportSize, m_PathTracer.GetOutputImage());
-			m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
+			Resize();
+			m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 	}
 }
@@ -86,6 +104,113 @@ Editor::Editor()
 Editor::~Editor()
 {
 
+}
+
+void Editor::CreateQuadPipeline()
+{
+	Vulture::Shader::CreateInfo vertexShaderInfo{};
+	vertexShaderInfo.Filepath = "src/shaders/Quad.vert";
+	vertexShaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
+	Vulture::Shader vertexShader(vertexShaderInfo);
+
+	Vulture::Shader::CreateInfo fragmentShaderInfo{};
+	fragmentShaderInfo.Filepath = "src/shaders/Quad.frag";
+	fragmentShaderInfo.Type = VK_SHADER_STAGE_FRAGMENT_BIT;
+	Vulture::Shader fragmentShader(fragmentShaderInfo);
+
+	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
+	Vulture::DescriptorSetLayout layout(bindings);
+
+	Vulture::Pipeline::GraphicsCreateInfo info{};
+	info.AttributeDesc = Vulture::Mesh::Vertex::GetAttributeDescriptions();
+	info.BindingDesc = Vulture::Mesh::Vertex::GetBindingDescriptions();
+	info.BlendingEnable = false;
+	info.ColorAttachmentCount = 1;
+	info.PolygonMode = VK_POLYGON_MODE_FILL;
+	info.CullMode = VK_CULL_MODE_NONE;
+	info.debugName = "Quad Pipeline";
+	info.DepthClamp = false;
+	info.DepthTestEnable = false;
+	info.DescriptorSetLayouts = { layout.GetDescriptorSetLayoutHandle() };
+	info.Height = m_ViewportSize.height;
+	info.Width = m_ViewportSize.width;
+	info.PushConstants = m_QuadPush.GetRangePtr();
+	info.Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	info.Shaders = { &vertexShader, &fragmentShader };
+	info.RenderPass = m_QuadRenderTarget.GetRenderPass();
+
+	m_QuadPipeline.Init(info);
+}
+
+void Editor::CreateQuadRenderTarget()
+{
+	// Framebuffer
+	{
+		VkSubpassDependency dependency{};
+		dependency.srcSubpass = 0;
+		dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		Vulture::Framebuffer::RenderPassCreateInfo renderPassInfo{};
+		renderPassInfo.FinalLayouts = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+		renderPassInfo.Dependencies = { dependency };
+		Vulture::Framebuffer::CreateInfo info{};
+		info.AttachmentsFormats = { Vulture::FramebufferAttachment::ColorRGBA8 };
+		info.Extent = { m_ViewportSize.width, m_ViewportSize.height };
+		info.RenderPassInfo = &renderPassInfo;
+		m_QuadRenderTarget.Init(info);
+	}
+}
+
+void Editor::RescaleQuad()
+{
+	VkExtent2D imageSize = m_PostProcessor.GetOutputImage()->GetImageSize();
+
+	float imageAspectRatio = (float)imageSize.width / (float)imageSize.height;
+	float viewportAspectRatio = (float)m_ViewportSize.width / (float)m_ViewportSize.height;
+
+	float maxScale = glm::max(imageAspectRatio, viewportAspectRatio);
+
+	float scaleX = imageAspectRatio / maxScale;
+	float scaleY = viewportAspectRatio / maxScale;
+
+	scaleX *= m_ViewportSize.width / 2.0f;
+	scaleY *= m_ViewportSize.height / 2.0f;
+
+	m_ImageQuadTransform.Init(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f), glm::vec3(scaleX, scaleY, 1.0f));
+}
+
+void Editor::CreateQuadDescriptor()
+{
+	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
+
+	m_QuadDescriptor.Init(&Vulture::Renderer::GetDescriptorPool(), bindings);
+	m_QuadDescriptor.AddImageSampler(0, { Vulture::Renderer::GetLinearSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+	m_QuadDescriptor.Build();
+}
+
+void Editor::RenderViewportImage()
+{
+	glm::mat4 view = m_QuadCamera.GetProjView();
+	view = glm::scale(view, glm::vec3(1.0f, -1.0f, 1.0f));
+	m_QuadPush.SetData({ view * m_ImageQuadTransform.GetMat4() });
+
+	std::vector<VkClearValue> clearColors;
+	clearColors.push_back({ 0.1f, 0.1f, 0.1f, 1.0f });
+	m_QuadRenderTarget.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
+
+	m_QuadPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
+
+	m_QuadPush.Push(m_QuadPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
+	m_QuadDescriptor.Bind(0, m_QuadPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, Vulture::Renderer::GetCurrentCommandBuffer());
+
+	Vulture::Renderer::GetQuadMesh().Bind(Vulture::Renderer::GetCurrentCommandBuffer());
+	Vulture::Renderer::GetQuadMesh().Draw(Vulture::Renderer::GetCurrentCommandBuffer(), 1, 0);
+
+	m_QuadRenderTarget.Unbind(Vulture::Renderer::GetCurrentCommandBuffer());
 }
 
 void Editor::RenderImGui()
@@ -144,6 +269,10 @@ void Editor::ImGuiPathTracerSettings()
 
 	ImGuiInfoHeader();
 	m_Timer.Reset();
+
+	ImGuiViewportSettings();
+
+	ImGuiCameraSettings();
 
 	ImGuiShaderSettings();
 
@@ -448,14 +577,91 @@ void Editor::ImGuiPathTracingSettings()
 	ImGui::Text("");
 
 	if (ImGui::SliderInt("Max Depth",			&m_PathTracer.m_DrawInfo.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderInt("Samples Per Pixel",	&m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderInt("Samples Per Pixel",	&m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
 	if (ImGui::SliderInt("Samples Per Frame",	&m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("FOV",				&PerspectiveCameraComponent::GetMainCamera(m_CurrentScene)->Camera.FOV, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 
 	if (ImGui::SliderFloat("Aliasing Jitter Strength",	&m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 1.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::Checkbox(   "Auto Focal Length",			&m_PathTracer.m_DrawInfo.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("Focal Length",				&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("DoF Strength",				&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	ImGui::Separator();
+}
+
+void Editor::ImGuiViewportSettings()
+{
+	if (!ImGui::CollapsingHeader("Viewport Settings"))
+		return;
+
+	ImGui::Separator();
+
+	if (ImGui::InputInt2("Rendered Image Size", (int*)&m_ImageSize)) { m_ImageResized = true; }
+
+	ImGui::Separator();
+}
+
+void Editor::ImGuiCameraSettings()
+{
+	if (!ImGui::CollapsingHeader("Camera Settings"))
+		return;
+
+	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
+
+	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	PerspectiveCameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<PerspectiveCameraComponent>(cameraEntity);
+	CameraScript* camScript;
+
+	if (scComp)
+	{
+		camScript = scComp->GetScript<CameraScript>(0);
+	}
+
+	ImGui::Separator();
+	if (camScript)
+	{
+		if (ImGui::Button("Reset Camera"))
+		{
+			camScript->Reset();
+			camComp->Camera.UpdateViewMatrix();
+		}
+		ImGui::SliderFloat("Movement Speed", &camScript->m_MovementSpeed, 0.0f, 20.0f);
+		ImGui::SliderFloat("Rotation Speed", &camScript->m_RotationSpeed, 0.0f, 40.0f);
+
+		if (ImGui::SliderFloat("FOV", &camComp->Camera.FOV, 10.0f, 45.0f))
+		{
+			camComp->Camera.UpdateProjMatrix();
+		}
+
+		glm::vec3 position = camComp->Camera.Translation;
+		glm::vec3 rotation = camComp->Camera.Rotation.GetAngles();
+		bool changed = false;
+		if (ImGui::InputFloat3("Position", (float*)&position)) { changed = true; };
+		if (ImGui::InputFloat3("Rotation", (float*)&rotation)) { changed = true; };
+
+		if (changed)
+		{
+			camComp->Camera.Translation = position;
+			camComp->Camera.Rotation.SetAngles(rotation);
+
+			camComp->Camera.UpdateViewMatrix();
+		}
+	}
+	ImGui::Separator();
+}
+
+void Editor::Resize()
+{
+	RescaleQuad();
+	CreateQuadRenderTarget();
+	CreateQuadDescriptor();
+
+	float x = m_ViewportSize.width / 2.0f;
+	float y = m_ViewportSize.height / 2.0f;
+
+	glm::vec4 size = { -x, x, -y, y };
+
+	m_QuadCamera.SetOrthographicMatrix({ -x, x, -y, y }, 0.1f, 100.0f);
+	m_QuadCamera.UpdateViewMatrix();
 }
 
 void Editor::UpdateModel()
@@ -477,14 +683,16 @@ void Editor::UpdateModel()
 
 void Editor::UpdateSkybox()
 {
-	Vulture::AssetHandle newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
-
+	Vulture::AssetHandle newAssetHandle;
 	auto view = m_CurrentScene->GetRegistry().view<SkyboxComponent>();
 	for (auto& entity : view)
 	{
 		SkyboxComponent* skyboxComp = &m_CurrentScene->GetRegistry().get<SkyboxComponent>(entity); // TODO: support more than one model
 		skyboxComp->ImageHandle.Unload();
+
+		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
 		skyboxComp->ImageHandle = newAssetHandle;
+		break;
 	}
 
 	newAssetHandle.WaitToLoad();

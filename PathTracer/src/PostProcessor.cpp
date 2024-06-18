@@ -2,6 +2,7 @@
 
 void PostProcessor::Init(Vulture::Image* inputImage)
 {
+	m_ViewportSize = inputImage->GetImageSize();
 	static bool blackMade = false;
 	if (!blackMade)
 	{
