@@ -1,0 +1,53 @@
+#version 460
+
+#extension GL_EXT_scalar_block_layout : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D uInput;
+layout(set = 0, binding = 1, rgba8) uniform image2D uOutput;
+
+layout(set = 0, binding = 2) uniform sampler2D uDepthBuffer;
+
+struct Info
+{
+	mat4 VPInverse;
+
+	float FocalPoint;
+	float Near;
+	float Far;
+};
+
+layout(push_constant, scalar) uniform PushConstants
+{
+	Info pInfo;
+};
+
+float linearDepth() 
+{
+	const float far = pInfo.Far;
+	const float near = pInfo.Near;
+	float depth = texelFetch(uDepthBuffer, ivec2(gl_GlobalInvocationID.xy), 0).r;
+
+    return near * far / (far + depth * (near - far));
+}
+
+void main() 
+{
+    if(gl_GlobalInvocationID.xy != clamp(gl_GlobalInvocationID.xy, vec2(0.0F), imageSize(uOutput)))
+		return;
+
+	float depth = linearDepth();
+
+	vec4 color;
+
+	if (depth >= pInfo.Far)
+		color = texelFetch(uInput, ivec2(gl_GlobalInvocationID.xy), 0);
+	else if (depth > pInfo.FocalPoint)  
+		color = vec4(0.0f, 0.6f, 0.0f, 1.0f);
+	else
+		color = texelFetch(uInput, ivec2(gl_GlobalInvocationID.xy), 0);
+
+		
+    imageStore(uOutput, ivec2(gl_GlobalInvocationID.xy), color);
+}

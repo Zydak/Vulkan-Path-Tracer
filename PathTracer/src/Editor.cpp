@@ -53,8 +53,6 @@ void Editor::Render()
 
 	if (m_ImGuiViewportResized)
 	{
-		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-		m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
 		m_ImGuiViewportResized = false;
 		Resize();
 		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -577,12 +575,12 @@ void Editor::ImGuiPathTracingSettings()
 	ImGui::Text("");
 
 	if (ImGui::SliderInt("Max Depth",			&m_PathTracer.m_DrawInfo.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderInt("Samples Per Pixel",	&m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
-	if (ImGui::SliderInt("Samples Per Frame",	&m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("FOV",				&PerspectiveCameraComponent::GetMainCamera(m_CurrentScene)->Camera.FOV, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-
-	if (ImGui::SliderFloat("Aliasing Jitter Strength",	&m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 1.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderInt("Samples Per Pixel", &m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
+	if (ImGui::SliderInt("Samples Per Frame", &m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) {  }
+	
+	if (ImGui::SliderFloat("Aliasing Jitter Strength",	&m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 3.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::Checkbox(   "Auto Focal Length",			&m_PathTracer.m_DrawInfo.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::Checkbox(   "Visualize DOF",				&m_PathTracer.m_DrawInfo.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("Focal Length",				&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("DoF Strength",				&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	ImGui::Separator();
@@ -666,13 +664,14 @@ void Editor::Resize()
 
 void Editor::UpdateModel()
 {
-	Vulture::AssetHandle newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
+	Vulture::AssetHandle newAssetHandle;
 
 	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
 	for (auto& entity : view)
 	{
 		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
 		modelComp->ModelHandle.Unload();
+		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
 		modelComp->ModelHandle = newAssetHandle;
 	}
 

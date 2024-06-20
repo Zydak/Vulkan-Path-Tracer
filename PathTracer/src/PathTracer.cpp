@@ -130,6 +130,16 @@ bool PathTracer::Render()
 		memcpy(&m_DrawInfo.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
 	}
 
+	Vulture::PerspectiveCamera* cam = &PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera;
+
+	if (m_DrawInfo.VisualizedDOF)
+	{
+		m_DOfVisualizer.GetPush().GetDataPtr()->Near = cam->NearFar.x;
+		m_DOfVisualizer.GetPush().GetDataPtr()->Far = cam->NearFar.y;
+		m_DOfVisualizer.GetPush().GetDataPtr()->FocalPoint = m_DrawInfo.FocalLength;
+		m_DOfVisualizer.GetPush().GetDataPtr()->VPInverse = glm::inverse(cam->GetProjView());
+		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer(), Vulture::Renderer::GetFrameIndex());
+	}
 	return true;
 }
 
@@ -169,7 +179,7 @@ void PathTracer::DrawGBuffer()
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
 	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.push_back({ 1.0f, 1 });
+	clearColors.push_back({ 1.0f, 0 });
 
 	m_GBufferFramebuffer.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
 	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
@@ -285,6 +295,18 @@ void PathTracer::CreatePipelines()
 
 			m_GBufferPipeline.Init(info);
 		}
+	}
+
+	// DOF
+	{
+		Vulture::Effect<PushConstantDOF>::CreateInfo info{};
+		info.AdditionalTextures = { m_GBufferFramebuffer.GetImageNoVk(4).get() };
+		info.DebugName = "DOF Visualizer";
+		info.InputImages = { &m_PathTracingImage };
+		info.OutputImages = { &m_PathTracingImage };
+		info.ShaderPath = "src/shaders/DepthOfField.comp";
+
+		m_DOfVisualizer.Init(info);
 	}
 }
 

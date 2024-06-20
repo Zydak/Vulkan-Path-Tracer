@@ -102,6 +102,7 @@ Vulture::Application* Vulture::CreateApplication()
 	appInfo.UseMemoryAddress = true;
 	appInfo.WindowHeight = 900;
 	appInfo.WindowWidth = 1600;
+	appInfo.MaxFramesInFlight = 1;
 
 	return new ::Application(appInfo);
 }

@@ -27,6 +27,15 @@ struct PushConstantGBuffer
 	Vulture::Material Material;
 };
 
+struct PushConstantDOF
+{
+	glm::mat4 VPInverse;
+
+	float FocalPoint;
+	float Near;
+	float Far;
+};
+
 struct MeshAdresses
 {
 	uint64_t VertexAddress; // Address of the Vertex buffer
@@ -84,8 +93,9 @@ public:
 	{
 		float DOFStrength = 0.0f;
 		float FocalLength = 8.0f;
+		bool VisualizedDOF = false;
 		bool AutoDoF = false;
-		float AliasingJitterStr = 1.0f;
+		float AliasingJitterStr = 2.0f;
 		int TotalSamplesPerPixel = 15000;
 		int RayDepth = 20;
 		int SamplesPerFrame = 15;
@@ -146,4 +156,7 @@ private:
 	// Push Contants
 	Vulture::PushConstant<PushConstantGBuffer> m_PushContantGBuffer;
 	Vulture::PushConstant<PushConstantRay> m_PushContantRayTrace;
+
+	// DOF
+	Vulture::Effect<PushConstantDOF> m_DOfVisualizer;
 };
