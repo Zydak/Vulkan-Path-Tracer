@@ -552,7 +552,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.Build();
 	}
 
-	for (int i = 0; i < Vulture::Renderer::GetMaxFramesInFlight(); i++)
+	for (int i = 0; i < (int)Vulture::Renderer::GetMaxFramesInFlight(); i++)
 	{
 		std::vector<MeshAdresses> meshAddresses;
 		std::vector<Vulture::Material> materials;

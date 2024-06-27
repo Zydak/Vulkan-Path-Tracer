@@ -61,7 +61,7 @@ void Application::Init()
 
 	// Load Initial Skybox
 	Vulture::Entity skyboxEntity = m_Scene->CreateEntity();
-	skyboxEntity.AddComponent<SkyboxComponent>("assets/sunrise.hdr").ImageHandle.WaitToLoad();
+	skyboxEntity.AddComponent<SkyboxComponent>("assets/Black.hdr").ImageHandle.WaitToLoad();
 
 	// Load Initial model
 	Vulture::Entity entity = m_Scene->CreateEntity();

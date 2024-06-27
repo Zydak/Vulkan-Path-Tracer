@@ -73,9 +73,10 @@ void main()
 
         // Applying small jitter for anti aliasing
         vec2 antiAliasingJitter = (RandomPointInCircle(payload.Seed) * 0.25f / outputImageSize.x) * pcRay.AliasingJitter;
-        direction.xyz += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
+        vec4 directionCopy = direction;
+        directionCopy.xyz += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
 
-        vec3 focalPoint = origin.xyz + normalize(direction.xyz) * pcRay.FocalLenght;
+        vec3 focalPoint = origin.xyz + normalize(directionCopy.xyz) * pcRay.FocalLenght;
         vec2 jitter = RandomPointInCircle(payload.Seed) * pcRay.DoFStrenght / 500.0f;
         payload.RayOrigin = origin.xyz + camRight * jitter.x + camUp * jitter.y;
 
@@ -104,10 +105,10 @@ void main()
             hitValue += payload.HitValue * curWeight;
             curWeight *= payload.Weight;
 
-            float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
-            if(Rnd(payload.Seed) >= rrPcont)
-                break;  // paths with low throughput that won't contribute
-            curWeight /= rrPcont;
+            //float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
+            //if(Rnd(payload.Seed) >= rrPcont)
+            //    break;  // paths with low throughput that won't contribute
+            //curWeight /= rrPcont;
         }
 
         finalHitValue += hitValue;

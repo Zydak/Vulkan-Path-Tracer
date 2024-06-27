@@ -32,6 +32,11 @@ layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
     EnvAccel[] uAccels;
 };
 
+vec3 BRDF(Material mat)
+{
+    return mat.Color.xyz;
+}
+
 void main() 
 {
     // -------------------------------------------
@@ -114,19 +119,13 @@ void main()
     vec3 rayDirCos = CosineSamplingHemisphere(payload.Seed, surface.Tangent, surface.Bitangent, surface.Normal);
     vec3 rayDirUni = UniformSamplingHemisphere(payload.Seed, surface.Tangent, surface.Bitangent, surface.Normal);
     
-    const float uniformScatteringPdf = 1 / (2 * M_PI);
-    const float cosineScatteringPdf = dot(rayDirCos, surface.Normal) / M_PI;
+    const float uniformScatteringPdf = 1;// / (2 * M_PI);
 
-    const vec3 uniformBSDF = material.Color.xyz * uniformScatteringPdf;
-    const vec3 cosineBSDF = material.Color.xyz * cosineScatteringPdf;
+    const vec3 brdf = BRDF(material) * uniformScatteringPdf;
 
-#ifdef COSINE_WEIGHT
-    payload.Weight       = cosineBSDF / cosineScatteringPdf;
-    payload.RayDirection = rayDirCos;
-#else
-    payload.Weight       = uniformBSDF / uniformScatteringPdf;
+    payload.Weight       = brdf / uniformScatteringPdf;
     payload.RayDirection = rayDirUni;
-#endif
+
     payload.RayOrigin    = worldPos;
-    payload.HitValue     = material.Color.xyz * material.Color.a;
+    payload.HitValue     = BRDF(material) * material.Color.a;
 }
