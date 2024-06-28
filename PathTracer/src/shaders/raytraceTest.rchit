@@ -8,6 +8,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "raycommon.glsl"
+#include "BRDF.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
@@ -31,11 +32,6 @@ layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
 {
     EnvAccel[] uAccels;
 };
-
-vec3 BRDF(Material mat)
-{
-    return mat.Color.xyz;
-}
 
 void main() 
 {
@@ -69,6 +65,9 @@ void main()
     const vec3 nrm      = v0.Normal.xyz * barycentrics.x + v1.Normal.xyz * barycentrics.y + v2.Normal.xyz * barycentrics.z;
     vec3 worldNrm = normalize(vec3(nrm * gl_ObjectToWorldEXT));  // Transforming the normal to world space
 
+    const vec3 tang     = v0.Tangent.xyz * barycentrics.x + v1.Tangent.xyz * barycentrics.y + v2.Tangent.xyz * barycentrics.z;
+    const vec3 bitang     = v0.Bitangent.xyz * barycentrics.x + v1.Bitangent.xyz * barycentrics.y + v2.Bitangent.xyz * barycentrics.z;
+
     material.eta = dot(gl_WorldRayDirectionEXT, worldNrm) < 0.0 ? (1.0 / material.Ior) : material.Ior;
 
     const vec3 V = -gl_WorldRayDirectionEXT;
@@ -81,6 +80,8 @@ void main()
     }
 
     surface.Normal = worldNrm;
+    //surface.Tangent = tang;
+    //surface.Bitangent = bitang;
     CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
 
 #ifdef USE_NORMAL_MAPS
@@ -105,27 +106,46 @@ void main()
     material.Roughness = max(material.Roughness, 0.001f);
     material.Metallic  = max(material.Metallic, 0.001f);
 
-#ifdef USE_ALBEDO
     material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
-#else
-    material.Color = vec4(0.5f);
-#endif
 
     material.SpecTrans = material.SpecTrans;
     
     // -------------------------------------------
     // Hit
     // -------------------------------------------
-    vec3 rayDirCos = CosineSamplingHemisphere(payload.Seed, surface.Tangent, surface.Bitangent, surface.Normal);
-    vec3 rayDirUni = UniformSamplingHemisphere(payload.Seed, surface.Tangent, surface.Bitangent, surface.Normal);
+
+    BRDFSampleData sampleData;
+    sampleData.View = -gl_WorldRayDirectionEXT;
+    sampleData.Random = vec4(Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed));
+
+    SampleBRDF(sampleData, material, surface);
+
+    payload.Weight = sampleData.BRDF / sampleData.PDF;
+
+    // TEST
+
     
-    const float uniformScatteringPdf = 1;// / (2 * M_PI);
+    vec3 halfVector = normalize(-gl_WorldRayDirectionEXT + sampleData.RayDir);
+    float NdotV = abs(dot(surface.Normal, -gl_WorldRayDirectionEXT));
+    float NdotL = abs(dot(surface.Normal, sampleData.RayDir));
+    float VdotH = abs(dot(-gl_WorldRayDirectionEXT, halfVector));
+    float NdotH = abs(dot(surface.Normal, halfVector));
+    float LdotH = abs(dot(sampleData.RayDir, halfVector));
+    
+    vec3 tint = material.Color.xyz / max(GetLuminance(material.Color.xyz), 0.001f);
+    vec3 f0 = mix(vec3(material.SpecularStrength) * mix(vec3(1.0f), tint, material.SpecularTint), material.Color.xyz, material.Metallic);
+    vec3 f90 = vec3(1.0F);
+    float a = material.Roughness * material.Roughness;
+    
+    //payload.Weight = BrdfSpecular(a, f0, f90, NdotH, NdotL, NdotV, LdotH);
+    //payload.Weight = BrdfSpecularGGX(f0, f90, a, VdotH, NdotL, NdotV, NdotH);
+    
+    // TEST
 
-    const vec3 brdf = BRDF(material) * uniformScatteringPdf;
 
-    payload.Weight       = brdf / uniformScatteringPdf;
-    payload.RayDirection = rayDirUni;
-
-    payload.RayOrigin    = worldPos;
-    payload.HitValue     = BRDF(material) * material.Color.a;
+    payload.RayDirection = sampleData.RayDir;
+    
+    vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
+    payload.RayOrigin = OffsetRay(worldPos, offsetDir);
+    payload.HitValue     = material.Color.xyz * material.Color.a;
 }

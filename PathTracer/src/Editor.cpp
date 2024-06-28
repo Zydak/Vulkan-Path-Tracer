@@ -399,7 +399,7 @@ void Editor::ImGuiSceneEditor()
 	{
 		if (entry.is_regular_file())
 		{
-			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj")
+			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj" || entry.path().extension() == ".fbx")
 			{
 				i++;
 			}
@@ -413,7 +413,7 @@ void Editor::ImGuiSceneEditor()
 	{
 		if (entry.is_regular_file())
 		{
-			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj")
+			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj" || entry.path().extension() == ".fbx")
 			{
 				modelsStr.push_back(entry.path().filename().string());
 				modelsCStr.push_back(modelsStr[i].c_str());
@@ -463,6 +463,7 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Anisotropy",		(float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Specular Strength", (float*)&(*currentMaterials)[currentMaterialItem].SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Specular Tint",		(float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 	ImGui::Separator();
 	
 	if (ImGui::SliderFloat("Spec Trans",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };

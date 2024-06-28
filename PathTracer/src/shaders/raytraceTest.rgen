@@ -105,10 +105,18 @@ void main()
             hitValue += payload.HitValue * curWeight;
             curWeight *= payload.Weight;
 
-            //float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
-            //if(Rnd(payload.Seed) >= rrPcont)
-            //    break;  // paths with low throughput that won't contribute
-            //curWeight /= rrPcont;
+            float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
+            if(Rnd(payload.Seed) >= rrPcont)
+                break;  // paths with low throughput that won't contribute
+            curWeight /= rrPcont;
+        }
+
+        // Eliminate fireflies
+        const float maxLuminance = 50.0f;
+        float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
+        if(lum > maxLuminance)
+        {
+            hitValue *= maxLuminance / lum;
         }
 
         finalHitValue += hitValue;
