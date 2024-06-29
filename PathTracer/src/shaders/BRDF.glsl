@@ -64,7 +64,7 @@ float SchlickWeight(float LdotH)
 
 vec3 BrdfLambertian(vec3 diffuseColor, float metallic)
 {
-    return (1.0F - metallic) * (diffuseColor);
+    return (1.0F - metallic) * (diffuseColor / M_PI);
 }
 
 vec3 BrdfSpecular(float alphaRoughness, vec3 f0, vec3 f90, float NdotH, float NdotL, float NdotV, float LdotH)
@@ -73,7 +73,7 @@ vec3 BrdfSpecular(float alphaRoughness, vec3 f0, vec3 f90, float NdotH, float Nd
     vec3 F = mix(f0, f90, SchlickWeight(LdotH));
     float G = SmithGGX(NdotL, NdotV, alphaRoughness);
 
-    return D * F * G; // (4 * NdotL * NdotV) denominator is already baked into SmithGGX function
+    return (D * F * G);// / (4.0f * NdotL * NdotV); // denominator is already baked into SmithGGX function
 }
 
 void EvaluateBRDF(inout BRDFEvaluateData data, in Material mat, in Surface surface)
@@ -95,8 +95,8 @@ void EvaluateBRDF(inout BRDFEvaluateData data, in Material mat, in Surface surfa
     {
         data.BRDF += BrdfLambertian(mat.Color.xyz, 0.0f);
     
-        // Uniform distribution
-        data.PDF += NdotL;
+        // Cosine Weighted Distribution
+        data.PDF += NdotL * M_1_OVER_PI;
     }
 
     // Specular
@@ -105,13 +105,13 @@ void EvaluateBRDF(inout BRDFEvaluateData data, in Material mat, in Surface surfa
         vec3 f0 = mix(vec3(mat.SpecularStrength) * mix(vec3(1.0f), tint, mat.SpecularTint), mat.Color.xyz, mat.Metallic);
         vec3 f90 = vec3(1.0F);
         float a = mat.Roughness * mat.Roughness;
-    
+
         data.BRDF += BrdfSpecular(a, f0, f90, NdotH, NdotL, NdotV, LdotH);
-    
-        data.PDF += DistributionGGX(NdotH, a) * NdotH / (4.0F * LdotH);
+
+        data.PDF += DistributionGGX(NdotH, a) /* * NdotH */ / (4.0F * LdotH); // (4.0F * LdotH) is a jacobian determinant according to some discord guy
     }
 
-    data.BRDF *= NdotL;
+    data.BRDF *= NdotL; // Cosine term
 }
 
 vec3 GgxSampling(float alphaRoughness, float r1, float r2)
@@ -136,6 +136,18 @@ vec3 CosineSampleHemisphere(float r1, float r2)
     return dir;
 }
 
+void TintColors(Material mat, float eta, out float F0, out vec3 Cspec0)
+{
+    float lum = CalculateLuminance(mat.Color.xyz);
+    vec3 ctint = lum > 0.0 ? mat.Color.xyz / lum : vec3(1.0);
+
+    F0 = (1.0 - eta) / (1.0 + eta);
+    F0 *= F0;
+
+    Cspec0 = F0 * mix(vec3(1.0f), ctint, 1.0f);
+    // Cspec0 = vec3(F0);
+}
+
 void SampleBRDF(inout BRDFSampleData data, in Material mat, in Surface surface)
 {
     // Random numbers
@@ -144,28 +156,36 @@ void SampleBRDF(inout BRDFSampleData data, in Material mat, in Surface surface)
     float r3 = data.Random.z;
     float r4 = data.Random.a;
 
-    // Lobe probabilities/weights
-    float diffuseWeight = (1.0 - mat.Metallic) * (1.0 - mat.SpecTrans);
-    float metalWeight = mat.Metallic;
+    vec3 Cspec0;
+    float F0;
+    TintColors(mat, mat.eta, F0, Cspec0);
+    float schlickWeight = SchlickWeight(WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View).z);
 
-    float TotalWeight = (diffuseWeight + metalWeight);
+    // TODO: Recheck this
+    // Lobe probabilities/weights
+    float diffuseWeight = (1.0 - mat.Metallic) * (1.0 - mat.SpecTrans) * GetLuminance(mat.Color.xyz);
+    float dielectricWeight = (1.0 - mat.Metallic) * (1.0 - mat.SpecTrans) * GetLuminance(mix(Cspec0, vec3(1.0), schlickWeight));
+    float metalWeight = mat.Metallic * GetLuminance(mix(mat.Color.xyz, vec3(1.0), schlickWeight));
+
+    float TotalWeight = (diffuseWeight + dielectricWeight + metalWeight);
     diffuseWeight /= TotalWeight;
+    dielectricWeight /= TotalWeight;
     metalWeight /= TotalWeight;
 
     // CDF of the sampling probabilities/weights
     float diffuseCDF = diffuseWeight;
-    float metallicCDF = diffuseCDF + metalWeight;
+    float metallicCDF = diffuseCDF + metalWeight + dielectricWeight;
 
     vec3 reflectVector;
     vec3 brdf;
     float pdf;
     if (r1 < diffuseCDF)
     {
-        reflectVector = SampleHemi(vec3(r2, r3, r4), surface.Normal);
-        //reflectVector = CosineSampleHemisphere(r3, r4);  // Diffuse
-        //reflectVector = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, reflectVector);
-        //if (dot(reflectVector, surface.Normal) <= 0.0f)
-        //    reflectVector = -reflectVector;
+        //reflectVector = SampleHemi(vec3(r2, r3, r4), surface.Normal);
+        reflectVector = CosineSampleHemisphere(r3, r4);  // Diffuse
+        reflectVector = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, reflectVector);
+        if (dot(reflectVector, surface.Normal) <= 0.0f)
+            reflectVector = -reflectVector;
     }
     else if (r1 < metallicCDF)
     {
