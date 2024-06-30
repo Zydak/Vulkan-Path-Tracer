@@ -225,8 +225,8 @@ void main()
     // -------------------------------------------
     // Calculate Material Properties
     // -------------------------------------------
-    float anisotropic = 0.0f;
-    float aspect = sqrt(1.0 - anisotropic * 0.99);
+    float anisotropic = 1.0f;
+    float aspect = sqrt(1.0 - anisotropic * 0.9);
     material.ax = max(0.001, material.Roughness / aspect);
     material.ay = max(0.001, material.Roughness * aspect);
 

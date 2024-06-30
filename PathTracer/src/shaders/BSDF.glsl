@@ -208,7 +208,6 @@ void BsdfEvaluate(inout BsdfEvaluateData data, in Surface surface, in Material m
     float NdotH = abs(dot(surfaceNormal, halfVector));
     float LdotH = abs(dot(data.Light, halfVector));
 
-    // To use normal maps we would need to change Normal to GeoNormal but idk if that's something I can do?
     vec3 L = WorldToTangent(surface.Tangent, surface.Bitangent, surface.GeoNormal, data.Light);
     vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.GeoNormal, data.View);
     bool reflect = L.z * V.z > 0;

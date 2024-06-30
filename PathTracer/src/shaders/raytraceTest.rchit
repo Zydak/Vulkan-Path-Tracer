@@ -68,8 +68,6 @@ void main()
     const vec3 tang     = v0.Tangent.xyz * barycentrics.x + v1.Tangent.xyz * barycentrics.y + v2.Tangent.xyz * barycentrics.z;
     const vec3 bitang     = v0.Bitangent.xyz * barycentrics.x + v1.Bitangent.xyz * barycentrics.y + v2.Bitangent.xyz * barycentrics.z;
 
-    material.eta = dot(gl_WorldRayDirectionEXT, worldNrm) < 0.0 ? (1.0 / material.Ior) : material.Ior;
-
     const vec3 V = -gl_WorldRayDirectionEXT;
 
     Surface surface;
@@ -84,31 +82,22 @@ void main()
     //surface.Bitangent = bitang;
     CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
 
-#ifdef USE_NORMAL_MAPS
-    vec3 normalMapVal = texture(uNormalTextures[gl_InstanceCustomIndexEXT], texCoord).xyz;
-    normalMapVal = normalMapVal * 2.0f - 1.0f;
-    
-    normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
-    surface.Normal = normalize(normalMapVal);
-    
-    CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
-#endif
-
     // -------------------------------------------
     // Calculate Material Properties
     // -------------------------------------------
-    // TODO: anisotropic
-    const float anisotropic = 0.0f;
-    const float aspect = sqrt(1.0 - anisotropic * 0.99);
+    material.Ior = clamp(material.Ior, 1.0001f, 2.0f);
+    material.Roughness = max(material.Roughness, 0.0001f);
+
+    material.EmissiveColor.rgb *= material.EmissiveColor.a;
+
+    const float anisotropic = material.Anisotropy;
+    const float aspect = sqrt(1.0 - anisotropic * 0.9);
     material.ax = max(0.001, material.Roughness / aspect);
     material.ay = max(0.001, material.Roughness * aspect);
 
-    material.Roughness = max(material.Roughness, 0.001f);
-    material.Metallic  = max(material.Metallic, 0.001f);
-
     material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
 
-    material.SpecTrans = material.SpecTrans;
+    material.eta = dot(gl_WorldRayDirectionEXT, surface.GeoNormal) < 0.0 ? (1.0 / material.Ior) : material.Ior;
     
     // -------------------------------------------
     // Hit
@@ -122,30 +111,9 @@ void main()
 
     payload.Weight = sampleData.BRDF / sampleData.PDF;
 
-    // TEST
-
-    
-    vec3 halfVector = normalize(-gl_WorldRayDirectionEXT + sampleData.RayDir);
-    float NdotV = abs(dot(surface.Normal, -gl_WorldRayDirectionEXT));
-    float NdotL = abs(dot(surface.Normal, sampleData.RayDir));
-    float VdotH = abs(dot(-gl_WorldRayDirectionEXT, halfVector));
-    float NdotH = abs(dot(surface.Normal, halfVector));
-    float LdotH = abs(dot(sampleData.RayDir, halfVector));
-    
-    vec3 tint = material.Color.xyz / max(GetLuminance(material.Color.xyz), 0.001f);
-    vec3 f0 = mix(vec3(material.SpecularStrength) * mix(vec3(1.0f), tint, material.SpecularTint), material.Color.xyz, material.Metallic);
-    vec3 f90 = vec3(1.0F);
-    float a = material.Roughness * material.Roughness;
-    
-    //payload.Weight = BrdfSpecular(a, f0, f90, NdotH, NdotL, NdotV, LdotH);
-    //payload.Weight = BrdfSpecularGGX(f0, f90, a, VdotH, NdotL, NdotV, NdotH);
-    
-    // TEST
-
-
     payload.RayDirection = sampleData.RayDir;
     
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
-    payload.RayOrigin = OffsetRay(worldPos, offsetDir);
-    payload.HitValue     = material.Color.xyz * material.Color.a;
+    payload.RayOrigin = worldPos;
+    payload.HitValue     = material.EmissiveColor.xyz;
 }

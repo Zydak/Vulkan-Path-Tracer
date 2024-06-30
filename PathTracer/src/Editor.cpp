@@ -458,7 +458,8 @@ void Editor::ImGuiSceneEditor()
 
 	bool valuesChanged = false;
 	if (ImGui::ColorEdit3("Albedo",				(float*)&(*currentMaterials)[currentMaterialItem].Color)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Emissive",			(float*)&(*currentMaterials)[currentMaterialItem].Color.w, 0.0f, 10.0f)) { valuesChanged = true; };
+	if (ImGui::ColorEdit3("Emissive Color",		(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Emissive Strength",	(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Roughness",			(float*)&(*currentMaterials)[currentMaterialItem].Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Anisotropy",		(float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
@@ -467,7 +468,7 @@ void Editor::ImGuiSceneEditor()
 	ImGui::Separator();
 	
 	if (ImGui::SliderFloat("Spec Trans",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.001f, 2.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.0f, 2.0f)) { valuesChanged = true; };
 	ImGui::Separator();
 	
 	if (ImGui::SliderFloat("Clearcoat",				(float*)&(*currentMaterials)[currentMaterialItem].Clearcoat, 0.0f, 1.0f)) { valuesChanged = true; };

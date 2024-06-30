@@ -67,6 +67,7 @@ struct MeshAdresses
 struct Material
 {
     vec4 Color;
+    vec4 EmissiveColor;
     float Metallic;
     float Roughness;
     float SubsurfaceScattering;
