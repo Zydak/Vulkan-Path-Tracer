@@ -462,10 +462,14 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Emissive Strength",	(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Roughness",			(float*)&(*currentMaterials)[currentMaterialItem].Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Anisotropy",		(float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
+	// IOR controls spec str
 	if (ImGui::SliderFloat("Specular Strength", (float*)&(*currentMaterials)[currentMaterialItem].SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Specular Tint",		(float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Specular Tint", (float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 	ImGui::Separator();
+
+	// Test mode shaders not ready :(
+#if 1
+	if (ImGui::SliderFloat("Anisotropy", (float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
 	
 	if (ImGui::SliderFloat("Spec Trans",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.0f, 2.0f)) { valuesChanged = true; };
@@ -474,9 +478,7 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Clearcoat",				(float*)&(*currentMaterials)[currentMaterialItem].Clearcoat, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Clearcoat Roughness",	(float*)&(*currentMaterials)[currentMaterialItem].ClearcoatRoughness, 0.0f, 1.0f)) { valuesChanged = true; };
 	ImGui::Separator();
-
-	if (ImGui::SliderFloat("Sheen",			(float*)&(*currentMaterials)[currentMaterialItem].Sheen, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Sheen Tint",	(float*)&(*currentMaterials)[currentMaterialItem].SheenTint, 0.0f, 1.0f)) { valuesChanged = true; };
+#endif
 
 	if (valuesChanged)
 	{
@@ -489,7 +491,6 @@ void Editor::ImGuiSceneEditor()
 
 		m_PathTracer.ResetFrameAccumulation();
 	}
-	ImGui::Separator();
 }
 
 void Editor::ImGuiEnvMapSettings()

@@ -111,7 +111,6 @@ void main()
             curWeight /= rrPcont;
         }
 
-#ifdef USE_FIREFLIES
         // Eliminate fireflies
         const float maxLuminance = 50.0f;
         float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
@@ -119,12 +118,17 @@ void main()
         {
             hitValue *= maxLuminance / lum;
         }
-#endif
 
         finalHitValue += hitValue;
 
         seed = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + payload.Seed;
         payload.Seed = PCG(seed);
+
+        if (payload.MissedAllGeometry)
+		{
+			break;
+		}
+
     }
     finalHitValue /= float(samplesAccumulated);
 

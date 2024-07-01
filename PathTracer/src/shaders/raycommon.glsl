@@ -72,15 +72,13 @@ struct Material
     float Roughness;
     float SubsurfaceScattering;
     float Anisotropy;
-    float Sheen;
-    float SheenTint;
     float SpecularTint;
     float SpecularStrength;
 
     float Ior;
     float SpecTrans;
-    float Clearcoat;
-    float ClearcoatRoughness;
+    float ClearCoat;
+    float ClearCoatRoughness;
 
     float eta;
     float ax;
@@ -186,7 +184,7 @@ vec2 RandomPointInCircle(inout uint seed)
 
 float GetLuminance(vec3 color)
 {
-    return color.r * 0.2126F + color.g * 0.7152F + color.b * 0.0722F;
+    return color.r * 0.212671f + color.g * 0.715160f + color.b * 0.072169f;
 }
 
 vec3 Slerp(vec3 p0, vec3 p1, float t)
@@ -205,15 +203,15 @@ vec3 Slerp(vec3 p0, vec3 p1, float t)
 
 vec3 OffsetRay(in vec3 p, in vec3 n)
 {
-    //// Smallest epsilon that can be added without losing precision is 1.19209e-07, but we play safe
-    //const float epsilon = 1.0f / 65536.0f * 5.0f;  // Safe epsilon
-    //
-    //float magnitude = length(p);
-    //float offset = epsilon * magnitude;
-    //// multiply the direction vector by the smallest offset
-    //vec3 offsetVector = n * offset;
-    //// add the offset vector to the starting point
-    //vec3 offsetPoint = p + offsetVector;
+    // Smallest epsilon that can be added without losing precision is 1.19209e-07, but we play safe
+    const float epsilon = 1.0f / 65536.0f;  // Safe epsilon
+    
+    float magnitude = length(p);
+    float offset = epsilon * magnitude;
+    // multiply the direction vector by the smallest offset
+    vec3 offsetVector = n * offset;
+    // add the offset vector to the starting point
+    vec3 offsetPoint = p + offsetVector;
 
     return p;
 }

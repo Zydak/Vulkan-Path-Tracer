@@ -114,9 +114,9 @@ public:
 		float EnvAzimuth = 0.0f;
 		float EnvAltitude = 0.0f;
 
-		std::string HitShaderPath		= "src/shaders/raytraceTest.rchit";
-		std::string MissShaderPath		= "src/shaders/raytraceTest.rmiss";
-		std::string RayGenShaderPath	= "src/shaders/raytraceTest.rgen";
+		std::string HitShaderPath = "src/shaders/raytrace.rchit";
+		std::string MissShaderPath = "src/shaders/raytrace.rmiss";
+		std::string RayGenShaderPath = "src/shaders/raytrace.rgen";
 	};
 
 	DrawInfo m_DrawInfo{};

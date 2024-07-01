@@ -8,7 +8,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "raycommon.glsl"
-#include "BRDF.glsl"
+#include "BRDFtest.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
@@ -114,6 +114,6 @@ void main()
     payload.RayDirection = sampleData.RayDir;
     
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
-    payload.RayOrigin = worldPos;
+    payload.RayOrigin = OffsetRay(worldPos, offsetDir);
     payload.HitValue     = material.EmissiveColor.xyz;
 }
