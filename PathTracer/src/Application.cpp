@@ -4,9 +4,8 @@
 #include "Components.h"
 
 Application::Application(Vulture::ApplicationInfo appInfo)
-	: Vulture::Application(appInfo) // TODO: check for amount of cores
+	: Vulture::Application(appInfo)
 {
-	Vulture::AssetManager::Init({ 4 });
 	m_Scene = std::make_unique<Vulture::Scene>(m_Window);
 	Init();
 	InitScripts();

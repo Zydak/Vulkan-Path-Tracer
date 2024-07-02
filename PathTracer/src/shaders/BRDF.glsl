@@ -99,7 +99,7 @@ vec3 EvalSpecular(Material mat, vec3 Cspec0, float NdotH, float NdotV, float Ndo
     vec3 F = mix(Cspec0, vec3(1.0F), SchlickWeight(LdotH));
     float G = SmithGGX(NdotL, NdotV, a);
 
-    pdf = DistributionGGX(NdotH, a) * NdotH / (4.0F * LdotH); // (4.0F * LdotH) is a jacobian determinant according to some discord guy
+    pdf = DistributionGGX(NdotH, a) * NdotH / (4.0F * LdotH);
 
     return vec3(D * F * G);
 }

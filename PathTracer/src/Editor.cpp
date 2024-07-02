@@ -467,16 +467,12 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Specular Tint", (float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 	ImGui::Separator();
 
-	// Test mode shaders not ready :(
+	// More advanced BSDF not ready yet :(
 #if 1
 	if (ImGui::SliderFloat("Anisotropy", (float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
 	
-	if (ImGui::SliderFloat("Spec Trans",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Transparency",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.0f, 2.0f)) { valuesChanged = true; };
-	ImGui::Separator();
-	
-	if (ImGui::SliderFloat("Clearcoat",				(float*)&(*currentMaterials)[currentMaterialItem].Clearcoat, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Clearcoat Roughness",	(float*)&(*currentMaterials)[currentMaterialItem].ClearcoatRoughness, 0.0f, 1.0f)) { valuesChanged = true; };
 	ImGui::Separator();
 #endif
 

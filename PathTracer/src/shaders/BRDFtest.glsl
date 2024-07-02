@@ -213,7 +213,7 @@ void EvaluateBRDF(inout BRDFEvaluateData data, in Material mat, in Surface surfa
         //
         //data.BRDF += BrdfSpecular(a, f0, f90, NdotH, NdotL, NdotV, LdotH);
         //
-        //data.PDF += DistributionGGX(NdotH, a) /* * NdotH */ / (4.0F * LdotH); // (4.0F * LdotH) is a jacobian determinant according to some discord guy
+        //data.PDF += DistributionGGX(NdotH, a) /* * NdotH */ / (4.0F * LdotH);
 
         float specStr = (1.0f - mat.eta) / (1.0f + mat.eta);
         specStr *= specStr;
@@ -243,25 +243,6 @@ void EvaluateBRDF(inout BRDFEvaluateData data, in Material mat, in Surface surfa
             data.BRDF += EvalMicrofacetRefraction(mat, mat.eta, V, L, H, vec3(F), pdf);
             data.PDF += pdf * (1.0 - F);
         }
-    }
-
-    if (clearCoatWeight > 0 && reflect)
-    {
-        // No Anisotropy for clearcoat
-
-        vec3 f0 = vec3(0.04f);
-        vec3 f90 = vec3(1.0F);
-        float a = mat.ClearCoatRoughness * mat.ClearCoatRoughness;
-
-        float D = DistributionGGX(NdotH, a);
-        vec3 F = mix(f0, f90, SchlickWeight(LdotH));
-        float G = SmithGGX(NdotL, NdotV, a);
-
-        vec3 specular = (D * F * G);// / (4.0f * NdotL * NdotV); // denominator is already baked into SmithGGX function
-
-        data.BRDF += specular;
-
-        data.PDF += DistributionGGX(NdotH, a) * NdotH / (4.0F * LdotH); // (4.0F * LdotH) is a jacobian determinant according to some discord guy
     }
 
     if (data.PDF == 0.0f)
