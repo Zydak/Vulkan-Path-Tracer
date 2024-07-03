@@ -11,10 +11,12 @@ void Editor::Init()
 {
 	m_PathTracer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
+	m_Rasterizer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_Rasterizer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
 
@@ -69,6 +71,9 @@ void Editor::Render()
 	{
 		if (Vulture::Renderer::BeginFrame())
 		{
+			m_Rasterizer.Render(m_CurrentScene);
+			m_Rasterizer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+
 			bool rayTracingFinished = !m_PathTracer.Render();
 
 			if (!rayTracingFinished)
@@ -221,14 +226,15 @@ void Editor::RenderImGui()
 		ImGui::DockSpaceOverViewport(viewport);
 	}
 
-	ImGuiRenderViewport();
+	ImGuiRenderPathTracingViewport();
+	ImGuiRenderRasterizerViewport();
 
 	ImGuiPathTracerSettings();
 
 	m_PostProcessor.RenderGraph();
 }
 
-void Editor::ImGuiRenderViewport()
+void Editor::ImGuiRenderPathTracingViewport()
 {
 	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
 
@@ -238,10 +244,12 @@ void Editor::ImGuiRenderViewport()
 	VL_CORE_ASSERT(camScript != nullptr, "No main camera found!");
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	ImGui::Begin("Preview Viewport");
+	m_PathTracerViewportVisible = ImGui::Begin("Path Tracer Preview Viewport");
 
 	bool isWindowHoveredAndDocked = ImGui::IsWindowHovered() && ImGui::IsWindowDocked();
-	camScript->m_CameraLocked = !isWindowHoveredAndDocked;
+
+	if (m_PathTracerViewportVisible)
+		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
 
 	static ImVec2 prevViewportSize = { 0, 0 };
 	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
@@ -256,6 +264,27 @@ void Editor::ImGuiRenderViewport()
 	m_ViewportSize = { viewportWidth, viewportHeight };
 
 	ImGui::Image(m_PathTracerOutputImageSet, viewportContentSize);
+
+	ImGui::End();
+	ImGui::PopStyleVar();
+}
+
+void Editor::ImGuiRenderRasterizerViewport()
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	m_RasterizerViewportVisible = ImGui::Begin("Rasterizer Preview Viewport");
+
+	bool isWindowHoveredAndDocked = ImGui::IsWindowHovered() && ImGui::IsWindowDocked();
+	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
+
+	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	CameraScript* camScript = scComp->GetScript<CameraScript>(0);
+
+	if (m_RasterizerViewportVisible)
+		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
+
+	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
+	ImGui::Image(m_RasterizerOutputImageSet, viewportContentSize);
 
 	ImGui::End();
 	ImGui::PopStyleVar();

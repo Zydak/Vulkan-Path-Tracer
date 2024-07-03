@@ -29,10 +29,10 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 	m_InputImage = inputImage;
 
 	m_Handler = std::make_unique<ImFlow::ImNodeFlow>("Main");
-	m_Handler->getStyle().colors.subGrid = IM_COL32(25.5, 25.5, 25.5, 255);
+	m_Handler->getStyle().colors.subGrid = IM_COL32(100, 100, 100, 255);
 	m_Handler->getStyle().grid_size = 100.0f;
-	m_Handler->getStyle().colors.grid = IM_COL32(50, 50, 50, 255);
-	m_Handler->getGrid().config().color = IM_COL32(25.5, 25.5, 25.5, 255);
+	m_Handler->getStyle().colors.grid = IM_COL32(100, 100, 100, 255);
+	m_Handler->getGrid().config().color = IM_COL32(35, 35, 35, 255);
 
 	CreateImages();
 

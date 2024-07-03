@@ -3,6 +3,11 @@
 #include "Vulture.h"
 #include "ImNodeFlow.h"
 
+#define CENTER_WIDGET(pos, width)\
+ImGui::Text("");\
+ImGui::SameLine(pos);\
+ImGui::SetNextItemWidth(width);\
+
 struct NodeOutput
 {
 	NodeOutput() = default;
@@ -249,11 +254,6 @@ public:
 						m_Bloom.Init(info);
 						m_PrevHandle = m_CachedHandle;
 					}
-					else if (m_MipCountChanged)
-					{
-						m_Bloom.RecreateDescriptors(m_RunInfo.MipCount);
-						m_MipCountChanged = false;
-					}
 
 					m_Bloom.Run(m_RunInfo, Vulture::Renderer::GetCurrentCommandBuffer());
 				};
@@ -275,22 +275,16 @@ public:
 
 		// ImGui
 		ImGui::Text("");
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Threshold", &m_RunInfo.Threshold, 0.0f, 3.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Strength", &m_RunInfo.Strength, 0.0f, 2.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
-		ImGui::SliderInt("MipCount", &m_RunInfo.MipCount, 0, 10);
+		CENTER_WIDGET(-50, 50);
+		ImGui::SliderInt("MipCount", &m_RunInfo.MipCount, 1, 10);
 
 		if (prevMipCount != m_RunInfo.MipCount)
 		{
-			m_MipCountChanged = true;
+			m_Bloom.RecreateDescriptors(m_RunInfo.MipCount);
 		}
 	}
 
@@ -316,7 +310,6 @@ private:
 	Vulture::Bloom m_Bloom;
 	Vulture::Bloom::BloomInfo m_RunInfo{};
 	NodeOutput m_NodeOutput{};
-	bool m_MipCountChanged = false;
 
 	VkImage m_CachedHandle = VK_NULL_HANDLE;
 	VkImage m_PrevHandle = VK_NULL_HANDLE;
@@ -385,38 +378,61 @@ public:
 	void draw() override
 	{
 		ImGui::Text("");
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Exposure", &m_RunInfo.Exposure, 0.0f, 3.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Contrast", &m_RunInfo.Contrast, 0.0f, 3.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Brightness", &m_RunInfo.Brightness, 0.0f, 3.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Saturation", &m_RunInfo.Saturation, 0.0f, 3.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Vignette", &m_RunInfo.Vignette, 0.0f, 1.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Gamma", &m_RunInfo.Gamma, 0.0f, 2.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Temperature", &m_RunInfo.Temperature, -1.0f, 1.0f);
-		ImGui::Text("");
-		ImGui::SameLine(-50);
-		ImGui::SetNextItemWidth(50.0f);
+		CENTER_WIDGET(-50, 50);
 		ImGui::SliderFloat("Tint", &m_RunInfo.Tint, -1.0f, 1.0f);
+		CENTER_WIDGET(-50, 150);
+		ImGui::ColorEdit3("Color Filter", (float*)&m_RunInfo.ColorFilter);
+
+		CENTER_WIDGET(-50, 50);
+		if (ImGui::Checkbox("Chromatic Aberration", &m_UseChromaticAberration)) 
+		{ 
+			m_Tonemap.RecompileShader(m_Tonemapper, m_UseChromaticAberration); 
+		}
+
+		if (m_UseChromaticAberration)
+		{
+			CENTER_WIDGET(-50, 50);
+			ImGui::SliderInt2("Aberration Offset R", (int*)&m_RunInfo.AberrationOffsets[0], -5, 5);
+			CENTER_WIDGET(-50, 50);
+			ImGui::SliderInt2("Aberration Offset G", (int*)&m_RunInfo.AberrationOffsets[1], -5, 5);
+			CENTER_WIDGET(-50, 50);
+			ImGui::SliderInt2("Aberration Offset B", (int*)&m_RunInfo.AberrationOffsets[2], -5, 5);
+
+			CENTER_WIDGET(-50, 50);
+			ImGui::SliderFloat("Aberration Vignette", &m_RunInfo.AberrationVignette, 0.0f, 10.0f);
+		}
+
+		CENTER_WIDGET(-50, 50);
+		ImGui::Text("Tonemappers");
+		static int currentTonemapper = 0;
+		const char* tonemappers[] = { "Filmic", "Hill Aces", "Narkowicz Aces", "Exposure Mapping", "Uncharted 2", "Reinchard Extended" };
+
+		CENTER_WIDGET(-50, 200);
+		if (ImGui::ListBox("", &currentTonemapper, tonemappers, IM_ARRAYSIZE(tonemappers), IM_ARRAYSIZE(tonemappers)))
+		{
+			m_Tonemapper = (Vulture::Tonemap::Tonemappers)currentTonemapper;
+			m_Tonemap.RecompileShader(m_Tonemapper, m_UseChromaticAberration);
+		}
+
+		if (currentTonemapper == Vulture::Tonemap::Tonemappers::ReinchardExtended)
+		{
+			CENTER_WIDGET(-50, 50);
+			ImGui::SliderFloat("White Point", &m_RunInfo.whitePointReinhard, 0.0f, 5.0f);
+		}
 	}
 
 	void CreateImage(VkExtent2D size)
@@ -454,6 +470,8 @@ private:
 	Vulture::Image m_OutputImage;
 	Vulture::Tonemap m_Tonemap;
 	Vulture::Tonemap::TonemapInfo m_RunInfo{};
+	Vulture::Tonemap::Tonemappers m_Tonemapper = Vulture::Tonemap::Tonemappers::Filmic;
+	bool m_UseChromaticAberration = false;
 	NodeOutput m_NodeOutput{};
 
 	VkImage m_CachedHandle = VK_NULL_HANDLE;

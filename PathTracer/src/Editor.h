@@ -4,6 +4,7 @@
 
 #include "PathTracer.h"
 #include "PostProcessor.h"
+#include "Rasterizer.h"
 
 class Vulture::Scene;
 
@@ -29,7 +30,8 @@ private:
 	void RenderViewportImage();
 	void RenderImGui();
 
-	void ImGuiRenderViewport();
+	void ImGuiRenderPathTracingViewport();
+	void ImGuiRenderRasterizerViewport();
 	void ImGuiPathTracerSettings();
 	void ImGuiShaderSettings();
 	void ImGuiInfoHeader();
@@ -41,9 +43,11 @@ private:
 
 	void Resize();
 
+	Rasterizer m_Rasterizer;
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
 	VkDescriptorSet m_PathTracerOutputImageSet;
+	VkDescriptorSet m_RasterizerOutputImageSet;
 
 	// Scene
 	Vulture::Scene* m_CurrentScene;
@@ -70,4 +74,7 @@ private:
 	Vulture::Transform m_ImageQuadTransform;
 	Vulture::Framebuffer m_QuadRenderTarget;
 	Vulture::DescriptorSet m_QuadDescriptor;
+
+	bool m_PathTracerViewportVisible = true;
+	bool m_RasterizerViewportVisible = true;
 };
