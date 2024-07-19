@@ -17,7 +17,7 @@ layout(push_constant) uniform _PushConstantRay
 void main()
 {
 	vec3 rayDir = payload.RayDirection;
-	rayDir = Rotate(rayDir, vec3(1, 0, 0), -pcRay.EnvAltitude);
+	rayDir = Rotate(rayDir, vec3(1, 0, 0), -pcRay.EnvAltitude + M_PI);
 	rayDir = Rotate(rayDir, vec3(0, 1, 0), -pcRay.EnvAzimuth);
 	vec2 uv = directionToSphericalEnvmap(rayDir);
 	vec3 color = texture(uEnvMap, uv).xyz;

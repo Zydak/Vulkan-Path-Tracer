@@ -30,7 +30,7 @@ void main()
 
     vec4 origin    = uni.ViewInverse * vec4(0, 0, 0, 1);
     vec4 target    = uni.ProjInverse * vec4(d.x, d.y, 1, 1);
-    vec4 direction = uni.ViewInverse * vec4(normalize(target.xyz), 0);
+    vec3 direction = vec3(uni.ViewInverse * vec4(normalize(target.xyz), 0.0f));
 
     uint  rayFlags = gl_RayFlagsOpaqueEXT;
     float tMin     = 0.001;
@@ -41,14 +41,14 @@ void main()
     payload.HitValue = vec3(0.0);
     payload.Depth = 0;
     payload.RayOrigin = origin.xyz;
-    payload.RayDirection = direction.xyz;
+    payload.RayDirection = direction;
     payload.Weight = vec3(0.0);
     payload.MissedAllGeometry = false;
 
     if (gl_LaunchIDEXT.xy == (gl_LaunchSizeEXT.xy / 2))
     {
         rayQueryEXT query;
-		rayQueryInitializeEXT(query, topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin.xyz, tMin, direction.xyz, tMax);
+		rayQueryInitializeEXT(query, topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin.xyz, tMin, direction, tMax);
 		rayQueryProceedEXT(query);
 		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		{
@@ -74,11 +74,12 @@ void main()
         payload.Bsdf = vec3(0.0f);
 
         // Applying small jitter for anti aliasing
-        vec2 antiAliasingJitter = (RandomPointInCircle(payload.Seed) * 0.25f / outputImageSize.x) * pcRay.AliasingJitter;
-        vec4 directionCopy = direction;
-        directionCopy.xyz += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
+        vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize;
+        vec3 directionCopy = direction;
+        directionCopy += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
+        directionCopy = normalize(directionCopy);
 
-        vec3 focalPoint = origin.xyz + normalize(directionCopy.xyz) * pcRay.FocalLenght;
+        vec3 focalPoint = origin.xyz + directionCopy * pcRay.FocalLenght;
         vec2 jitter = RandomPointInCircle(payload.Seed) * pcRay.DoFStrenght / 500.0f;
         payload.RayOrigin = origin.xyz + camRight * jitter.x + camUp * jitter.y;
 

@@ -4,8 +4,14 @@
 
 struct PushConstantRasterizer
 {
+	glm::vec4 Color; // .a is lights count
 	glm::mat4 Model;
-	Vulture::Material Material;
+};
+
+struct LightsBufferEntry
+{
+	glm::vec4 Color;
+	glm::vec3 Position;
 };
 
 class Rasterizer
@@ -43,4 +49,6 @@ private:
 	Vulture::PushConstant<PushConstantRasterizer> m_Push;
 	Vulture::Buffer m_CameraBuffer;
 	Vulture::DescriptorSet m_CameraSet;
+	Vulture::Buffer m_LightsBuffer;
+	Vulture::DescriptorSet m_LightsSet;
 };

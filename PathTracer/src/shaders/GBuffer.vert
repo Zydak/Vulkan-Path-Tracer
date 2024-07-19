@@ -17,7 +17,7 @@ struct Material
 struct DataOut
 {
 	Material material;
-	mat3 TBN;
+	vec3 Normal;
 	vec2 TexCoord;
 };
 
@@ -38,14 +38,10 @@ layout(set = 0, binding = 0) uniform GlobalUniforms
 
 void main()
 {
-	vec3 T = normalize(vec3(push.model * vec4(inTangent,   0.0)));
-	vec3 B = normalize(vec3(push.model * vec4(inBitangent, 0.0)));
-	vec3 N = normalize(vec3(push.model * vec4(inNormal,    0.0)));
-	mat3 TBN = mat3(T, B, N);
 	vec4 worldPos = push.model * vec4(inPosition, 1.0);
 	gl_Position = ubo.ViewProjectionMat * worldPos;
 	
 	dataOut.TexCoord = inTexCoord;
 	dataOut.material = push.material;
-	dataOut.TBN = TBN;
+	dataOut.Normal = inNormal;
 }

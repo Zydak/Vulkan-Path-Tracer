@@ -74,9 +74,9 @@ void Editor::Render()
 			m_Rasterizer.Render(m_CurrentScene);
 			m_Rasterizer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
 
-			bool rayTracingFinished = !m_PathTracer.Render();
+			m_PathTracingFinished = !m_PathTracer.Render();
 
-			if (!rayTracingFinished)
+			if (!m_PathTracingFinished)
 				m_Time += m_Timer.ElapsedSeconds();
 
 			m_PostProcessor.Evaluate();
@@ -86,15 +86,19 @@ void Editor::Render()
 
 			Vulture::Renderer::ImGuiPass();
 
+			if (m_ReadyToSaveRender)
+			{
+				m_ReadyToSaveRender = false;
+				m_FileAlreadySaved = true;
+				Vulture::Renderer::SaveImageToFile("", m_PostProcessor.GetOutputImage());
+			}
+
 			Vulture::Renderer::EndFrame();
 			m_PostProcessor.EndFrame();
 		}
 		else
 		{
-			m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
 			Resize();
-			m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 	}
 }
@@ -229,7 +233,10 @@ void Editor::RenderImGui()
 	ImGuiRenderPathTracingViewport();
 	ImGuiRenderRasterizerViewport();
 
-	ImGuiPathTracerSettings();
+	if (m_RenderToFile)
+		ImGuiRenderingToFileSettings();
+	else
+		ImGuiPathTracerSettings();
 
 	m_PostProcessor.RenderGraph();
 }
@@ -250,6 +257,9 @@ void Editor::ImGuiRenderPathTracingViewport()
 
 	if (m_PathTracerViewportVisible)
 		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
+
+	if (m_RenderToFile)
+		camScript->m_CameraLocked = true; // Always lock camera when rendering to file
 
 	static ImVec2 prevViewportSize = { 0, 0 };
 	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
@@ -283,6 +293,9 @@ void Editor::ImGuiRenderRasterizerViewport()
 	if (m_RasterizerViewportVisible)
 		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
 
+	if (m_RenderToFile)
+		camScript->m_CameraLocked = true; // Always lock camera when rendering to file
+
 	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
 	ImGui::Image(m_RasterizerOutputImageSet, viewportContentSize);
 
@@ -292,7 +305,7 @@ void Editor::ImGuiRenderRasterizerViewport()
 
 void Editor::ImGuiPathTracerSettings()
 {
-	ImGui::Begin("Path Tracing Settings");
+	ImGui::Begin("Settings");
 
 	ImGuiInfoHeader();
 	m_Timer.Reset();
@@ -308,6 +321,59 @@ void Editor::ImGuiPathTracerSettings()
 	ImGuiEnvMapSettings();
 
 	ImGuiPathTracingSettings();
+
+	ImGuiFileRenderSettings();
+
+	ImGui::End();
+}
+
+void Editor::ImGuiRenderingToFileSettings()
+{
+	ImGui::Begin("Settings");
+
+	ImGuiInfoHeader();
+	m_Timer.Reset();
+
+	ImGui::Separator();
+
+	ImGui::Text("%d / %d samples accumulated", m_PathTracer.GetSamplesAccumulated(), m_PathTracer.m_DrawInfo.TotalSamplesPerPixel);
+
+	ImGui::Separator();
+
+	if (!m_PathTracingFinished)
+	{
+		if (ImGui::Button("Cancel"))
+		{
+			m_RenderToFile = false;
+			m_PathTracer.ResetFrameAccumulation();
+			m_Time = 0.0f;
+		}
+	}
+	else
+	{
+		ImGui::Text("File Ready To Save!");
+		ImGui::Text("You Can Play With Post Processor And Save When You're Done");
+
+		bool x = m_FileAlreadySaved;
+
+		if (ImGui::Button("Save To File"))
+		{
+			m_ReadyToSaveRender = true;
+			m_FileAlreadySaved = false;
+		}
+
+		if (x)
+		{
+			ImGui::Text("Saved To File!");
+			ImGui::Text("Check Rendered_Images/ For A File");
+		}
+
+		if (ImGui::Button("Back"))
+		{
+			m_RenderToFile = false;
+			m_FileAlreadySaved = false;
+		}
+	}
 
 	ImGui::End();
 }
@@ -491,19 +557,14 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Emissive Strength",	(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Roughness",			(float*)&(*currentMaterials)[currentMaterialItem].Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
-	// IOR controls spec str
 	if (ImGui::SliderFloat("Specular Strength", (float*)&(*currentMaterials)[currentMaterialItem].SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Specular Tint", (float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Specular Tint",		(float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
+	if (ImGui::SliderFloat("Specular Angle",	(float*)&(*currentMaterials)[currentMaterialItem].SpecularAngle, 0.0f, 90.0f)) { valuesChanged = true; };
 	ImGui::Separator();
-
-	// More advanced BSDF not ready yet :(
-#if 1
-	if (ImGui::SliderFloat("Anisotropy", (float*)&(*currentMaterials)[currentMaterialItem].Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
 	
 	if (ImGui::SliderFloat("Transparency",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.0f, 2.0f)) { valuesChanged = true; };
 	ImGui::Separator();
-#endif
 
 	if (valuesChanged)
 	{
@@ -515,6 +576,7 @@ void Editor::ImGuiSceneEditor()
 		);
 
 		m_PathTracer.ResetFrameAccumulation();
+		m_Time = 0.0f;
 	}
 }
 
@@ -603,14 +665,13 @@ void Editor::ImGuiPathTracingSettings()
 	ImGui::Text("");
 
 	if (ImGui::SliderInt("Max Depth",			&m_PathTracer.m_DrawInfo.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderInt("Samples Per Pixel", &m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
-	if (ImGui::SliderInt("Samples Per Frame", &m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) {  }
+	if (ImGui::SliderInt("Samples Per Pixel",	&m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
+	if (ImGui::SliderInt("Samples Per Frame",	&m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) {  }
 	
-	if (ImGui::SliderFloat("Aliasing Jitter Strength",	&m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 3.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::Checkbox(   "Auto Focal Length",			&m_PathTracer.m_DrawInfo.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::Checkbox(   "Visualize DOF",				&m_PathTracer.m_DrawInfo.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("Focal Length",				&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("DoF Strength",				&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::Checkbox(   "Auto Focal Length",	&m_PathTracer.m_DrawInfo.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::Checkbox(   "Visualize DOF",		&m_PathTracer.m_DrawInfo.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("Focal Length",		&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("DoF Strength",		&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	ImGui::Separator();
 }
 
@@ -672,6 +733,23 @@ void Editor::ImGuiCameraSettings()
 			camComp->Camera.UpdateViewMatrix();
 		}
 	}
+	ImGui::Separator();
+}
+
+void Editor::ImGuiFileRenderSettings()
+{
+	if (!ImGui::CollapsingHeader("File Render"))
+		return;
+
+	ImGui::Separator();
+
+	if (ImGui::Button("Render To File"))
+	{
+		m_RenderToFile = true;
+		m_PathTracer.ResetFrameAccumulation();
+		m_Time = 0.0f;
+	}
+
 	ImGui::Separator();
 }
 

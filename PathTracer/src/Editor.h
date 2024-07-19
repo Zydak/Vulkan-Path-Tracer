@@ -30,9 +30,11 @@ private:
 	void RenderViewportImage();
 	void RenderImGui();
 
+	void ImGuiPathTracerSettings();
+	void ImGuiRenderingToFileSettings();
+
 	void ImGuiRenderPathTracingViewport();
 	void ImGuiRenderRasterizerViewport();
-	void ImGuiPathTracerSettings();
 	void ImGuiShaderSettings();
 	void ImGuiInfoHeader();
 	void ImGuiSceneEditor();
@@ -40,6 +42,7 @@ private:
 	void ImGuiPathTracingSettings();
 	void ImGuiViewportSettings();
 	void ImGuiCameraSettings();
+	void ImGuiFileRenderSettings();
 
 	void Resize();
 
@@ -66,6 +69,11 @@ private:
 	bool m_ImageResized = false;
 	VkOffset2D m_ImageSize = {900, 900}; // Using offset so that components are ints and not uints for ImGui
 	VkExtent2D m_ViewportSize = {900, 900};
+
+	bool m_RenderToFile = false;
+	bool m_PathTracingFinished = false;
+	bool m_ReadyToSaveRender = false;
+	bool m_FileAlreadySaved = false;
 
 	// Viewport Rendering
 	Vulture::OrthographicCamera m_QuadCamera;

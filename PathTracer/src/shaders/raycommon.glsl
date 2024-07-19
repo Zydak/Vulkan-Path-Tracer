@@ -74,6 +74,7 @@ struct Material
     float Anisotropy;
     float SpecularTint;
     float SpecularStrength;
+    float SpecularAngle;
 
     float Ior;
     float SpecTrans;
@@ -137,32 +138,48 @@ vec3 sphericalEnvmapToDirection(vec2 tex)
     return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 }
 
-vec3 CosineSamplingHemisphere(inout uint seed, in vec3 normal)
+vec3 RandomVec(inout uint seed)
 {
-    float r1 = Rnd(seed);
-    float r2 = Rnd(seed);
-    float sq = sqrt(r1);
+    vec3 vec;
+    vec.x = Rnd(seed) * 2.0f - 1.0f;
+    vec.y = Rnd(seed) * 2.0f - 1.0f;
+    vec.z = Rnd(seed) * 2.0f - 1.0f;
 
-    const float phi = 2 * M_PI * r2;
-    vec3 direction = vec3(cos(phi) * sq, sin(phi) * sq, sqrt(1.0f - r1));
+    return vec;
+}
 
-    if (dot(direction, normal) < 0.0)
-        direction = -direction;
+vec3 RandomSphereVec(inout uint seed)
+{
+    while (true)
+    {
+        vec3 vec;
+        vec.x = Rnd(seed) * 2.0f - 1.0f;
+        vec.y = Rnd(seed) * 2.0f - 1.0f;
+        vec.z = Rnd(seed) * 2.0f - 1.0f;
 
-    return direction;
+        // Return only if it's inside unit sphere
+        if (dot(vec, vec) < 1.0f)
+            return vec;
+    }
 }
 
 vec3 UniformSamplingHemisphere(inout uint seed, in vec3 normal)
 {
-    float r1 = Rnd(seed) * 2.0f - 1.0f;
-    float r2 = Rnd(seed) * 2.0f - 1.0f;
-    float r3 = Rnd(seed) * 2.0f - 1.0f;
-
-    vec3 direction = normalize(vec3(r1, r2, r3));
-    if (dot(direction, normal) <= 0.0)
+    vec3 direction = normalize(RandomSphereVec(seed));
+    if (dot(direction, normal) < 0.0)
         direction = -direction;
-
+    
     return direction;
+}
+
+vec3 CosineSamplingHemisphere(inout uint seed, in vec3 normal)
+{
+    vec3 direction = normalize(RandomSphereVec(seed));
+
+    // technically case where direction is equal to normal should be handled but I 
+    // delete all of the nans later on anyway so who cares, it's always one less if statement
+
+    return normalize(direction + normal);
 }
 
 // Return the tangent and binormal from the incoming normal
@@ -209,11 +226,11 @@ vec3 OffsetRay(in vec3 p, in vec3 n)
     float magnitude = length(p);
     float offset = epsilon * magnitude;
     // multiply the direction vector by the smallest offset
-    vec3 offsetVector = n * offset;
+    vec3 offsetVector = n * 0.001f;
     // add the offset vector to the starting point
     vec3 offsetPoint = p + offsetVector;
 
-    return p;
+    return offsetPoint;
 }
 
 float CalculateLuminance(vec3 rgb)

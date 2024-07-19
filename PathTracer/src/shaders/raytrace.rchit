@@ -105,15 +105,15 @@ void main()
 
     BRDFSampleData sampleData;
     sampleData.View = -gl_WorldRayDirectionEXT;
-    sampleData.Random = vec4(Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed));
-
-    SampleBRDF(sampleData, material, surface);
-
-    payload.Weight = sampleData.BRDF / sampleData.PDF;
-
-    payload.RayDirection = sampleData.RayDir;
     
+    SampleBRDF(payload.Seed, sampleData, material, surface);
+    
+    payload.Weight = sampleData.BRDF / sampleData.PDF;
+    
+    payload.RayDirection = sampleData.RayDir;
+
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
     payload.RayOrigin = OffsetRay(worldPos, offsetDir);
-    payload.HitValue     = material.EmissiveColor.xyz;
+    payload.HitValue = material.EmissiveColor.xyz;
+    
 }

@@ -21,7 +21,7 @@ struct Material
 struct DataIn
 {
 	Material material;
-	mat3 TBN;
+	vec3 Normal;
 	vec2 TexCoord;
 };
 
@@ -29,27 +29,9 @@ layout (location = 0) in DataIn dataIn;
 
 void main()
 {
-#ifdef USE_NORMAL_MAPS
-	vec3 normalMapVal = texture(uNormalTexture, dataIn.TexCoord).xyz * 2.0f - 1.0f;
-	normalMapVal = normalize(dataIn.TBN * normalMapVal);
+	outNormal = vec4(dataIn.Normal, 1.0f);
 
-	// no idea why but sometimes it's just nan
-	if(isnan(normalMapVal.x) || isnan(normalMapVal.y) || isnan(normalMapVal.z))
-	{
-		normalMapVal = vec3(0.5f, 0.5f, 1.0f);
-	}
-#else
-	vec3 normalMapVal = vec3(0.5f, 0.5f, 1.0f) * 2.0f - 1.0f;
-	normalMapVal = normalize(dataIn.TBN * normalMapVal);
-#endif
-
-	outNormal = 0.5 * (vec4(normalMapVal, 1.0f) + 1.0f);
-
-#ifdef USE_ALBEDO
     outAlbedo = dataIn.material.Albedo * texture(uAlbedoTexture, dataIn.TexCoord);
-#else
-    outAlbedo = vec4(0.5f);
-#endif
 
 	float metallic = texture(uMetallnessTexture, dataIn.TexCoord).r;
 	float roughness = texture(uRoghnessTexture, dataIn.TexCoord).r;

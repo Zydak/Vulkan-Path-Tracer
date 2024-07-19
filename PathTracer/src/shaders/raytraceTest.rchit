@@ -85,8 +85,9 @@ void main()
     // -------------------------------------------
     // Calculate Material Properties
     // -------------------------------------------
-    material.Ior = clamp(material.Ior, 1.0001f, 2.0f);
+    material.Ior = clamp(material.Ior, 1.0001f, 10.0f);
     material.Roughness = max(material.Roughness, 0.0001f);
+    material.SpecularAngle = clamp(material.SpecularAngle, 0.0f, 90.0f);
 
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
 
