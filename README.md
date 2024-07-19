@@ -62,13 +62,6 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
 - Open generated solution in Visual Studio.
 
 # Credits
-## Resources
-- https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/ - Introduction to Vulkan Ray Tracing Pipeline
-- https://www.youtube.com/@Acerola_t - Post Processing Effects
-- https://github.com/nvpro-samples/vk_denoise - Integrating Optix
-- https://www.scratchapixel.com/ - Math behind path tracing
-- https://github.com/knightcrawler25/GLSL-PathTracer
-
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
 - https://pbrt.org/scenes-v3 - Glass & Small Dragon
