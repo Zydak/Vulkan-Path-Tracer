@@ -51,6 +51,7 @@ public:
 	void Render();
 	void RenderGraph();
 	void Resize(VkExtent2D newSize, Vulture::Image* inputImage);
+	void UpdateInputImage(Vulture::Image* inputImage);
 	void EndFrame();
 
 	inline ImFlow::ImNodeFlow* GetGridHandler() const { return m_Handler.get(); };

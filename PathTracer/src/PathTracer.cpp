@@ -264,10 +264,6 @@ void PathTracer::CreatePipelines()
 			Vulture::Shader shader1({ "src/shaders/GBuffer.vert", VK_SHADER_STAGE_VERTEX_BIT });
 
 			std::vector<Vulture::Shader::Define> defines;
-			if (m_DrawInfo.UseAlbedo)
-				defines.push_back({ "USE_ALBEDO" });
-			if (m_DrawInfo.UseNormalMaps)
-				defines.push_back({ "USE_NORMAL_MAPS" });
 			if (m_DrawInfo.SampleEnvMap)
 				defines.push_back({ "SAMPLE_ENV_MAP" });
 
@@ -323,24 +319,12 @@ void PathTracer::CreateRayTracingPipeline()
 		info.PushConstants = m_PushContantRayTrace.GetRangePtr();
 
 		std::vector<Vulture::Shader::Define> defines;
-		if (m_DrawInfo.UseAlbedo)
-			defines.push_back({ "USE_ALBEDO" });
-		if (m_DrawInfo.UseNormalMaps)
-			defines.push_back({ "USE_NORMAL_MAPS" });
 		if (m_DrawInfo.SampleEnvMap)
 			defines.push_back({ "SAMPLE_ENV_MAP" });
-		if (m_DrawInfo.UseGlossy)
-			defines.push_back({ "USE_GLOSSY" });
-		if (m_DrawInfo.UseGlass)
-			defines.push_back({ "USE_GLASS" });
-		if (m_DrawInfo.UseClearcoat)
-			defines.push_back({ "USE_CLEARCOAT" });
 		if (m_DrawInfo.UseFireflies)
 			defines.push_back({ "USE_FIREFLIES" });
 		if (m_DrawInfo.ShowSkybox)
 			defines.push_back({ "SHOW_SKYBOX" });
-		if (m_DrawInfo.UseCosineWeight)
-			defines.push_back({ "COSINE_WEIGHT" });
 
 		Vulture::Shader rgShader;
 		if (!rgShader.Init({ m_DrawInfo.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))

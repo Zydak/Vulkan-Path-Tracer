@@ -150,17 +150,32 @@ vec3 RandomVec(inout uint seed)
 
 vec3 RandomSphereVec(inout uint seed)
 {
-    while (true)
-    {
-        vec3 vec;
-        vec.x = Rnd(seed) * 2.0f - 1.0f;
-        vec.y = Rnd(seed) * 2.0f - 1.0f;
-        vec.z = Rnd(seed) * 2.0f - 1.0f;
+    // Rejection Method
 
-        // Return only if it's inside unit sphere
-        if (dot(vec, vec) < 1.0f)
-            return vec;
-    }
+    //while (true)
+    //{
+    //    vec3 vec;
+    //    vec.x = Rnd(seed) * 2.0f - 1.0f;
+    //    vec.y = Rnd(seed) * 2.0f - 1.0f;
+    //    vec.z = Rnd(seed) * 2.0f - 1.0f;
+    //
+    //    // Return only if it's inside unit sphere
+    //    if (sqrt(dot(vec, vec)) < 1.0f)
+    //        return vec;
+    //}
+
+
+    // Spherical Coordinates
+
+    float theta = 2.0f * M_PI * Rnd(seed);
+    float phi = acos(2.0f * Rnd(seed) - 1.0f);
+
+    vec3 dir;
+    dir.x = sin(phi) * cos(theta);
+    dir.y = sin(phi) * sin(theta);
+    dir.z = cos(phi);
+
+    return dir;
 }
 
 vec3 UniformSamplingHemisphere(inout uint seed, in vec3 normal)
@@ -176,7 +191,7 @@ vec3 CosineSamplingHemisphere(inout uint seed, in vec3 normal)
 {
     vec3 direction = normalize(RandomSphereVec(seed));
 
-    // technically case where direction is equal to normal should be handled but I 
+    // Case where direction is equal to -normal should be handled but I 
     // delete all of the nans later on anyway so who cares, it's always one less if statement
 
     return normalize(direction + normal);

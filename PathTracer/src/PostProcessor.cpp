@@ -95,6 +95,13 @@ void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
 	std::vector<int> data(m_OutputImage.GetImageSize().width * m_OutputImage.GetImageSize().height, 0);
 	m_OutputImage.WritePixels(data.data());
 
+	UpdateInputImage(inputImage);
+}
+
+void PostProcessor::UpdateInputImage(Vulture::Image* inputImage)
+{
+	m_InputImage = inputImage;
+
 	for (auto& node : m_Handler->getNodes())
 	{
 		// Update Input Nodes

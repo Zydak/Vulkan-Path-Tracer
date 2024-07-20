@@ -6,23 +6,42 @@
 
 #include "Vulture.h"
 
+//#define RASTERIZER
 
 void Editor::Init()
 {
 	m_PathTracer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
+#ifdef RASTERIZER
 	m_Rasterizer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_Rasterizer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+#endif
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_Rasterizer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
 
 	CreateQuadRenderTarget();
 	CreateQuadPipeline();
 	CreateQuadDescriptor();
+
+	m_Denoiser.Init();
+	m_Denoiser.AllocateBuffers({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+
+	Vulture::Image::CreateInfo imageInfo{};
+	imageInfo.Width = m_ImageSize.x;
+	imageInfo.Height = m_ImageSize.y;
+	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	imageInfo.Tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	imageInfo.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	imageInfo.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageInfo.LayerCount = 1;
+	imageInfo.SamplerInfo = Vulture::SamplerInfo{};
+	imageInfo.Type = Vulture::Image::ImageType::Image2D;
+	imageInfo.DebugName = "Denoised Image";
+	m_DenoisedImage.Init(imageInfo);
 }
 
 void Editor::Destroy()
@@ -61,8 +80,15 @@ void Editor::Render()
 	}
 	if (m_ImageResized)
 	{
+		m_Denoiser.AllocateBuffers({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+		m_DenoisedImage.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-		m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
+
+		if (m_ShowDenoisedImage)
+			m_PostProcessor.UpdateInputImage(&m_DenoisedImage);
+		else
+			m_PostProcessor.UpdateInputImage(m_PathTracer.GetOutputImage());
+
 		m_ImageResized = false;
 		Resize();
 		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -71,9 +97,11 @@ void Editor::Render()
 	{
 		if (Vulture::Renderer::BeginFrame())
 		{
+#ifdef RASTERIZER
 			m_Rasterizer.Render(m_CurrentScene);
 			m_Rasterizer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
-
+#endif
+			if (m_PathTracer.GetSamplesAccumulated() == 0) m_Time = 0.0f;
 			m_PathTracingFinished = !m_PathTracer.Render();
 
 			if (!m_PathTracingFinished)
@@ -86,6 +114,8 @@ void Editor::Render()
 
 			Vulture::Renderer::ImGuiPass();
 
+			m_PathTracingFinished = m_PathTracer.GetSamplesAccumulated() >= m_PathTracer.m_DrawInfo.TotalSamplesPerPixel;
+
 			if (m_ReadyToSaveRender)
 			{
 				m_ReadyToSaveRender = false;
@@ -93,8 +123,41 @@ void Editor::Render()
 				Vulture::Renderer::SaveImageToFile("", m_PostProcessor.GetOutputImage());
 			}
 
+			// Denoiser
+			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
+			{
+				std::vector<Vulture::Image*> denoiserInput =
+				{
+					m_PathTracer.GetOutputImage(),
+					m_PathTracer.GetGBuffer()->GetImageNoVk(0).get(),
+					m_PathTracer.GetGBuffer()->GetImageNoVk(1).get()
+				};
+
+				m_Denoiser.ImageToBuffer(Vulture::Renderer::GetCurrentCommandBuffer(), denoiserInput);
+			}
+
+			if (m_PathTracingFinished && m_RenderToFile && m_ImageDenoised && !m_DenoisedImageReady)
+			{
+				m_Denoiser.BufferToImage(Vulture::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
+				m_DenoisedImageReady = true;
+			}
+
 			Vulture::Renderer::EndFrame();
 			m_PostProcessor.EndFrame();
+
+			
+			// Denoiser
+			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
+			{
+				VkCommandBuffer cmd;
+				Vulture::Device::BeginSingleTimeCommands(cmd, Vulture::Device::GetGraphicsCommandPool());
+				m_ImageDenoised = true;
+				Vulture::Device::WaitIdle();
+				uint64_t x = UINT64_MAX;
+				m_Denoiser.DenoiseImageBuffer(x);
+				Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
+			}
+
 		}
 		else
 		{
@@ -231,7 +294,10 @@ void Editor::RenderImGui()
 	}
 
 	ImGuiRenderPathTracingViewport();
+
+#ifdef RASTERIZER
 	ImGuiRenderRasterizerViewport();
+#endif
 
 	if (m_RenderToFile)
 		ImGuiRenderingToFileSettings();
@@ -370,8 +436,25 @@ void Editor::ImGuiRenderingToFileSettings()
 
 		if (ImGui::Button("Back"))
 		{
+			if (m_ShowDenoisedImage)
+				m_PostProcessor.UpdateInputImage(m_PathTracer.GetOutputImage()); // Reset the image back to the path tracer output if it was selected to show denoised one
+
 			m_RenderToFile = false;
+			m_ImageDenoised = false;
+			m_DenoisedImageReady = false;
+			m_ShowDenoisedImage = false;
 			m_FileAlreadySaved = false;
+		}
+
+		bool showDenoisedPrev = m_ShowDenoisedImage;
+		ImGui::Checkbox("Show Denoised Image", &m_ShowDenoisedImage);
+
+		if (showDenoisedPrev != m_ShowDenoisedImage)
+		{
+			if (m_ShowDenoisedImage)
+				m_PostProcessor.UpdateInputImage(&m_DenoisedImage);
+			else
+				m_PostProcessor.UpdateInputImage(m_PathTracer.GetOutputImage());
 		}
 	}
 
@@ -638,21 +721,6 @@ void Editor::ImGuiPathTracingSettings()
 
 	ImGui::Separator();
 
-	if (ImGui::Checkbox("Use Normal Maps (Experimental)", &m_PathTracer.m_DrawInfo.UseNormalMaps))
-		m_PathTracer.RecreateRayTracingPipeline();
-
-	if (ImGui::Checkbox("Use Albedo", &m_PathTracer.m_DrawInfo.UseAlbedo))
-		m_PathTracer.RecreateRayTracingPipeline();
-
-	if (ImGui::Checkbox("Use Glossy Reflections", &m_PathTracer.m_DrawInfo.UseGlossy))
-		m_PathTracer.RecreateRayTracingPipeline();
-
-	if (ImGui::Checkbox("Use Glass", &m_PathTracer.m_DrawInfo.UseGlass))
-		m_PathTracer.RecreateRayTracingPipeline();
-
-	if (ImGui::Checkbox("Use Clearcoat", &m_PathTracer.m_DrawInfo.UseClearcoat))
-		m_PathTracer.RecreateRayTracingPipeline();
-
 	if (ImGui::Checkbox("Eliminate Fireflies", &m_PathTracer.m_DrawInfo.UseFireflies))
 		m_PathTracer.RecreateRayTracingPipeline();
 
@@ -672,6 +740,7 @@ void Editor::ImGuiPathTracingSettings()
 	if (ImGui::Checkbox(   "Visualize DOF",		&m_PathTracer.m_DrawInfo.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("Focal Length",		&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("DoF Strength",		&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("Anti Aliasing Strength", &m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 2.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	ImGui::Separator();
 }
 

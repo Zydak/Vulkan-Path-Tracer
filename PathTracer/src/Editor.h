@@ -49,7 +49,10 @@ private:
 	Rasterizer m_Rasterizer;
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
+	Vulture::Denoiser m_Denoiser;
+	Vulture::Image m_DenoisedImage;
 	VkDescriptorSet m_PathTracerOutputImageSet;
+	VkDescriptorSet m_DenoisedOutputImageSet;
 	VkDescriptorSet m_RasterizerOutputImageSet;
 
 	// Scene
@@ -74,6 +77,9 @@ private:
 	bool m_PathTracingFinished = false;
 	bool m_ReadyToSaveRender = false;
 	bool m_FileAlreadySaved = false;
+	bool m_ImageDenoised = false;
+	bool m_DenoisedImageReady = false;
+	bool m_ShowDenoisedImage = false;
 
 	// Viewport Rendering
 	Vulture::OrthographicCamera m_QuadCamera;

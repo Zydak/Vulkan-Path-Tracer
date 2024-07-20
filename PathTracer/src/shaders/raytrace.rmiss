@@ -17,10 +17,25 @@ layout(push_constant) uniform _PushConstantRay
 void main()
 {
 	vec3 rayDir = payload.RayDirection;
+	vec3 color;
+#ifdef SHOW_SKYBOX
 	rayDir = Rotate(rayDir, vec3(1, 0, 0), -pcRay.EnvAltitude + M_PI);
 	rayDir = Rotate(rayDir, vec3(0, 1, 0), -pcRay.EnvAzimuth);
 	vec2 uv = directionToSphericalEnvmap(rayDir);
-	vec3 color = texture(uEnvMap, uv).xyz;
+	color = texture(uEnvMap, uv).xyz;
+#else
+	if (payload.Depth == 0)
+	{
+		color = vec3(0.0f);
+	}
+	else
+	{
+		rayDir = Rotate(rayDir, vec3(1, 0, 0), -pcRay.EnvAltitude + M_PI);
+		rayDir = Rotate(rayDir, vec3(0, 1, 0), -pcRay.EnvAzimuth);
+		vec2 uv = directionToSphericalEnvmap(rayDir);
+		color = texture(uEnvMap, uv).xyz;
+	}
+#endif
 
     payload.HitValue = color;
 	payload.Depth = DEPTH_INFINITE;

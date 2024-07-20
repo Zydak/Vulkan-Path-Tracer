@@ -56,6 +56,7 @@ public:
 	PathTracer& operator=(PathTracer&& other) noexcept = delete;
 
 	inline Vulture::Image* GetOutputImage() { return &m_PathTracingImage; };
+	inline Vulture::Framebuffer* GetGBuffer() { return &m_GBufferFramebuffer; };
 
 	void Resize(VkExtent2D newSize);
 	void SetScene(Vulture::Scene* scene);
@@ -95,20 +96,12 @@ public:
 		float FocalLength = 8.0f;
 		bool VisualizedDOF = false;
 		bool AutoDoF = false;
-		float AliasingJitterStr = 2.0f;
+		float AliasingJitterStr = 1.0f;
 		int TotalSamplesPerPixel = 15000;
 		int RayDepth = 20;
 		int SamplesPerFrame = 15;
-		bool UseNormalMaps = false;
-		bool UseAlbedo = true;
-		bool UseGlossy = true;
-		bool UseGlass = true;
-		bool UseClearcoat = true;
 		bool UseFireflies = true;
 		bool ShowSkybox = true;
-
-		bool UseTestShaders = false;
-		bool UseCosineWeight = true;
 
 		bool SampleEnvMap = true;
 		float EnvAzimuth = 0.0f;

@@ -25,7 +25,7 @@ void main()
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d;
-    d.x = (pixelCenter.x * 2.0f) / gl_LaunchSizeEXT.x - 1.0f;
+    d.x = 1.0f - (pixelCenter.x * 2.0f) / gl_LaunchSizeEXT.x;
     d.y = (pixelCenter.y * 2.0f) / gl_LaunchSizeEXT.y - 1.0f;
 
     vec4 origin    = uni.ViewInverse * vec4(0, 0, 0, 1);
@@ -74,7 +74,7 @@ void main()
         payload.Bsdf = vec3(0.0f);
 
         // Applying small jitter for anti aliasing
-        vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize;
+        vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize * pcRay.AliasingJitter;
         vec3 directionCopy = direction;
         directionCopy += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
         directionCopy = normalize(directionCopy);
@@ -115,12 +115,14 @@ void main()
         }
 
         // Eliminate fireflies
+#ifdef USE_FIREFLIES
         const float maxLuminance = 50.0f;
         float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
         if(lum > maxLuminance)
         {
             hitValue *= maxLuminance / lum;
         }
+#endif
 
         finalHitValue += hitValue;
 
