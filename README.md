@@ -1,29 +1,53 @@
 # Vulkan-Path-Tracer
 
-Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designed for simulating global illumination and complex lighting effects, featuring a lot of post-processing effects. Renders that you create can be easly saved to disk as PNG images.
+Vulkan Path Tracer is a simple offline renderer made using Vulkan Ray-Tracing Pipeline. It uses a simple BSDF (unfortunately not energy conserving) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be also saved as .png images. It also features a post processing graph that allows you to create your own combination of post processing effects and apply them to your renders.
 
 # Gallery
 ![BlackDragon](./Gallery/BlackDragon.png)
 ![Dogs](./Gallery/Dogs.png)
+![TranslucentDragon](./Gallery/TranslucentDragon.png)
+![CornellBox](./Gallery/CornellBox.png)
 ![Monster](./Gallery/MonsterRough.png)
 ![MonsterInk](./Gallery/MonsterInk.png)
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
-![TranslucentDragon](./Gallery/TranslucentDragon.png)
-![CornellBox](./Gallery/CornellBox.png)
-![Editor](./Gallery/Editor.png)
 
-# Features
+## Material Showcase
+
+- Metallic factor ranging from 0 to 1. Determines whether the surface is metallic or dielectric.
+![metallic](./Gallery/materialShowcase/metallic.png)
+
+- Roughness factor on metallic surface ranging from 0 to 1.
+![metalRoughness](./Gallery/materialShowcase/metalRoughness.png)
+
+- Specular Strength factor ranging from 0 to 1. Changes the strength of specular highlights on specular surfaces.
+![specular](./Gallery/materialShowcase/specular.png)
+
+- Roughness factor on dielectric surface ranging from 0 to 1.
+![specRoughness](./Gallery/materialShowcase/specRoughness.png)
+
+- Specular Tint factor on dielectric surface ranging from 0 to 1. Gradually Tints the specular highlights to the surface color.
+![specTint](./Gallery/materialShowcase/specTint.png)
+
+- Transparency factor ranging from 0 to 1. Determines whether the material is able to refract light rays or not.
+![glass](./Gallery/materialShowcase/glass.png)
+
+- Roughness factor on glass surface ranging from 0 to 1.
+![glassRougness](./Gallery/materialShowcase/glassRougness.png)
+
+- Index of refraction (IOR) factor on glass surface ranging from 1 to 2. Determines how much the path of light is bent.
+![IOR](./Gallery/materialShowcase/ior.png)
+
+# List Of Features
 - Complex Materials
   - Albedo, Metallic and Roughness Textures
-  - Translucent materials with IOR
-  - Clearcoat
-  - Emissive Factor
+  - Transparent materials with IOR
+  - Emissive Objects
 - Editor
-  - Loading your own scenes in .gltf and .obj format
+  - Loading your own scenes in .gltf .fbx and .obj format
   - Editing scene materials in runtime
 - Exporting renders into .PNG files
-- Shader reloading and caching
-- HDR Environment Maps with importance sampling
+- Shader hot reloading and caching
+- HDR Environment Maps
 - Post Processing
   - Bloom using Mip Maps
   - Exposure
@@ -38,14 +62,10 @@ Vulkan Path Tracer is an offline PBR renderer made using the Vulkan API, designe
   - 6 Tonemappers (Filmic, Hill Aces, Narkowicz Aces, Exposure Mapping, Uncharted 2, Reinchard Extended)
   - Ink Effect: Detects Edges, turns everything to black and white, applies blue noise and adds paper texture.
   - Posterize Effect: Quantizes Colors, Applies Dithering and adds ability to replace color pallet with your own colors or colors generated in OKLAB color space
-- Physically Accurate BSDF
-- GPU Path Tracing using Vulkan Ray Tracing Pipeline
-  - Albedo, Glossy Reflections, Glass
-  - Fireflies Elimination
 - Anti Aliasing
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
-- Camera made using quaternions
+- Camera controller made using quaternions
 
 # Running
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
