@@ -8,7 +8,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "raycommon.glsl"
-#include "BRDF.glsl"
+#include "BSDF.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
@@ -85,15 +85,11 @@ void main()
     // -------------------------------------------
     // Calculate Material Properties
     // -------------------------------------------
-    material.Ior = clamp(material.Ior, 1.0001f, 2.0f);
+    material.Ior = min(material.Ior, 3.0f);
     material.Roughness = max(material.Roughness, 0.0001f);
+    material.Roughness *= material.Roughness;
 
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
-
-    const float anisotropic = material.Anisotropy;
-    const float aspect = sqrt(1.0 - anisotropic * 0.9);
-    material.ax = max(0.001, material.Roughness / aspect);
-    material.ay = max(0.001, material.Roughness * aspect);
 
     material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
 
@@ -103,17 +99,25 @@ void main()
     // Hit
     // -------------------------------------------
 
-    BRDFSampleData sampleData;
+    BSDFSampleData sampleData;
     sampleData.View = -gl_WorldRayDirectionEXT;
     
-    SampleBRDF(payload.Seed, sampleData, material, surface);
+    bool absorb = !SampleBSDF(payload.Seed, sampleData, material, surface);
     
-    payload.Weight = sampleData.BRDF / sampleData.PDF;
+    if (absorb)
+    {
+        payload.Weight = vec3(0.0f);
+        payload.Depth = DEPTH_INFINITE;
+    }
+    payload.Weight = sampleData.BSDF / sampleData.PDF;
     
     payload.RayDirection = sampleData.RayDir;
 
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
     payload.RayOrigin = OffsetRay(worldPos, offsetDir);
     payload.HitValue = material.EmissiveColor.xyz;
+
+    //payload.Weight = vec3(0.0f);
+    //payload.HitValue = (surface.Normal + 1.0f) / 2.0f;
     
 }

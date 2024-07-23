@@ -6,16 +6,11 @@
 
 #include "Vulture.h"
 
-//#define RASTERIZER
 
 void Editor::Init()
 {
 	m_PathTracer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
-#ifdef RASTERIZER
-	m_Rasterizer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_Rasterizer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-#endif
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -54,6 +49,16 @@ void Editor::SetCurrentScene(Vulture::Scene* scene)
 	m_CurrentScene = scene;
 
 	m_PathTracer.SetScene(scene);
+	
+	// Get Vertex and index count
+	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
+	for (auto& entity : view)
+	{
+		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
+		Vulture::Model* model = modelComp->ModelHandle.GetModel();
+		m_VertexCount = model->GetVertexCount();
+		m_IndexCount = model->GetIndexCount();
+	}
 }
 
 void Editor::Render()
@@ -85,9 +90,9 @@ void Editor::Render()
 		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
 
 		if (m_ShowDenoisedImage)
-			m_PostProcessor.UpdateInputImage(&m_DenoisedImage);
+			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, &m_DenoisedImage);
 		else
-			m_PostProcessor.UpdateInputImage(m_PathTracer.GetOutputImage());
+			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
 
 		m_ImageResized = false;
 		Resize();
@@ -97,10 +102,6 @@ void Editor::Render()
 	{
 		if (Vulture::Renderer::BeginFrame())
 		{
-#ifdef RASTERIZER
-			m_Rasterizer.Render(m_CurrentScene);
-			m_Rasterizer.GetOutputImage()->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
-#endif
 			if (m_PathTracer.GetSamplesAccumulated() == 0) m_Time = 0.0f;
 			m_PathTracingFinished = !m_PathTracer.Render();
 
@@ -124,6 +125,8 @@ void Editor::Render()
 			}
 
 			// Denoiser
+			// step 1:
+			// First it checks whether it can upload data to cuda buffers using normal frame command buffer
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
 				std::vector<Vulture::Image*> denoiserInput =
@@ -136,6 +139,12 @@ void Editor::Render()
 				m_Denoiser.ImageToBuffer(Vulture::Renderer::GetCurrentCommandBuffer(), denoiserInput);
 			}
 
+			// step 3:
+			// When m_ImageDenoised is set to true and it hasn't been copied already (m_DenoisedImageReady)
+			// it copies the data from cuda buffers into m_DenoisedImage
+			// 
+			// This way you have to wait 2 frames for denoising, step 1 is run on the first frame,
+			// step 2 is run between frames, and step 3 is run on the second frame
 			if (m_PathTracingFinished && m_RenderToFile && m_ImageDenoised && !m_DenoisedImageReady)
 			{
 				m_Denoiser.BufferToImage(Vulture::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
@@ -144,18 +153,17 @@ void Editor::Render()
 
 			Vulture::Renderer::EndFrame();
 			m_PostProcessor.EndFrame();
-
 			
 			// Denoiser
+			// step 2:
+			// After the first step is done it waits until all buffers are copied using WaitIdle()
+			// and when that's done it runs Optix denoiser in cuda and waits untill it's done (DenoiseImageBuffer())
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
-				VkCommandBuffer cmd;
-				Vulture::Device::BeginSingleTimeCommands(cmd, Vulture::Device::GetGraphicsCommandPool());
 				m_ImageDenoised = true;
 				Vulture::Device::WaitIdle();
 				uint64_t x = UINT64_MAX;
 				m_Denoiser.DenoiseImageBuffer(x);
-				Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
 			}
 
 		}
@@ -295,10 +303,6 @@ void Editor::RenderImGui()
 
 	ImGuiRenderPathTracingViewport();
 
-#ifdef RASTERIZER
-	ImGuiRenderRasterizerViewport();
-#endif
-
 	if (m_RenderToFile)
 		ImGuiRenderingToFileSettings();
 	else
@@ -340,30 +344,6 @@ void Editor::ImGuiRenderPathTracingViewport()
 	m_ViewportSize = { viewportWidth, viewportHeight };
 
 	ImGui::Image(m_PathTracerOutputImageSet, viewportContentSize);
-
-	ImGui::End();
-	ImGui::PopStyleVar();
-}
-
-void Editor::ImGuiRenderRasterizerViewport()
-{
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	m_RasterizerViewportVisible = ImGui::Begin("Rasterizer Preview Viewport");
-
-	bool isWindowHoveredAndDocked = ImGui::IsWindowHovered() && ImGui::IsWindowDocked();
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
-
-	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
-	CameraScript* camScript = scComp->GetScript<CameraScript>(0);
-
-	if (m_RasterizerViewportVisible)
-		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
-
-	if (m_RenderToFile)
-		camScript->m_CameraLocked = true; // Always lock camera when rendering to file
-
-	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
-	ImGui::Image(m_RasterizerOutputImageSet, viewportContentSize);
 
 	ImGui::End();
 	ImGui::PopStyleVar();
@@ -552,6 +532,8 @@ void Editor::ImGuiInfoHeader()
 	ImGui::Text("Frame: %i", m_PathTracer.GetFrame()); // renderer starts counting from 0 so add 1
 	ImGui::Text("Time: %fs", m_Time);
 	ImGui::Text("Samples Per Pixel: %i", m_PathTracer.GetSamplesAccumulated());
+	ImGui::Text("Vertices Count: %i", m_VertexCount);
+	ImGui::Text("Indices Count: %i", m_IndexCount);
 
 	if (ImGui::Button("Reset"))
 	{
@@ -642,7 +624,6 @@ void Editor::ImGuiSceneEditor()
 	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Specular Strength", (float*)&(*currentMaterials)[currentMaterialItem].SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
 	if (ImGui::SliderFloat("Specular Tint",		(float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Specular Angle",	(float*)&(*currentMaterials)[currentMaterialItem].SpecularAngle, 0.0f, 90.0f)) { valuesChanged = true; };
 	ImGui::Separator();
 	
 	if (ImGui::SliderFloat("Transparency",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
@@ -753,6 +734,9 @@ void Editor::ImGuiViewportSettings()
 
 	if (ImGui::InputInt2("Rendered Image Size", (int*)&m_ImageSize)) { m_ImageResized = true; }
 
+	m_ImageSize.x = glm::max(m_ImageSize.x, 1);
+	m_ImageSize.y = glm::max(m_ImageSize.y, 1);
+
 	ImGui::Separator();
 }
 
@@ -848,9 +832,14 @@ void Editor::UpdateModel()
 		modelComp->ModelHandle.Unload();
 		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
 		modelComp->ModelHandle = newAssetHandle;
+		newAssetHandle.WaitToLoad();
+
+		// Get Vertex and index count
+		Vulture::Model* model = newAssetHandle.GetModel();
+		m_VertexCount = model->GetVertexCount();
+		m_IndexCount = model->GetIndexCount();
 	}
 
-	newAssetHandle.WaitToLoad();
 	m_PathTracer.SetScene(m_CurrentScene);
 	m_PathTracer.ResetFrameAccumulation();
 }

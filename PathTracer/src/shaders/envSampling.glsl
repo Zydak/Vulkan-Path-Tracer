@@ -22,15 +22,13 @@ vec4 SampleImportanceEnvMap(in sampler2D hdrTexture, in vec3 randVal, out vec3 t
     if (xi.y < sample_data.Importance)
     {
         // If the random variable is lower than the importance, we directly pick
-        // this texel, and renormalize the random variable for later use. The PDF is the
-        // one of the texel itself
+        // this texel, and renormalize the random variable for later use.
         envIdx = idx;
         xi.y /= sample_data.Importance;
     }
     else
     {
-        // Otherwise we pick the alias of the texel, renormalize the random variable and use
-        // the PDF of the alias
+        // Otherwise we pick the alias of the texel and renormalize the random variable
         envIdx = sample_data.Alias;
         xi.y = (xi.y - sample_data.Importance) / (1.0f - sample_data.Importance);
     }
@@ -58,7 +56,7 @@ vec4 SampleImportanceEnvMap(in sampler2D hdrTexture, in vec3 randVal, out vec3 t
     toLight = Rotate(toLight, vec3(1, 0, 0), push.EnvAltitude);
     toLight = Rotate(toLight, vec3(0, 1, 0), push.EnvAzimuth);
 
-    // Lookup the environment value using bilinear filtering
+    // Lookup the environment value using
     return texture(hdrTexture, vec2(u, v));
 }
 

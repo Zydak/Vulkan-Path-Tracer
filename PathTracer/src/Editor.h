@@ -4,7 +4,6 @@
 
 #include "PathTracer.h"
 #include "PostProcessor.h"
-#include "Rasterizer.h"
 
 class Vulture::Scene;
 
@@ -34,7 +33,6 @@ private:
 	void ImGuiRenderingToFileSettings();
 
 	void ImGuiRenderPathTracingViewport();
-	void ImGuiRenderRasterizerViewport();
 	void ImGuiShaderSettings();
 	void ImGuiInfoHeader();
 	void ImGuiSceneEditor();
@@ -46,14 +44,12 @@ private:
 
 	void Resize();
 
-	Rasterizer m_Rasterizer;
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
 	Vulture::Denoiser m_Denoiser;
 	Vulture::Image m_DenoisedImage;
 	VkDescriptorSet m_PathTracerOutputImageSet;
 	VkDescriptorSet m_DenoisedOutputImageSet;
-	VkDescriptorSet m_RasterizerOutputImageSet;
 
 	// Scene
 	Vulture::Scene* m_CurrentScene;
@@ -61,6 +57,8 @@ private:
 	bool m_ModelChanged = false;
 	std::string m_ChangedModelFilepath = "";
 	void UpdateModel();
+	uint64_t m_VertexCount = 0;
+	uint64_t m_IndexCount = 0;
 	// Skybox
 	bool m_SkyboxChanged = false;
 	std::string m_ChangedSkyboxFilepath = "";
@@ -90,5 +88,4 @@ private:
 	Vulture::DescriptorSet m_QuadDescriptor;
 
 	bool m_PathTracerViewportVisible = true;
-	bool m_RasterizerViewportVisible = true;
 };

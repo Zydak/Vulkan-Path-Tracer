@@ -18,7 +18,7 @@ public:
 
 		cameraCp->Camera.SetPerspectiveMatrix(45.0f, m_Entity.GetScene()->GetWindow()->GetAspectRatio(), 0.1f, 100.0f);
 
-		cameraCp->Camera.Translation.z = -10.0f;
+		cameraCp->Camera.Translation.z = -8.0f;
 		cameraCp->Camera.UpdateViewMatrix();
 
 		m_StartingTranslation = cameraCp->Camera.Translation;

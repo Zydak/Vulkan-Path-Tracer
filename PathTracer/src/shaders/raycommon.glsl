@@ -70,20 +70,13 @@ struct Material
     vec4 EmissiveColor;
     float Metallic;
     float Roughness;
-    float SubsurfaceScattering;
-    float Anisotropy;
     float SpecularTint;
     float SpecularStrength;
-    float SpecularAngle;
 
     float Ior;
     float SpecTrans;
-    float ClearCoat;
-    float ClearCoatRoughness;
 
     float eta;
-    float ax;
-    float ay;
 };
 
 struct Surface
@@ -258,6 +251,13 @@ void CalculateTangents(in vec3 N, out vec3 T, out vec3 B)
     vec3 up = abs(N.z) < 0.9999999 ? vec3(0, 0, 1) : vec3(1, 0, 0);
     T = normalize(cross(up, N));
     B = cross(N, T);
+}
+
+bool IsNan(vec3 vec)
+{
+    if (isnan(vec).x || isnan(vec).y || isnan(vec).z)
+        return true;
+    return false;
 }
 
 vec3 TangentToWorld(vec3 T, vec3 B, vec3 N, vec3 V)

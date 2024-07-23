@@ -64,7 +64,7 @@ void Application::Init()
 
 	// Load Initial model
 	Vulture::Entity entity = m_Scene->CreateEntity();
-	entity.AddComponent<ModelComponent>("assets/cornell-box2.gltf").ModelHandle.WaitToLoad();
+	entity.AddComponent<ModelComponent>("assets/cornellBox.gltf").ModelHandle.WaitToLoad();
 	entity.AddComponent<TransformComponent>(Vulture::Transform(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 180.0f), glm::vec3(0.5f)));
 
 	// Initialize path tracing stuff
