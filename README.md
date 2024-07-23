@@ -1,6 +1,6 @@
 # Vulkan-Path-Tracer
 
-Vulkan Path Tracer is a simple offline renderer made using Vulkan Ray-Tracing Pipeline. It uses a simple BSDF (unfortunately not energy conserving) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be also saved as .png images. It also features a post processing graph that allows you to create your own combination of post processing effects and apply them to your renders.
+Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [Vulture](https://github.com/Zydak/Vulture). For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses a simple BSDF (unfortunately not energy conserving) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be easily saved as .png images. It also features a post processing graph that allows you to create your own combination of post processing effects and apply them to your renders.
 
 # Gallery
 ![BlackDragon](./Gallery/BlackDragon.png)
