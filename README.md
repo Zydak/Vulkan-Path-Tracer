@@ -19,7 +19,7 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 - Roughness factor on metallic surface ranging from 0 to 1.
 ![metalRoughness](./Gallery/materialShowcase/metalRoughness.png)
 
-- Specular Strength factor ranging from 0 to 1. Changes the strength of specular highlights on specular surfaces.
+- Specular Strength factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
 ![specular](./Gallery/materialShowcase/specular.png)
 
 - Roughness factor on dielectric surface ranging from 0 to 1.
@@ -34,12 +34,12 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 - Roughness factor on glass surface ranging from 0 to 1.
 ![glassRougness](./Gallery/materialShowcase/glassRougness.png)
 
-- Index of refraction (IOR) factor on glass surface ranging from 1 to 2. Determines how much the path of light is bent.
+- Index of refraction (IOR) factor on glass surface ranging from 1 to 2. Determines how much the path of light is bent during refraction.
 ![IOR](./Gallery/materialShowcase/ior.png)
 
 # List Of Features
 - Complex Materials
-  - Albedo, Metallic and Roughness Textures
+  - Diffuse, Metallic and Roughness Textures
   - Transparent materials with IOR
   - Emissive Objects
 - Editor
