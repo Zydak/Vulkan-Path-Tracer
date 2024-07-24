@@ -70,8 +70,8 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 
 # Running
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
-- Download [Win64.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Win64.zip) from Releases.
-- Unzip and run `Release/PathTracer/PathTracer.exe`.
+- Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0-alpha/PathTracer.zip) from Releases.
+- Unzip and run `PathTracer/PathTracer/PathTracer.exe`.
 
 # Building
 ## Windows Only
