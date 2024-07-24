@@ -3,10 +3,11 @@
 Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [Vulture](https://github.com/Zydak/Vulture). For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses a simple BSDF (unfortunately not energy conserving) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be easily saved as .png images. It also features a post processing graph that allows you to create your own combination of post processing effects and apply them to your renders.
 
 # Gallery
-![BlackDragon](./Gallery/BlackDragon.png)
-![Dogs](./Gallery/Dogs.png)
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
 ![CornellBox](./Gallery/CornellBox.png)
+![BlackDragon](./Gallery/BlackDragon.png)
+![Dogs](./Gallery/Dogs.png)
+![Caustics](./Gallery/Caustics.png)
 ![Monster](./Gallery/MonsterRough.png)
 ![MonsterInk](./Gallery/MonsterInk.png)
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
@@ -76,7 +77,7 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 ## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
-- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Shaderc/Shaderc.zip)
+- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Shaderc.zip)
 - Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
 - Run `setup.bat` in main directory.
 - Open generated solution in Visual Studio.
