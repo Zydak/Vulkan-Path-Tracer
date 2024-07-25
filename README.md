@@ -8,6 +8,7 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 ![BlackDragon](./Gallery/BlackDragon.png)
 ![Dogs](./Gallery/Dogs.png)
 ![Caustics](./Gallery/Caustics.png)
+![Sponza](./Gallery/Sponza.png)
 ![Monster](./Gallery/MonsterRough.png)
 ![MonsterInk](./Gallery/MonsterInk.png)
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
@@ -90,3 +91,4 @@ Vulkan Path Tracer is a simple offline renderer made using my Vulkan framework [
 - https://polyhaven.com/hdris - Env Maps
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
+- https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
