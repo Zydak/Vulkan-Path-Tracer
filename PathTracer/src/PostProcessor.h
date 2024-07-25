@@ -31,6 +31,7 @@ public:
 	// 	virtual Vulture::Image* GetOutputImage() = 0;
 	bool PinsEvaluated() { return m_PinsEvaluated; };
 	void SetPinsEvaluated(bool val) { m_PinsEvaluated = val; };
+	virtual void Resize(VkExtent2D size) {};
 
 private:
 	bool m_PinsEvaluated = false;
@@ -267,7 +268,7 @@ public:
 			}
 		);
 
-		CreateImage(size);
+		Resize(size);
 	}
 
 	void draw() override
@@ -289,7 +290,7 @@ public:
 		}
 	}
 
-	void CreateImage(VkExtent2D size)
+	void Resize(VkExtent2D size) override
 	{
 		Vulture::Image::CreateInfo info{};
 		info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -316,7 +317,7 @@ private:
 	VkImage m_PrevHandle = VK_NULL_HANDLE;
 };
 
-class TonemapNode : public ImFlow::BaseNode, public  BaseNodeVul
+class TonemapNode : public ImFlow::BaseNode, public BaseNodeVul
 {
 public:
 	TonemapNode(VkExtent2D size)
@@ -371,7 +372,7 @@ public:
 			}
 		);
 
-		CreateImage(size);
+		Resize(size);
 
 		NodeOutput nodeInput = getInVal<NodeOutput>("Input");
 	}
@@ -436,7 +437,7 @@ public:
 		}
 	}
 
-	void CreateImage(VkExtent2D size)
+	void Resize(VkExtent2D size) override
 	{
 		bool gettingRecreated = m_OutputImage.IsInitialized();
 
@@ -473,6 +474,207 @@ private:
 	Vulture::Tonemap::TonemapInfo m_RunInfo{};
 	Vulture::Tonemap::Tonemappers m_Tonemapper = Vulture::Tonemap::Tonemappers::Filmic;
 	bool m_UseChromaticAberration = false;
+	NodeOutput m_NodeOutput{};
+
+	VkImage m_CachedHandle = VK_NULL_HANDLE;
+	VkImage m_PrevHandle = VK_NULL_HANDLE;
+};
+
+class PosterizeNode : public ImFlow::BaseNode, public BaseNodeVul
+{
+public:
+	PosterizeNode(VkExtent2D size)
+	{
+		setTitle("Posterize Dither");
+		setStyle(ImFlow::NodeStyle::green());
+		addIN<NodeOutput>("Input", PostProcessor::EmptyNodeOutput, ImFlow::ConnectionFilter::SameType());
+		addOUT<NodeOutput>("Output")->behaviour(
+			[this]()
+			{
+				if (PinsEvaluated()) // Node was already evaluated so just return node output
+					return m_NodeOutput;
+				else // Node is evaluated for the first time in the frame so reset m_NodeOutput from prev frame and continue
+				{
+					m_NodeOutput = {};
+					SetPinsEvaluated(true);
+				}
+
+				auto ins = this->getIns();
+
+				for (int i = 0; i < ins.size(); i++)
+				{
+					auto link = ins[i]->getLink().lock();
+					if (link == nullptr)
+						continue;
+
+					auto leftPin = link->left();
+					leftPin->resolve();
+				}
+
+				auto func = [this](Vulture::Image* inputImage)
+					{
+						m_CachedHandle = inputImage->GetImage();
+						if (m_PrevHandle != m_CachedHandle)
+						{
+							Vulture::Effect<Info>::CreateInfo createInfo{};
+							createInfo.DebugName = "Posterize Effect";
+							createInfo.InputImage = inputImage;
+							createInfo.OutputImage = &m_OutputImage;
+							createInfo.ShaderPath = "src/shaders/Posterize.comp";
+
+							m_Effect.Init(createInfo);
+							m_PrevHandle = m_CachedHandle;
+						}
+
+						Info* pushInfo = m_Effect.GetPush().GetDataPtr();
+						*pushInfo = m_RunInfo;
+
+						m_Effect.Run(Vulture::Renderer::GetCurrentCommandBuffer());
+					};
+
+				m_NodeOutput = getInVal<NodeOutput>("Input");
+				m_NodeOutput.Queue.PushTask(func, m_NodeOutput.Image);
+				m_NodeOutput.Image = &m_OutputImage;
+
+				return m_NodeOutput;
+			}
+		);
+
+		Resize(size);
+
+		NodeOutput nodeInput = getInVal<NodeOutput>("Input");
+	}
+
+	void draw() override
+	{
+		ImGui::Text("");
+
+		CENTER_WIDGET(-50, 50);
+		ImGui::SliderInt("Color Count", &m_RunInfo.ColorsCount, 1, 8);
+		CENTER_WIDGET(-50, 50);
+		ImGui::SliderFloat("Dither Spread", &m_RunInfo.DitherSpread, 0.0f, 4.0f);
+		CENTER_WIDGET(-50, 50);
+		ImGui::SliderInt("Dither Size", &m_RunInfo.DitherSize, 0, 5);
+
+		bool prevReplace = m_ReplaceColorPalette;
+		CENTER_WIDGET(-50, 50);
+		ImGui::Checkbox("Replace Color Palette", &m_ReplaceColorPalette);
+		if (m_ReplaceColorPalette != prevReplace)
+		{
+			Recompile();
+		}
+
+		if (m_ReplaceColorPalette)
+		{
+			CENTER_WIDGET(-50, 50);
+			if (ImGui::Button("Generate pallet"))
+			{
+				uint32_t seed = (uint32_t)time(NULL);
+				std::vector<glm::vec3> colors = GeneratePallet(m_RunInfo.ColorsCount, seed);
+				for (int i = 0; i < m_RunInfo.ColorsCount; i++)
+				{
+					m_RunInfo.Colors[i] = glm::vec4(colors[i], 1.0f);
+				}
+			}
+
+			for (int i = 0; i < m_RunInfo.ColorsCount; i++)
+			{
+				CENTER_WIDGET(-50, 150);
+				ImGui::ColorEdit3(("Color" + std::to_string(i + 1)).c_str(), (float*)&m_RunInfo.Colors[i]);
+			}
+		}
+	}
+
+	void Resize(VkExtent2D size) override
+	{
+		Vulture::Image::CreateInfo info{};
+		info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.Format = VK_FORMAT_R8G8B8A8_UNORM;
+		info.Height = size.height;
+		info.Width = size.width;
+		info.LayerCount = 1;
+		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
+		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		info.SamplerInfo = Vulture::SamplerInfo{};
+		info.Type = Vulture::Image::ImageType::Image2D;
+		info.DebugName = "Posterize Output Image";
+		m_OutputImage.Init(info);
+
+		{
+			NodeOutput nodeInput = getInVal<NodeOutput>("Input");
+
+			Vulture::Effect<Info>::CreateInfo createInfo{};
+			createInfo.DebugName = "Posterize Effect";
+			createInfo.InputImage = nodeInput.Image;
+			createInfo.OutputImage = &m_OutputImage;
+			createInfo.ShaderPath = "src/shaders/Posterize.comp";
+			if (m_ReplaceColorPalette)
+				createInfo.Defines = { Vulture::Shader::Define{"REPLACE_PALLET", ""} };
+
+			m_Effect.Init(createInfo);
+		}
+	}
+
+	void Recompile()
+	{
+		NodeOutput nodeInput = getInVal<NodeOutput>("Input");
+
+		Vulture::Effect<Info>::CreateInfo createInfo{};
+		createInfo.DebugName = "Posterize Effect";
+		createInfo.InputImage = nodeInput.Image;
+		createInfo.OutputImage = &m_OutputImage;
+		createInfo.ShaderPath = "src/shaders/Posterize.comp";
+		if (m_ReplaceColorPalette)
+			createInfo.Defines = { Vulture::Shader::Define{"REPLACE_PALLET", ""} };
+
+		m_Effect.Init(createInfo);
+	}
+
+	std::vector<glm::vec3> GeneratePallet(uint32_t numberOfColors, uint32_t& seed)
+	{
+		float hue = Vulture::Random(seed) * 2.0f * (float)M_PI;
+		float hueContrast = glm::mix(0.0f, 1.0f, Vulture::Random(seed));
+		float L = glm::mix(0.134f, 0.343f, Vulture::Random(seed));
+		float LContrast = glm::mix(0.114f, 1.505f, Vulture::Random(seed));
+		float chroma = glm::mix(0.077f, 0.179f, Vulture::Random(seed));
+		float chromaContrast = glm::mix(0.078f, 0.224f, Vulture::Random(seed));
+
+		std::vector<glm::vec3> colors(numberOfColors);
+
+		for (int i = 0; i < (int)numberOfColors; i++)
+		{
+			float linearIterator = (float)i / (numberOfColors);
+
+			float hueOffset = hueContrast * linearIterator * 2.0f * (float)M_PI + ((float)M_PI / 4.0f);
+			hueOffset *= 0.33f;
+
+			float luminanceOffset = L + LContrast * linearIterator;
+			float chromaOffset = chroma + chromaContrast * linearIterator;
+
+			colors[i] = Vulture::OKLCHtoRGB(glm::vec3(luminanceOffset, chromaOffset, hue + hueOffset));
+
+			colors[i] = glm::clamp(colors[i], 0.0f, 1.0f);
+		}
+
+		return colors;
+	}
+
+private:
+
+	struct Info
+	{
+		int ColorsCount = 8;
+		float DitherSpread = 0.5f;
+		int DitherSize = 4;
+
+		glm::vec4 Colors[8];
+	};
+
+	Vulture::Image m_OutputImage;
+	Vulture::Effect<Info> m_Effect;
+	bool m_ReplaceColorPalette = false;
+	Info m_RunInfo{};
 	NodeOutput m_NodeOutput{};
 
 	VkImage m_CachedHandle = VK_NULL_HANDLE;

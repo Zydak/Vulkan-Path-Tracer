@@ -41,7 +41,7 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 	m_NodesRef.push_back(bloomNode);
 	std::shared_ptr<TonemapNode> tonemapNode = m_Handler->addNode<TonemapNode>({ 370, 400 }, VkExtent2D{ 900, 900 });
 	m_NodesRef.push_back(tonemapNode);
-	m_OutputNode = m_Handler->addNode<OutputNode>({ 600, 400 }, &m_NodeQueue, &m_OutputImage);
+	m_OutputNode = m_Handler->addNode<OutputNode>({ 700, 400 }, &m_NodeQueue, &m_OutputImage);
 
 	bloomNode->inPin("Input")->createLink(m_InputNode->outPin("Output"));
 	tonemapNode->inPin("Input")->createLink(bloomNode->outPin("Output"));
@@ -96,6 +96,18 @@ void PostProcessor::Resize(VkExtent2D newSize, Vulture::Image* inputImage)
 	m_OutputImage.WritePixels(data.data());
 
 	UpdateInputImage(inputImage);
+
+	// Resize nodes
+	for (auto& node : m_Handler->getNodes())
+	{
+		{
+			BaseNodeVul* bloomNode = dynamic_cast<BaseNodeVul*>(node.second.get());
+			if (bloomNode != nullptr)
+			{
+				bloomNode->Resize(m_ViewportSize);
+			}
+		}
+	}
 }
 
 void PostProcessor::UpdateInputImage(Vulture::Image* inputImage)
@@ -119,24 +131,6 @@ void PostProcessor::UpdateInputImage(Vulture::Image* inputImage)
 			if (outputNode != nullptr)
 			{
 				outputNode->UpdateImage(&m_OutputImage);
-			}
-		}
-
-		// Update Bloom Nodes
-		{
-			BloomNode* bloomNode = dynamic_cast<BloomNode*>(node.second.get());
-			if (bloomNode != nullptr)
-			{
-				bloomNode->CreateImage(m_ViewportSize);
-			}
-		}
-
-		// Update Tonemap Nodes
-		{
-			TonemapNode* tonemapNode = dynamic_cast<TonemapNode*>(node.second.get());
-			if (tonemapNode != nullptr)
-			{
-				tonemapNode->CreateImage(m_ViewportSize);
 			}
 		}
 	}
@@ -166,39 +160,12 @@ void PostProcessor::EndFrame()
 	ImFlow::ImNodeFlow* handler = GetGridHandler();
 	for (auto& node : handler->getNodes())
 	{
-		// Update Input Nodes
+		// Update Nodes
 		{
-			PathTracerOutputNode* inputNode = dynamic_cast<PathTracerOutputNode*>(node.second.get());
+			BaseNodeVul* inputNode = dynamic_cast<BaseNodeVul*>(node.second.get());
 			if (inputNode != nullptr)
 			{
 				inputNode->SetPinsEvaluated(false);
-			}
-		}
-
-		// Update Output Nodes
-		{
-			OutputNode* outputNode = dynamic_cast<OutputNode*>(node.second.get());
-			if (outputNode != nullptr)
-			{
-				outputNode->SetPinsEvaluated(false);
-			}
-		}
-
-		// Update Bloom Nodes
-		{
-			BloomNode* bloomNode = dynamic_cast<BloomNode*>(node.second.get());
-			if (bloomNode != nullptr)
-			{
-				bloomNode->SetPinsEvaluated(false);
-			}
-		}
-
-		// Update Tonemap Nodes
-		{
-			TonemapNode* tonemapNode = dynamic_cast<TonemapNode*>(node.second.get());
-			if (tonemapNode != nullptr)
-			{
-				tonemapNode->SetPinsEvaluated(false);
 			}
 		}
 	}
@@ -230,6 +197,8 @@ ImFlow::BaseNode* PostProcessor::SpawnFunction()
 		node = m_Handler->placeNode<BloomNode>(m_ViewportSize);
 	if (ImGui::Button("Tonemap"))
 		node = m_Handler->placeNode<TonemapNode>(m_ViewportSize);
+	if (ImGui::Button("Posterize"))
+		node = m_Handler->placeNode<PosterizeNode>(m_ViewportSize);
 
 	if (node != nullptr)
 		m_NodesRef.push_back(node);

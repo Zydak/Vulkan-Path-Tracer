@@ -138,7 +138,7 @@ bool PathTracer::Render()
 		m_DOfVisualizer.GetPush().GetDataPtr()->Far = cam->NearFar.y;
 		m_DOfVisualizer.GetPush().GetDataPtr()->FocalPoint = m_DrawInfo.FocalLength;
 		m_DOfVisualizer.GetPush().GetDataPtr()->VPInverse = glm::inverse(cam->GetProjView());
-		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer(), Vulture::Renderer::GetFrameIndex());
+		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer());
 	}
 	return true;
 }
@@ -298,8 +298,8 @@ void PathTracer::CreatePipelines()
 		Vulture::Effect<PushConstantDOF>::CreateInfo info{};
 		info.AdditionalTextures = { m_GBufferFramebuffer.GetImageNoVk(4).get() };
 		info.DebugName = "DOF Visualizer";
-		info.InputImages = { &m_PathTracingImage };
-		info.OutputImages = { &m_PathTracingImage };
+		info.InputImage = &m_PathTracingImage;
+		info.OutputImage = &m_PathTracingImage;
 		info.ShaderPath = "src/shaders/DepthOfField.comp";
 
 		m_DOfVisualizer.Init(info);
