@@ -4,14 +4,23 @@ Vulkan Path Tracer is a simple offline renderer made from scratch in Vulkan usin
 
 # Gallery
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
+--------
 ![CornellBox](./Gallery/CornellBox.png)
+--------
 ![BlackDragon](./Gallery/BlackDragon.png)
+--------
 ![Dogs](./Gallery/Dogs.png)
+--------
 ![Caustics](./Gallery/Caustics.png)
+--------
 ![Sponza](./Gallery/Sponza.png)
+--------
 ![Monster](./Gallery/MonsterRough.png)
+--------
 ![MonsterInk](./Gallery/MonsterInk.png)
+--------
 ![MonsterPosterize](./Gallery/MonsterPosterize.png)
+--------
 
 ## Material Showcase
 
