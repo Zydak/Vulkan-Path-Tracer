@@ -30,6 +30,8 @@ project "PathTracer"
 		"IMGUI_DEFINE_MATH_OPERATORS"
 	}
 
+	buildoptions { "/MP" }
+
 	filter "system:windows"
 		defines "WIN"
 		systemversion "latest"

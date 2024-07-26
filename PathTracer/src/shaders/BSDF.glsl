@@ -31,7 +31,7 @@ float SchlickWeight(float NdotV)
 
 float DielectricFresnel(float cosThetaI, float eta)
 {
-    float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
+    float sinThetaTSq = (1.0f - cosThetaI * cosThetaI) / eta * eta;
 
     if (sinThetaTSq > 1.0)
         return 1.0;
@@ -44,30 +44,6 @@ float DielectricFresnel(float cosThetaI, float eta)
     return 0.5f * (rs * rs + rp * rp);
 }
 
-vec3 customReflect(vec3 I, vec3 N) {
-    float NdotI = dot(N, I);
-    return I - 2.0 * NdotI * N;
-}
-
-vec3 SampleGGXVNDF(vec3 V, float ax, float ay, float r1, float r2)
-{
-    vec3 Vh = normalize(vec3(ax * V.x, ay * V.y, V.z));
-
-    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-    vec3 T1 = lensq > 0 ? vec3(-Vh.y, Vh.x, 0) * inversesqrt(lensq) : vec3(1, 0, 0);
-    vec3 T2 = cross(Vh, T1);
-
-    float r = sqrt(r1);
-    float phi = 2.0 * M_PI * r2;
-    float t1 = r * cos(phi);
-    float t2 = r * sin(phi);
-    float s = 0.5 * (1.0 + Vh.z);
-    t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
-
-    vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
-
-    return normalize(vec3(ax * Nh.x, ay * Nh.y, max(0.0, Nh.z)));
-}
 
 bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface)
 {
