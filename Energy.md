@@ -65,22 +65,31 @@ $$
 As you can see, $L_o(\mathbf{x}, \omega_o) = L_i(\mathbf{x}, \omega_i)$. That means that if we choose a uniform environment light, the $L_i(\mathbf{x}, \omega_i)$ will equal to the background color. And that means that we won't be able to distinguish between an object and the background. So if I use a perfectly white background and place a perfectly reflective sphere in the scene, I shouldn't be able to see it.
 
 And that is exactly what happens!
-![PassedFurnace](./Gallery/materialShowcase/PassedFurnace.png)
+<p align="center">
+  <img src="./Gallery/materialShowcase/PassedFurnace.png" alt="Passed Furnace" width="500" height="500" />
+</p>
 
 Why is any of this useful? Well, if we mess up any part of the renderer, like the BSDF the furnace test will fail. If we absorb too much energy (destroy light), we'll see a dark sphere on a white background. On the other hand, if we reflect too much energy (create light), we'll see a sphere brighter than the background. And that's exactly what happens if I intentionally break my BSDF:
 
 Here's the result of incorrectly calculating dielectric reflection color:
-![FailedFurnace](./Gallery/materialShowcase/FailedFurnace.png)
+<p align="center">
+  <img src="./Gallery/materialShowcase/FailedFurnace.png" alt="Failed Furnace" width="500" height="500" />
+</p>
+You can clearly see that something is wrong. The BRDF is absorbing too much energy at high angles.
 
 # My Implementation
 
 Now, back to my implementation, does it properly conserve energy? Yes.
 
 As a proof, you can see the furnace test on the cornell box that you can find in a gallery, but this time all materials have albedo equal 1 (perfect reflector) with roughness and metallic factors also set to 1.
-![FurnaceCornell](./Gallery/materialShowcase/CornellFurnace.png)
+<p align="center">
+  <img src="./Gallery/materialShowcase/CornellFurnace.png" alt="Furnace Cornell" width="500" height="500" />
+</p>
 
 You can't see it but that's the point, I promise it's there!
 
 Here's how it looks with a non-uniform environment map:
-![FurnaceCornell1](./Gallery/materialShowcase/CornellFurnace1.png)
+<p align="center">
+  <img src="./Gallery/materialShowcase/CornellFurnace1.png" alt="Furnace Cornell1" width="500" height="500" />
+</p>
 
