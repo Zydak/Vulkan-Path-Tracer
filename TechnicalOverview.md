@@ -111,9 +111,8 @@ Here's the result of incorrectly calculating dielectric reflection color:
   <img src="./Gallery/materialShowcase/FailedFurnace.png" alt="Failed Furnace" width="500" height="500" />
   <img src="./Gallery/materialShowcase/FailedFurnace1.png" alt="Failed Furnace1" width="500" height="500" />
 </p>
-You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the right image the BSDF is reflecting too much energy at high angles. In both cases 
-$L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF.
 
+You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the right image the BSDF is reflecting too much energy at high angles. In both cases $L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF which no longer equals $\frac{1}{\pi}$.
 ## My Implementation
 
 Now, back to my implementation, does it properly conserve energy? Yes.
