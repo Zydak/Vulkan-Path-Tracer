@@ -39,7 +39,7 @@ In short, if we say that something is energy conserving we mean that light is ne
 Color of a pixel is given by the outgoing radiance $L_o$ in the direction $\omega_o$ which is given by solving a rendering equation. Here I'll use a simple one where BRDF = $\frac{albedo}{\pi}$. But this easily extends to more complex BRDFs, BSDFs etc.
 
 $$
-L_o(\mathbf{x}, \omega_o) = \frac{1}{\pi} \int_{\Omega} L_i(\mathbf{x}, \omega_i) \cdot \rho(\mathbf{x}, \omega_i) \cdot \cos(\theta_i) d\omega_i
+L_o(\mathbf{x}, \omega_o) = \int_{\Omega} L_i(\mathbf{x}, \omega_i) \cdot \rho(\mathbf{x}, \omega_i) \cdot \cos(\theta_i) d\omega_i
 $$
 
 where:
@@ -111,9 +111,8 @@ Here's the result of incorrectly calculating dielectric reflection color:
   <img src="./Gallery/materialShowcase/FailedFurnace.png" alt="Failed Furnace" width="500" height="500" />
   <img src="./Gallery/materialShowcase/FailedFurnace1.png" alt="Failed Furnace1" width="500" height="500" />
 </p>
-You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the right image the BSDF is reflecting too much energy at high angles. In both cases 
-$L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF.
 
+You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the right image the BSDF is reflecting too much energy at high angles. In both cases $L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF which no longer equals $\frac{1}{\pi}$.
 ## My Implementation
 
 Now, back to my implementation, does it properly conserve energy? Yes.
