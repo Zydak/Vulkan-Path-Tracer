@@ -28,7 +28,7 @@ void PathTracer::Resize(VkExtent2D newSize)
 	// Update Ray tracing set
 	m_RayTracingDescriptorSet.UpdateImageSampler(
 		1, 
-		{ Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL }
+		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL }
 	);
 
 	UpdateDescriptorSetsData();
@@ -47,7 +47,7 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 
 	m_GlobalDescriptorSets.UpdateImageSampler(
 		1,
-		{ Vulture::Renderer::GetLinearSamplerHandle(),
+		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
 		skybox->ImageHandle.GetImage()->GetImageView(),
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 	);
@@ -485,7 +485,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		asInfo.pAccelerationStructures = &tlas;
 
 		m_RayTracingDescriptorSet.AddAccelerationStructure(0, asInfo);
-		m_RayTracingDescriptorSet.AddImageSampler(1, { Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
+		m_RayTracingDescriptorSet.AddImageSampler(1, { Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
 		m_RayTracingDescriptorSet.AddBuffer(2, m_RayTracingMeshesBuffer.DescriptorInfo());
 		m_RayTracingDescriptorSet.AddBuffer(3, m_RayTracingMaterialsBuffer.DescriptorInfo());
 
@@ -498,7 +498,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			{
 				m_RayTracingDescriptorSet.AddImageSampler(
 					4,
-					{ Vulture::Renderer::GetLinearSamplerHandle(),
+					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 					model->GetAlbedoTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
@@ -507,7 +507,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			{
 				m_RayTracingDescriptorSet.AddImageSampler(
 					5,
-					{ Vulture::Renderer::GetLinearSamplerHandle(),
+					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 					model->GetNormalTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
@@ -516,7 +516,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			{
 				m_RayTracingDescriptorSet.AddImageSampler(
 					6,
-					{ Vulture::Renderer::GetLinearSamplerHandle(),
+					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 					model->GetRoughnessTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
@@ -525,7 +525,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			{
 				m_RayTracingDescriptorSet.AddImageSampler(
 					7,
-					{ Vulture::Renderer::GetLinearSamplerHandle(),
+					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 					model->GetMetallnessTexture(j)->GetImageView(),
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 				);
@@ -606,11 +606,13 @@ void PathTracer::UpdateDescriptorSetsData()
 	PerspectiveCameraComponent* cameraCp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
 	cameraCp->Camera.SetPerspectiveMatrix(cameraCp->Camera.FOV, newAspectRatio, 0.1f, 1000.0f);
 
+	glm::mat4 flipX = glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, 1.0f, 1.0f));
+
 	GlobalUbo ubo{};
 	VL_CORE_ASSERT(cameraCp != nullptr, "No main camera found!");
 	ubo.ProjInverse = glm::inverse(cameraCp->Camera.ProjMat);
-	ubo.ViewInverse = glm::inverse(cameraCp->Camera.ViewMat);
-	ubo.ViewProjectionMat = cameraCp->Camera.GetProjView();
+	ubo.ViewInverse = glm::inverse(cameraCp->Camera.ViewMat * flipX);
+	ubo.ViewProjectionMat = cameraCp->Camera.ProjMat * (cameraCp->Camera.ViewMat * flipX);
 	m_GlobalSetBuffer.WriteToBuffer(&ubo);
 
 	m_GlobalSetBuffer.Flush();

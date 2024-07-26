@@ -23,10 +23,8 @@ void main()
     payload.Seed = PCG(seed);
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
-    vec2 d;
-    d.x = 1.0f - (pixelCenter.x * 2.0f) / gl_LaunchSizeEXT.x;
-    d.y = (pixelCenter.y * 2.0f) / gl_LaunchSizeEXT.y - 1.0f;
+    const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = inUV * 2.0 - 1.0;
 
     vec4 origin    = uni.ViewInverse * vec4(0, 0, 0, 1);
     vec4 target    = uni.ProjInverse * vec4(d.x, d.y, 1, 1);

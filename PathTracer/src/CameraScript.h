@@ -52,11 +52,11 @@ public:
 			// Translation
 			if (Vulture::Input::IsKeyPressed(VL_KEY_A))
 			{
-				cameraComponent.Camera.Translation -= (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
+				cameraComponent.Camera.Translation += (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
 			}
 			if (Vulture::Input::IsKeyPressed(VL_KEY_D))
 			{
-				cameraComponent.Camera.Translation += (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
+				cameraComponent.Camera.Translation -= (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
 			}
 			if (Vulture::Input::IsKeyPressed(VL_KEY_W))
 			{
@@ -79,11 +79,11 @@ public:
 			// Roll
 			if (Vulture::Input::IsKeyPressed(VL_KEY_Q))
 			{
-				cameraComponent.Camera.AddRoll(-(float)deltaTime * m_RotationSpeed);
+				cameraComponent.Camera.AddRoll((float)deltaTime * m_RotationSpeed);
 			}
 			if (Vulture::Input::IsKeyPressed(VL_KEY_E))
 			{
-				cameraComponent.Camera.AddRoll((float)deltaTime * m_RotationSpeed);
+				cameraComponent.Camera.AddRoll(-(float)deltaTime * m_RotationSpeed);
 			}
 
 			// Pitch
@@ -95,7 +95,7 @@ public:
 			// Yaw
 			if (m_LastMousePosition.x != mousePosition.x)
 			{
-				cameraComponent.Camera.AddYaw((m_LastMousePosition.x - mousePosition.x) * (m_RotationSpeed / 200.0f));
+				cameraComponent.Camera.AddYaw(-(m_LastMousePosition.x - mousePosition.x) * (m_RotationSpeed / 200.0f));
 			}
 		}
 		m_LastMousePosition = mousePosition;

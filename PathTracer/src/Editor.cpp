@@ -13,7 +13,7 @@ void Editor::Init()
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
-	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
 
@@ -81,7 +81,7 @@ void Editor::Render()
 	{
 		m_ImGuiViewportResized = false;
 		Resize();
-		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 	if (m_ImageResized)
 	{
@@ -96,7 +96,7 @@ void Editor::Render()
 
 		m_ImageResized = false;
 		Resize();
-		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 	else
 	{
@@ -266,7 +266,7 @@ void Editor::CreateQuadDescriptor()
 	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
 
 	m_QuadDescriptor.Init(&Vulture::Renderer::GetDescriptorPool(), bindings);
-	m_QuadDescriptor.AddImageSampler(0, { Vulture::Renderer::GetLinearSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+	m_QuadDescriptor.AddImageSampler(0, { Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
 	m_QuadDescriptor.Build();
 }
 
