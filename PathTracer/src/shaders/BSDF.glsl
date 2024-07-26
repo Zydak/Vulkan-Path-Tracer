@@ -109,14 +109,20 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         // Dielectric
         vec3 V = normalize(data.View);
         vec3 N = normalize(surface.Normal);
-        vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
-        H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
 
-        data.RayDir = reflect(-V, H);
-
-        if (dot(surface.Normal, data.RayDir) < 0.0f)
+        // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
+        // bounce it again instead of ending the path
+        while (true)
         {
-            return false;
+            vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
+            H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
+
+            data.RayDir = reflect(-V, H);
+
+            if (dot(surface.Normal, data.RayDir) > 0.0f)
+            {
+                break;
+            }
         }
     
         data.BSDF = mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
@@ -126,14 +132,20 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         // Metal
         vec3 V = normalize(data.View);
         vec3 N = normalize(surface.Normal);
-        vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
-        H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
-    
-        data.RayDir = reflect(-V, H);
 
-        if (dot(surface.Normal, data.RayDir) < 0.0f)
+        // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
+        // bounce it again instead of ending the path
+        while (true)
         {
-            return false;
+            vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
+            H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
+
+            data.RayDir = reflect(-V, H);
+
+            if (dot(surface.Normal, data.RayDir) > 0.0f)
+            {
+                break;
+            }
         }
 
         data.BSDF = mat.Color.xyz;
@@ -141,7 +153,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     else if (random < glassCDF)
     {
         // Glass
-        vec3 H = GgxSampling(mat.Roughness * mat.Roughness, Rnd(seed), Rnd(seed));
+        vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
         H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
     
         float FresnelWeight = DielectricFresnel(abs(dot(data.View, H)), mat.eta);
@@ -150,7 +162,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         {
             data.RayDir = reflect(-data.View, H);
             data.BSDF = vec3(1.0f);
-
+    
             if (dot(data.RayDir, surface.Normal) < 0.0f) // refraction
                 data.BSDF = mat.Color.xyz;
         }
