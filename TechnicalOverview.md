@@ -78,8 +78,8 @@ Aliasing is a known artifacts in computer graphics, it's caused by the fact that
 It's really simple in terms of code, we just generate random point on a 2D square and then we offset the ray origin and ray direction with it. Here's the result:
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/AntiAliasingOn.png" alt="Furnace Cornell" width="520" height="200" />
-  <img src="./Gallery/materialShowcase/AntiAliasingOff.png" alt="Furnace Cornell" width="520" height="200" />
+  <img src="./Gallery/materialShowcase/AntiAliasingOn.png" alt="Furnace Cornell" width="390" height="150" />
+  <img src="./Gallery/materialShowcase/AntiAliasingOff.png" alt="Furnace Cornell" width="390" height="150" />
 </p>
 
 <p align="center"> 
@@ -120,18 +120,18 @@ And because we're terminating only paths with low throughput we're not introduci
 By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweights small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible, the image will be way darker as the probabiity of a path having 20 bounces is close to zero as each bounce's probability of being terminated is 99%.
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/NoRoulette366s.png" alt="No Roulette" width="500" height="500" />
-  <img src="./Gallery/materialShowcase/Roulette150s.png" alt="Roulette" width="500" height="500" />
-  <img src="./Gallery/materialShowcase/IncorrectRoulette55s.png" alt="Incorrect Roulette" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/NoRoulette366s.png" alt="No Roulette" width="300" height="300" />
+  <img src="./Gallery/materialShowcase/Roulette150s.png" alt="Roulette" width="300" height="300" />
+  <img src="./Gallery/materialShowcase/IncorrectRoulette55s.png" alt="Incorrect Roulette" width="300" height="300" />
 </p>
 
-<p style="text-align:center;"> 
+<p align="center"> 
 Left image was rendered without russian roulette (366s for 200k samples per pixel)
 </p>
-<p style="text-align:center;"> 
+<p align="center"> 
 Middle image was rendered with roulette with correctly picked probability (150s for 200k samples per pixel)
 </p>
-<p style="text-align:center;"> 
+<p align="center"> 
 right image was rendered with roulette using constant probability 0.1 (55s for 200k samples per pixel)
 </p>
 
@@ -144,8 +144,8 @@ Fireflies elimination is a method used to limit the luminance of the sampled ray
 If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big to even be denoised (at least with my denoiser).
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/Fireflies.png" alt="No Roulette" width="600" height="600" />
-  <img src="./Gallery/materialShowcase/FirefliesDenoise.png" alt="Roulette" width="600" height="600" />
+  <img src="./Gallery/materialShowcase/Fireflies.png" alt="No Roulette" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/FirefliesDenoise.png" alt="Roulette" width="500" height="500" />
 </p>
 
 <p align="center"> 
