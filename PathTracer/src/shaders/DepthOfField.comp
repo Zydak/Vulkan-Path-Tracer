@@ -42,12 +42,12 @@ void main()
 	vec4 color;
 
 	if (depth >= pInfo.Far)
-		color = texelFetch(uInput, ivec2(imageSize(uOutput).x - gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0);
+		color = texelFetch(uInput, ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0);
 	else if (depth > pInfo.FocalPoint)  
 		color = vec4(0.0f, 0.6f, 0.0f, 1.0f);
 	else
-		color = texelFetch(uInput, ivec2(imageSize(uOutput).x - gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0);
+		color = texelFetch(uInput, ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0);
 
 		
-    imageStore(uOutput, ivec2(imageSize(uOutput).x - gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), color);
+    imageStore(uOutput, ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), color);
 }

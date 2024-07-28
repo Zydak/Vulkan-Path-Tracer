@@ -72,7 +72,7 @@ void main()
         payload.Bsdf = vec3(0.0f);
 
         // Applying small jitter for anti aliasing
-        vec2 antiAliasingJitter = vec2(Rnd(payload.Seed) - 0.5f, Rnd(payload.Seed) - 0.5f) / outputImageSize * pcRay.AliasingJitter;
+        vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize * pcRay.AliasingJitter;
         vec3 directionCopy = direction;
         directionCopy += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
         directionCopy = normalize(directionCopy);

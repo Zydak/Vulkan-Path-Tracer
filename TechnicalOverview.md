@@ -30,6 +30,8 @@ The main goal for this project was to create energy conserving offline renderer 
       - [Final Result](#final-result)
       - [My Implementation](#my-implementation)
   - [Denoising](#denoising)
+  - [Conclusion](#conclusion)
+- [Editor](#editor)
 - [Architecture](#architecture)
 - [Benchmark](#benchmark)
 
@@ -75,11 +77,11 @@ Now let's talk about some interesting techniques that I used in my raygen shader
 
 Aliasing is a known artifacts in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offseting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
 
-It's really simple in terms of code, we just generate random point on a 2D square and then we offset the ray origin and ray direction with it. Here's the result:
+It's really simple in terms of code, we just generate random point on a 2D circle and then we offset the ray direction with it. Here's the result:
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/AntiAliasingOn.png" alt="Furnace Cornell" width="390" height="150" />
-  <img src="./Gallery/materialShowcase/AntiAliasingOff.png" alt="Furnace Cornell" width="390" height="150" />
+  <img src="./Gallery/materialShowcase/AntiAliasingOn.png" alt="AntiAliasingOn" width="390" height="150" />
+  <img src="./Gallery/materialShowcase/AntiAliasingOff.png" alt="AntiAliasingOff" width="390" height="150" />
 </p>
 
 <p align="center"> 
@@ -88,7 +90,16 @@ It's really simple in terms of code, we just generate random point on a 2D squar
 </p>
 
 ##### Depth Of Field
-DOF TODO
+
+Depth of field (DoF) effect is pretty simple, it's a camera effect that simulates a real-world lens. It causes objects at a certain distance from the camera (Focal point) to appear sharp, while objects farther from that point appear progressively more blurred due to the camera lens bending the light. All you need to do in code is randomly offset ray origin and set ray direction to **focalPoint - rayOrigin**.
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/DoFOn.png" alt="DofOn" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/DoFOff.png" alt="DofOff" width="500" height="500" />
+</p>
+<p align="center"> 
+Left image was rendererd with Depth of Field effect on, you can clearly see how focal point is set on a middle sculpture, and how the first and the last one are completely not in focus. Right image was rendered without Depth of Field effect for comparison. 
+</p>
 
 ##### Russian Roulette
 
@@ -144,8 +155,8 @@ Fireflies elimination is a method used to limit the luminance of the sampled ray
 If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big to even be denoised (at least with my denoiser).
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/Fireflies.png" alt="No Roulette" width="500" height="500" />
-  <img src="./Gallery/materialShowcase/FirefliesDenoise.png" alt="Roulette" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/Fireflies.png" alt="Fireflies" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/FirefliesDenoise.png" alt="Fireflies denoised" width="500" height="500" />
 </p>
 
 <p align="center"> 
@@ -155,14 +166,14 @@ The left image shows cornell box lit by a very bright env map, the image has 200
 So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance. Here's an image with luminance limited to 500:
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/FirefliesEliminated.png" alt="No Roulette" width="600" height="600" />
+  <img src="./Gallery/materialShowcase/FirefliesEliminated.png" alt="No Fireflies" width="600" height="600" />
 </p>
 
 <p align="center"> 
 Image Shows the same image as above (200k samples per pixel) but this time max luminance of the env map is limited to 500.
 </p>
 
-As you can see the image is way darker, but that's logical if we're literally limiting brightness. Unfortunately that's really the only way of keeping the noise on "stable" and denoisable level for some environment maps.
+As you can see the image is way darker, but that's logical if we're literally limiting brightness. Unfortunately that's really the only way of keeping the noise at "stable" and denoisable level for some environment maps.
 
 #### Closest Hit Shader
 
@@ -200,7 +211,7 @@ Metallic lobe returns the material color same as the diffuse lobe. For the ray d
 #### Glass
 Glass lobe can have 2 cases - reflection and refraction. Whether the light will reflect or refract is based on Fresnel term ([more info here](https://pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission#FrDielectric)). Same as before we calculate the half vector, if the ray refracts we choose material color as output color and if it reflects we choose 1 (we choose one because the glass is dielectric so we don't want to tint it).
 
-Lobes are sampled semi randomly, each lobes has it's weight, the bigger the weight the bigger the probability that it will be sampled. All of the weights calculation can be found in the code. You can find the code in the [BSDF.glsl](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/BSDF.glsl). Also, all of the lobes described above are energy conserving, as that was the main goal for this project, to make a energy conserving path tracer, but what does that even mean and how did I check that?
+Lobes are sampled semi randomly, each lobe has it's weight, the bigger the weight the bigger the probability that it will be sampled. All of the weights calculation can be found in the code. You can find the code in the [BSDF.glsl](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/BSDF.glsl). Also, all of the lobes described above are energy conserving, as that was the main goal for this project, to make a energy conserving path tracer, but what does that even mean and how did I check that?
 
 ### Energy Conservation
 In short, if we say that something is energy conserving we mean that light is neither created nor destroyed as it bounces around a scene. We can check for energy conservation using a furnace test. What is a furnace test? The general idea is that if you have a 100% reflective object that is lit by a uniform environment, it becomes indistinguishable from the environment. It doesn’t matter if the object is matte or mirror like, or anything in between, it just “disappears”. We can easily prove that:
@@ -302,6 +313,42 @@ Here's how it looks with a non-uniform environment map:
 
 
 ## Denoising
+
+All of the denoising is performed using Optix Denoiser running on CUDA.
+
+First, I'm rasterizing the scene into a GBuffer to give optix better context of the scene, the images that are rasterized are called **guiding layers**. I'm rasterizing Albedo of each surface onto one image, and then normals of each surface onto another image. It's important that these images are RGBA32 because they have to match optix buffer layout. After the images are rasterized they are copied into vulkan buffers. Then I get a memory handles of them using **vkGetMemoryWin32HandleKHR** and I import the buffers into cuda using **cudaImportExternalMemory** and **cudaExternalMemoryGetMappedBuffer**. After that the rasterized images are ready to be used by Optix.
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/GuideLayerNormal.png" alt="Normal" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/GuideLayerAlbedo.png" alt="Albedo" width="500" height="500" />
+</p>
+
+<p align="center"> 
+Left image shows rasterized normal information. Right image shows rasterized albedo information.
+</p>
+
+After the rasterized images are ready we wait for vulkan frame rendering to finish, give all of the information to optix (path traced image + 2 guiding layers) and call **optixDenoiserInvoke**. After that we have to wait for it to finish which takes a couple of milliseconds. Then we just copy the resulting cuda buffer onto the vulkan image same as we did before and present it to the screen.
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/NoDenoise.png" alt="Normal" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/Denoise.png" alt="Albedo" width="500" height="500" />
+</p>
+
+<p align="center"> 
+Left image shows path tracing result with 15k samples per pixel, a lot of noise is clearly visible. Right image shows the denoised version of the left one. All of the noise is gone. So as you can see Optix does a really good job at clearing all of the noise.
+</p>
+
+## Conclusion
+
+And that pretty much concludes overview of the path tracing. I went over every single component that is used to path trace my renders, I haven't explained everything in that much detail but that's not the point of this document, if for whatever reason you need more details as to how exactly did I implement all those things, you can just look into the code. There are also ton of online resources which will explain those things way better than I would here. 
+
+So as a further reading:
+* Read the code.
+* For more info on the Vulkan Ray Tracing Pipeline refer to [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR).
+* For more info on the BSDF and various other techniques like russian roulette refer to [pbrt book](https://pbr-book.org/4ed/contents).
+* For more info on the Optix denoiser refer to nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
+
+# Editor
 TODO
 
 # Architecture
