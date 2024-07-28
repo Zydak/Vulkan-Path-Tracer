@@ -109,7 +109,10 @@ void main()
         payload.Weight = vec3(0.0f);
         payload.Depth = DEPTH_INFINITE;
     }
-    payload.Weight = sampleData.BSDF / sampleData.PDF;
+    else
+    {
+        payload.Weight = sampleData.BSDF / sampleData.PDF;
+    }
     
     payload.RayDirection = sampleData.RayDir;
 

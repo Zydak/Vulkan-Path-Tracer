@@ -75,6 +75,7 @@ bool PathTracer::Render()
 	m_PushContantRayTrace.GetDataPtr()->FocalLength = m_DrawInfo.FocalLength;
 	m_PushContantRayTrace.GetDataPtr()->DoFStrength = m_DrawInfo.DOFStrength;
 	m_PushContantRayTrace.GetDataPtr()->AliasingJitter = m_DrawInfo.AliasingJitterStr;
+	m_PushContantRayTrace.GetDataPtr()->FirefliesLuminance = m_DrawInfo.FirefliesMaxLuminance;
 	m_PushContantRayTrace.GetDataPtr()->SamplesPerFrame = m_DrawInfo.SamplesPerFrame;
 	m_PushContantRayTrace.GetDataPtr()->EnvAzimuth = glm::radians(m_DrawInfo.EnvAzimuth);
 	m_PushContantRayTrace.GetDataPtr()->EnvAltitude = glm::radians(m_DrawInfo.EnvAltitude);

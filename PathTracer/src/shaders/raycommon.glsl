@@ -44,6 +44,7 @@ struct PushConstantRay
     float FocalLenght;
     float DoFStrenght;
     float AliasingJitter;
+    float FirefliesLuminance;
 };
 
 struct Vertex

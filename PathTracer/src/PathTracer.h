@@ -19,6 +19,7 @@ struct PushConstantRay
 	float FocalLength;
 	float DoFStrength;
 	float AliasingJitter;
+	float FirefliesLuminance;
 };
 
 struct PushConstantGBuffer
@@ -97,6 +98,7 @@ public:
 		bool VisualizedDOF = false;
 		bool AutoDoF = false;
 		float AliasingJitterStr = 1.0f;
+		float FirefliesMaxLuminance = 500.0f;
 		int TotalSamplesPerPixel = 15000;
 		int RayDepth = 20;
 		int SamplesPerFrame = 15;

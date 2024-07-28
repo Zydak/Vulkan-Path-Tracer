@@ -72,7 +72,7 @@ void main()
         payload.Bsdf = vec3(0.0f);
 
         // Applying small jitter for anti aliasing
-        vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize * pcRay.AliasingJitter;
+        vec2 antiAliasingJitter = vec2(Rnd(payload.Seed) - 0.5f, Rnd(payload.Seed) - 0.5f) / outputImageSize * pcRay.AliasingJitter;
         vec3 directionCopy = direction;
         directionCopy += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
         directionCopy = normalize(directionCopy);
@@ -106,15 +106,15 @@ void main()
             hitValue += payload.HitValue * curWeight;
             curWeight *= payload.Weight;
 
-            float rrPcont = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 0.95);
-            if(Rnd(payload.Seed) >= rrPcont)
+            float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 1.0f);
+            if(Rnd(payload.Seed) >= p)
                 break;  // paths with low throughput that won't contribute
-            curWeight /= rrPcont;
+            curWeight /= p;
         }
 
         // Eliminate fireflies
 #ifdef USE_FIREFLIES
-        const float maxLuminance = 50.0f;
+        const float maxLuminance = pcRay.FirefliesLuminance;
         float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
         if(lum > maxLuminance)
         {

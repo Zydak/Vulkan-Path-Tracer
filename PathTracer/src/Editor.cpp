@@ -705,6 +705,8 @@ void Editor::ImGuiPathTracingSettings()
 	if (ImGui::Checkbox("Eliminate Fireflies", &m_PathTracer.m_DrawInfo.UseFireflies))
 		m_PathTracer.RecreateRayTracingPipeline();
 
+	if (ImGui::SliderFloat("Fireflies Max Luminance", &m_PathTracer.m_DrawInfo.FirefliesMaxLuminance, 1.0f, 500.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+
 	if (ImGui::Checkbox("Show Skybox", &m_PathTracer.m_DrawInfo.ShowSkybox))
 		m_PathTracer.RecreateRayTracingPipeline();
 
