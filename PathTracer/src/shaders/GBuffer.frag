@@ -29,7 +29,7 @@ layout (location = 0) in DataIn dataIn;
 
 void main()
 {
-	outNormal = vec4(dataIn.Normal, 1.0f);
+	outNormal = vec4(dataIn.Normal + 0.5f * 0.5f, 1.0f);
 
     outAlbedo = dataIn.material.Albedo * texture(uAlbedoTexture, dataIn.TexCoord);
 

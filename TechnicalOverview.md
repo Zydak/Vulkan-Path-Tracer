@@ -69,15 +69,15 @@ First let's talk about ray gen shader. There are 2 approaches for generating ray
 
 I used the loop based approach as it is way better than a recursive one, why?
 * I found out that for whatever reason it's about 2-3 times faster depending on scene than the recursive method. It's not only my machine as other guides on RT pipeline I saw noticed that as well.
-* You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit but on my computer it's 31, it of course varies per device. You can query the limit using VkPhysicalDeviceRayTracingPipelinePropertiesKHR.maxRayRecursionDepth. If you cross the limit device will be lost so you'll most likely just crash. Of course loop base approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
+* You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit but on my computer it's 31, it of course varies per device. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR.maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
 
-Now let's talk about some interesting techniques that I used in my raygen shader: Anti aliasing, Russian Roulette, Depth of field, and fireflies elimintaion.
+Now let's talk about some interesting techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and fireflies elimintaion.
 
 ##### Anti Aliasing
 
 Aliasing is a known artifacts in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offseting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
 
-It's really simple in terms of code, we just generate random point on a 2D circle and then we offset the ray direction with it. Here's the result:
+It's really simple in terms of code, we just generate random point on a 2D circle or square and then we offset the ray direction with it. Here's the result:
 
 <p align="center">
   <img src="./Gallery/materialShowcase/AntiAliasingOn.png" alt="AntiAliasingOn" width="390" height="150" />
@@ -85,8 +85,7 @@ It's really simple in terms of code, we just generate random point on a 2D circl
 </p>
 
 <p align="center"> 
-<b>Left image was rendered with antialiasing and the right was rendered without. The difference is quite clear.
-</b>
+Left image was rendered with antialiasing and the right was rendered without. The difference is quite clear.
 </p>
 
 ##### Depth Of Field
@@ -98,7 +97,7 @@ Depth of field (DoF) effect is pretty simple, it's a camera effect that simulate
   <img src="./Gallery/materialShowcase/DoFOff.png" alt="DofOff" width="500" height="500" />
 </p>
 <p align="center"> 
-Left image was rendererd with Depth of Field effect on, you can clearly see how focal point is set on a middle sculpture, and how the first and the last one are completely not in focus. Right image was rendered without Depth of Field effect for comparison. 
+Left image was rendererd with Depth of Field effect on, you can clearly see how focal point is set on a middle sculpture, and how the first and the last one are completely out of focus. Right image was rendered without Depth of Field effect for comparison. 
 </p>
 
 ##### Russian Roulette
@@ -128,7 +127,7 @@ $$ E[F_i\prime] = \left(1 - p_i\right) \cdot 0 + p_i \cdot \frac{E[F_i]}{p_i} = 
 
 And because we're terminating only paths with low throughput we're not introducing too much variance and keeping the convergence rate relatively similiar to the original one. This way the result is not only mathematically correct, but we're also saving a lot of computation time by not evaluating low throughput paths. 
 
-By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweights small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible, the image will be way darker as the probabiity of a path having 20 bounces is close to zero as each bounce's probability of being terminated is 99%.
+By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweights small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible. I'm not the greatest statistician in the world but If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be super dark, you'll be lucky to get 2 or even 1 bounce most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/NoRoulette366s.png" alt="No Roulette" width="300" height="300" />
@@ -174,6 +173,8 @@ Image Shows the same image as above (200k samples per pixel) but this time max l
 </p>
 
 As you can see the image is way darker, but that's logical if we're literally limiting brightness. Unfortunately that's really the only way of keeping the noise at "stable" and denoisable level for some environment maps.
+
+And that concludes the Ray Generation Shader!
 
 #### Closest Hit Shader
 
@@ -285,7 +286,7 @@ So if I use a perfectly white background and place a perfectly reflective sphere
   <img src="./Gallery/materialShowcase/PassedFurnace.png" alt="Passed Furnace" width="500" height="500" />
 </p>
 
-Why is any of this useful? Well, if we mess up any part of the renderer, like the BSDF the furnace test will fail. If we absorb too much energy (destroy light), we'll see a dark sphere on a white background. On the other hand, if we reflect too much energy (create light), we'll see a sphere brighter than the background. And that's exactly what happens if I intentionally break my BSDF:
+Why is any of this useful? Well, if we mess up any part of the renderer, like the BSDF, the furnace test will fail. If we absorb too much energy (destroy light), we'll see a dark sphere on a white background. On the other hand, if we reflect too much energy (create light), we'll see a sphere brighter than the background. And that's exactly what happens if I intentionally break my BSDF:
 
 Here's the result of incorrectly calculating dielectric reflection color:
 <p align="center">
