@@ -1,6 +1,6 @@
 # Overview
 
-The main goal for this project was to create energy conserving offline renderer with global illumination with variety of flexible and easy to use materials using Vulkan. I think that the goal has been achieved pretty well. You have 8 material parameters available: Albedo, Emissive, Roughness, Metallic, Specular Strength, Specular Tint, Transparency, IOR, that can be easily tweaked to create whatever combination you like the most. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers. All of the renders that you can find in the gallery are either 1000x1000 or 2000x2000 and haven't taken more than 5-10 minutes to render (except for the sponza one) (all of them were rendered using RTX 3060) (More info in the [Benchmark](#benchmark) section) and their quality is I'd say really good, especially after denoising. So let's take a deeper look how exactly is everything working.
+The main goal for this project was to create energy conserving offline renderer with global illumination with variety of flexible and easy to use materials using Vulkan. I think that the goal has been achieved pretty well. There are 8 different material parameters available: Albedo, Emissive, Roughness, Metallic, Specular Strength, Specular Tint, Transparency, IOR, that can be easily tweaked to create whatever combination you like the most. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers. All of the renders that you can find in the gallery are either 1000x1000 or 2000x2000 and haven't taken more than 5-10 minutes to render (except for the sponza one) (all of them were rendered using RTX 3060) (More info in the [Benchmark](#benchmark) section) and their quality is I'd say really good, especially after denoising. So let's take a deeper look how exactly is everything working.
 
 # Table Of Contents
 
@@ -15,7 +15,7 @@ The main goal for this project was to create energy conserving offline renderer 
         - [Anti Aliasing](#anti-aliasing)
         - [Depth Of Field](#depth-of-field)
         - [Russian Roulette](#russian-roulette)
-        - [Fireflies elimination](#fireflies-elimination)
+        - [Caustics Suppresion](#caustics-suppresion)
       - [Closest Hit Shader](#closest-hit-shader)
       - [Miss Shader](#miss-shader)
   - [BSDF And Light Transport](#bsdf-and-light-transport)
@@ -71,7 +71,7 @@ I used the loop based approach as it is way better than a recursive one, why?
 * I found out that for whatever reason it's about 2-3 times faster depending on scene than the recursive method. It's not only my machine as other guides on RT pipeline I saw noticed that as well.
 * You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit but on my computer it's 31, it of course varies per device. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR.maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
 
-Now let's talk about some interesting techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and fireflies elimintaion.
+Now let's talk about some interesting techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and Caustics Suppresion.
 
 ##### Anti Aliasing
 
@@ -145,17 +145,17 @@ Middle image was rendered with roulette with correctly picked probability (150s 
 right image was rendered with roulette using constant probability 0.1 (55s for 200k samples per pixel)
 </p>
 
-So in general, this method reduces computation by terminating a lot of the low contributing paths while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, more on that in the [Benchmark](#benchmark) section.
+So in general, this method reduces computation by terminating a lot of the low contributing paths while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, what I mean by that is because I'm choosing to terminate my rays based on the albedo so you could say "luminance", if materials aren't absorbing any light (they are white) the roullete won't give us any performance increase, we don't terminate rays if they are bright, and their brighness depends on the materials colors. more on that in the [Benchmark](#benchmark) section.
 
-##### Fireflies elimination
+##### Caustics Suppresion
 
-Fireflies elimination is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm if we pick environment map with a few very bright spots the variance goes through the roof. And unfortunately there's not much we can do about that, so the only solution is to limit the luminance of the rays that hit those very bright spots.
+Caustics Suppresion is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm if we pick environment map with a few very bright spots the variance goes through the roof. And unfortunately there's not much we can do about that, so the only solution is to limit the luminance of the rays that hit those very bright spots.
 
 If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big to even be denoised (at least with my denoiser).
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/Fireflies.png" alt="Fireflies" width="500" height="500" />
-  <img src="./Gallery/materialShowcase/FirefliesDenoise.png" alt="Fireflies denoised" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/Caustics.png" alt="Caustisc" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/CausticsDenoised.png" alt="Caustics denoised" width="500" height="500" />
 </p>
 
 <p align="center"> 
@@ -165,7 +165,7 @@ The left image shows cornell box lit by a very bright env map, the image has 200
 So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance. Here's an image with luminance limited to 500:
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/FirefliesEliminated.png" alt="No Fireflies" width="600" height="600" />
+  <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="600" height="600" />
 </p>
 
 <p align="center"> 
@@ -359,4 +359,49 @@ TODO
 
 # Benchmark
 
-TODO
+In this section I will discuss the general performance of the path tracer.
+
+## Specs
+
+All bencharks were taken on Intel Core i5-10400F CPU @ 2.90GHz + RTX 3060 + Windows 10 + Visual Studio 2022.
+
+## Performance
+Performance of the path tracer depends on the scene and material settings. For certain scenes the variance will be bigger than for others which means that you generally have to take more samples. For some scenes there will be a lot of closed rooms which means more ray bounces which means more time needed per sample. For some scenes there will be a lot of vertices which means more time spent at intersection tests. So here I'll present the performance of each of those cases, I'll path trace 3 scenes which more or less represent each case, CornellBox (64 vertices, 96 indices, Closed space with small light case), Sponza (2.2M vertices, 11.2M indices, Closed space with a lot of geometry case), and Dragon (2.5M vertices, 2.5M indices, Complex geometry case). We'll also look into how Russian roulette affects their performances.
+
+## Cornell Box
+
+<p align="center">
+  <img src="./Gallery/Benchmark/17.5s_15K.png" alt="CornellBoxBenchmark" width="500" height="500" />
+</p>
+
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **17.5s**. As discussed earlier, the roulette works best when there is a lot of color absorption which happens here, the walls are dark gold color with left and right one having only single channel, so roulette gives us a nice performance boost. Rendering without roulette takes around **44.2s** so we get a performance increase of around 250%.
+
+## Dragon
+
+### Opaque
+
+<p align="center">
+  <img src="./Gallery/Benchmark/24.6s_15K.png" alt="DragonOpaqueBenchmark" width="700" height="700" />
+</p>
+
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **24.6s**. Here where we have a single mesh white white albedo we get no performance boost from running roulette as there is no absorbtion, the material is a perfect reflector. Also because of the fact that we have a single model that is lit by the env map we do not actually need 15K samples to produce a quality image, that's because the variance from the env map is relativaly slow. A 1k would suffice for this particular scene.
+
+### Transparent
+
+Let's also look at the case where we have a more complex material. By making it fully transparent it's no longer a single scatter, we can now also refract light, which means more bounces per sample.
+
+<p align="center">
+  <img src="./Gallery/Benchmark/56s_15K.png" alt="DragonTransparentBenchmark" width="700" height="700" />
+</p>
+
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **56s**.
+
+## Sponza
+
+<p align="center">
+  <img src="./Gallery/Benchmark/64.1s_15K.png" alt="DragonTransparentBenchmark" width="700" height="700" />
+</p>
+
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **64.1s**. But if you zoom into the image you'll see a lot of weird artifacts, that's because the denoiser couldn't handle all of the noise that was produced by this scene. Here, unlike the Dragon scene we actually need to take more than 15K samples to decrease the noise to the denoisable level. That's mainly because it's a closed room with small lights so it produces way more variance. For the image in the gallery I believe that I took 500K or 700K samples, I don't remember honestly.
+
+It is the most complex scene of all, it has the most vertex data, it's practically a closed room, it has textures, small lights etc. And because of all that plus the fact that we have a LOT of absorption going on, it's here that Russian Roulette shines the most. Rendering this scene without a Russian Roulette takes **87.5** minutes! It's over an hour to get barely 15K samples! So we get a **8,190%** performance boost just by adding in 4 lines of code to use the roulette.

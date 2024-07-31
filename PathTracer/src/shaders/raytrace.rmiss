@@ -37,6 +37,9 @@ void main()
 	}
 #endif
 
+	if (payload.Depth == 0)
+		payload.MissedAllGeometry = true;
+
     payload.HitValue = color;
 	payload.Depth = DEPTH_INFINITE;
 }

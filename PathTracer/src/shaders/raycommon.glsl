@@ -19,9 +19,6 @@ struct hitPayload
     vec3 RayDirection;
     vec3 Weight;
     bool MissedAllGeometry;
-
-    float Pdf;
-    vec3 Bsdf;
 };
 
 struct GlobalUniforms
@@ -44,7 +41,7 @@ struct PushConstantRay
     float FocalLenght;
     float DoFStrenght;
     float AliasingJitter;
-    float FirefliesLuminance;
+    float CausticsLuminance;
 };
 
 struct Vertex

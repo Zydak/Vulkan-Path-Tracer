@@ -6,8 +6,8 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 globalIncludes = 
 {
-    "%{wks.location}/Vulture/src/",
     "%{wks.location}/Vulture/src/Vulture",
+    "%{wks.location}/Vulture/src/",
     "%{wks.location}",
     "%{wks.location}/Vulture/lib/",
     "%{wks.location}/Vulture/lib/glfw/include/",

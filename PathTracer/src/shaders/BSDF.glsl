@@ -31,7 +31,7 @@ float SchlickWeight(float NdotV)
 
 float DielectricFresnel(float cosThetaI, float eta)
 {
-    float sinThetaTSq = (1.0f - cosThetaI * cosThetaI) / eta * eta;
+    float sinThetaTSq = (1.0f - cosThetaI * cosThetaI) * eta * eta;
 
     if (sinThetaTSq > 1.0)
         return 1.0;
@@ -43,7 +43,6 @@ float DielectricFresnel(float cosThetaI, float eta)
 
     return 0.5f * (rs * rs + rp * rp);
 }
-
 
 bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface)
 {

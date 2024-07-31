@@ -68,8 +68,6 @@ void main()
         ivec2 outputImageSize = imageSize(image);
         payload.HitValue = vec3(0.0);
         payload.Depth = 0;
-        payload.Pdf = 0.0f;
-        payload.Bsdf = vec3(0.0f);
 
         // Applying small jitter for anti aliasing
         vec2 antiAliasingJitter = RandomPointInCircle(payload.Seed) * 0.5f / outputImageSize * pcRay.AliasingJitter;
@@ -112,9 +110,9 @@ void main()
             curWeight /= p;
         }
 
-        // Eliminate fireflies
-#ifdef USE_FIREFLIES
-        const float maxLuminance = pcRay.FirefliesLuminance;
+        // Eliminate caustics
+#ifdef USE_CAUSTICS_SUPPRESION
+        const float maxLuminance = pcRay.CausticsLuminance;
         float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
         if(lum > maxLuminance)
         {
