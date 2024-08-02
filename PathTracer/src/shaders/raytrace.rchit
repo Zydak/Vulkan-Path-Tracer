@@ -132,6 +132,6 @@ void main()
     payload.HitValue = material.EmissiveColor.xyz;
 
     //payload.Weight = vec3(0.0f);
-    //payload.HitValue = (surface.Normal + 1.0f) / 2.0f;
+    //payload.HitValue = (surface.Normal + 1.0f) * 0.5f;
     
 }

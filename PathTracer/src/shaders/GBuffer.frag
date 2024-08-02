@@ -27,9 +27,33 @@ struct DataIn
 
 layout (location = 0) in DataIn dataIn;
 
+void CreateCoordinateSystem(in vec3 N, out vec3 Nt, out vec3 Nb)
+{
+    if(abs(N.x) > abs(N.y))
+        Nt = vec3(N.z, 0, -N.x) / sqrt(N.x * N.x + N.z * N.z);
+    else
+        Nt = vec3(0, -N.z, N.y) / sqrt(N.y * N.y + N.z * N.z);
+    Nb = cross(N, Nt);
+}
+
+vec3 TangentToWorld(vec3 T, vec3 B, vec3 N, vec3 V)
+{
+    return V.x * T + V.y * B + V.z * N;
+}
+
 void main()
 {
-	outNormal = vec4(dataIn.Normal + 0.5f * 0.5f, 1.0f);
+	//outNormal = vec4(dataIn.Normal + 0.5f * 0.5f, 1.0f);
+
+	vec3 Tangent;
+	vec3 Bitangent;
+	CreateCoordinateSystem(dataIn.Normal, Tangent, Bitangent);
+
+	vec3 texNorm = texture(uNormalTexture, dataIn.TexCoord).rgb;
+	texNorm = texNorm * 2.0f - 1.0f;
+	texNorm = normalize(TangentToWorld(Tangent, Bitangent, dataIn.Normal, texNorm));
+
+	outNormal = vec4((vec3(-texNorm.x, -texNorm.y, texNorm.z) + 1.0f) * 0.5f, 1.0f);
 
     outAlbedo = dataIn.material.Albedo * texture(uAlbedoTexture, dataIn.TexCoord);
 

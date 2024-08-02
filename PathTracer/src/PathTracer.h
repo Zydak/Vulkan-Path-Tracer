@@ -106,7 +106,6 @@ public:
 		bool ShowSkybox = true;
 		bool FurnaceTestMode = false;
 
-		bool SampleEnvMap = true;
 		float EnvAzimuth = 0.0f;
 		float EnvAltitude = 0.0f;
 

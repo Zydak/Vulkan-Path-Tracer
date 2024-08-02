@@ -4,6 +4,20 @@ Vulkan Path Tracer is a simple offline renderer made from scratch in Vulkan usin
 
 For more info on the project visit [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md).
 
+# Running
+- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
+- Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0-alpha/PathTracer.zip) from Releases.
+- Unzip and run `PathTracer/PathTracer/PathTracer.exe`.
+
+# Building
+## Windows Only
+- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
+- Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
+- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Shaderc.zip)
+- Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
+- Run `setup.bat` in main directory.
+- Open generated solution in Visual Studio.
+
 # Gallery
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
 --------
@@ -12,12 +26,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![Mustang0](./Gallery/Mustang0.png)
 ![Mustang1](./Gallery/Mustang1.png)
 --------
-
-<p align="center">
-  <img src="./Gallery/TeapotMarble.png" alt="TeapotMarble" width="600" height="600" />
-  <img src="./Gallery/TeapotTiled.png" alt="TeapotTiled" width="600" height="600" />
-</p>
-
+![TeapotMarble](./Gallery/TeapotMarble.png)
+![TeapotTiled](./Gallery/TeapotTiled.png)
 --------
 ![BlackDragon](./Gallery/BlackDragon.png)
 --------
@@ -93,30 +103,16 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Image Denoising using Nvidia Optix Denoiser
 - Camera controller made using quaternions
 
-# Running
-- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
-- Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0-alpha/PathTracer.zip) from Releases.
-- Unzip and run `PathTracer/PathTracer/PathTracer.exe`.
-
-# Building
-## Windows Only
-- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
-- Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
-- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Shaderc.zip)
-- Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
-- Run `setup.bat` in main directory.
-- Open generated solution in Visual Studio.
-
 # Credits
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
 - https://pbrt.org/scenes-v3 - Glass
 - https://pbrt.org/scenes-v3 - Small Dragon
+- https://pbrt.org/scenes-v3 - Coffee Cup
 - https://www.blender.org/download/demo-files/ - Monster
 - https://polyhaven.com/hdris - Env Maps
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
-- https://benedikt-bitterli.me/resources/ - Coffee Cup
 - https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://github.com/knightcrawler25/GLSL-PathTracer Teapots

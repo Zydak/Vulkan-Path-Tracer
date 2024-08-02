@@ -15,7 +15,7 @@ The main goal for this project was to create energy conserving offline renderer 
         - [Anti Aliasing](#anti-aliasing)
         - [Depth Of Field](#depth-of-field)
         - [Russian Roulette](#russian-roulette)
-        - [Caustics Suppresion](#caustics-suppresion)
+        - [Caustics Suppression](#caustics-suppression)
       - [Closest Hit Shader](#closest-hit-shader)
       - [Miss Shader](#miss-shader)
   - [BSDF And Light Transport](#bsdf-and-light-transport)
@@ -31,7 +31,6 @@ The main goal for this project was to create energy conserving offline renderer 
       - [My Implementation](#my-implementation)
   - [Denoising](#denoising)
   - [Conclusion](#conclusion)
-- [Editor](#editor)
 - [Architecture](#architecture)
 - [Benchmark](#benchmark)
   - [Specs](#specs)
@@ -41,7 +40,19 @@ The main goal for this project was to create energy conserving offline renderer 
     - [Opaque](#opaque)
     - [Transparent](#transparent)
   - [Sponza](#sponza)
-- [Limitations And Possible Improvements](#limitations-and-possible-improvements)
+- [Editor](#editor)
+  - [Info Section](#info-section)
+  - [Viewport Settings section](#viewport-settings-section)
+  - [Camera Settings Section](#camera-settings-section)
+  - [Shaders Settings Section](#shaders-settings-section)
+  - [Scene Settings Section](#scene-settings-section)
+  - [Environment Map Section](#environment-map-section)
+  - [Path Tracing Section](#path-tracing-section)
+  - [File Render Section](#file-render-section)
+  - [Conclusion](#conclusion-1)
+- [Limitations And Possible Future Improvements](#limitations-and-possible-future-improvements)
+  - [Editor](#editor-1)
+  - [Path Tracing](#path-tracing)
 
     
 
@@ -79,11 +90,11 @@ I used the loop based approach as it is way better than a recursive one, why?
 * I found out that for whatever reason it's about 2-3 times faster depending on scene than the recursive method. It's not only my machine as other guides on RT pipeline I saw noticed that as well.
 * You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit but on my computer it's 31, it of course varies per device. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR.maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
 
-Now let's talk about some interesting techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and Caustics Suppresion.
+Now let's talk about some interesting techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and Caustics Suppression.
 
 ##### Anti Aliasing
 
-Aliasing is a known artifacts in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offseting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
+Aliasing is a known artifacts in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offsetting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
 
 It's really simple in terms of code, we just generate random point on a 2D circle or square and then we offset the ray direction with it. Here's the result:
 
@@ -93,7 +104,7 @@ It's really simple in terms of code, we just generate random point on a 2D circl
 </p>
 
 <p align="center"> 
-Left image was rendered with antialiasing and the right was rendered without. The difference is quite clear.
+Left image was rendered with anti-aliasing and the right was rendered without. The difference is quite clear.
 </p>
 
 ##### Depth Of Field
@@ -105,7 +116,7 @@ Depth of field (DoF) effect is pretty simple, it's a camera effect that simulate
   <img src="./Gallery/materialShowcase/DoFOff.png" alt="DofOff" width="500" height="500" />
 </p>
 <p align="center"> 
-Left image was rendererd with Depth of Field effect on, you can clearly see how focal point is set on a middle sculpture, and how the first and the last one are completely out of focus. Right image was rendered without Depth of Field effect for comparison. 
+Left image was rendered with Depth of Field effect on, you can clearly see how focal point is set on a middle sculpture, and how the first and the last one are completely out of focus. Right image was rendered without Depth of Field effect for comparison. 
 </p>
 
 ##### Russian Roulette
@@ -118,7 +129,7 @@ where $F$ is the integrand (light contribution of the ray), $F_i$ are random sam
 
 To speed up the rendering we can use a method called **Russian Roulette** which terminates path with low throughput without biasing the result (keeping the expected value the same). Here's how it works:
 
-Theoritically to have a completely unbiased and mathematically correct result of the sample we should bounce the ray through the scene infinite amount of times, which is completely impossible to do. But as each succesive bounce does less and less visually (it's throughput decreases) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how do we choose this limit? If it's too small we're biasing the result, if it's too large we're wasting time on computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
+Theoretically to have a completely unbiased and mathematically correct result of the sample we should bounce the ray through the scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how do we choose this limit? If it's too small we're biasing the result, if it's too large we're wasting time on computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
 
 At each ray-surface intersection, we set a probability $p_i$ it can be chosen in any manner, I set it based on the maximum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p_i$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p_i}$ to account for the termination of other paths. Here's a mathematical formulation of this:
 
@@ -133,9 +144,9 @@ We can see that as long as we divide the $F_i$ by $p_i$ the expected value remai
 
 $$ E[F_i\prime] = \left(1 - p_i\right) \cdot 0 + p_i \cdot \frac{E[F_i]}{p_i} = E[F_i] $$
 
-And because we're terminating only paths with low throughput we're not introducing too much variance and keeping the convergence rate relatively similiar to the original one. This way the result is not only mathematically correct, but we're also saving a lot of computation time by not evaluating low throughput paths. 
+And because we're terminating only paths with low throughput we're not introducing too much variance and keeping the convergence rate relatively similar to the original one. This way the result is not only mathematically correct, but we're also saving a lot of computation time by not evaluating low throughput paths. 
 
-By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweights small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible. I'm not the greatest statistician in the world but If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be super dark, you'll be lucky to get 2 or even 1 bounce most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
+By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweighs small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible. I'm not the greatest statistician in the world but If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be super dark, you'll be lucky to get 2 or even 1 bounce most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/NoRoulette366s.png" alt="No Roulette" width="300" height="300" />
@@ -153,34 +164,34 @@ Middle image was rendered with roulette with correctly picked probability (150s 
 right image was rendered with roulette using constant probability 0.1 (55s for 200k samples per pixel)
 </p>
 
-So in general, this method reduces computation by terminating a lot of the low contributing paths while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, what I mean by that is because I'm choosing to terminate my rays based on the albedo so you could say "luminance", if materials aren't absorbing any light (they are white) the roullete won't give us any performance increase, we don't terminate rays if they are bright, and their brighness depends on the materials colors. more on that in the [Benchmark](#benchmark) section.
+So in general, this method reduces computation by terminating a lot of the low contributing paths while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, what I mean by that is because I'm choosing to terminate my rays based on the albedo so you could say "luminance", if materials aren't absorbing any light (they are white) the roulette won't give us any performance increase, we don't terminate rays if they are bright, and their brightness depends on the materials colors. more on that in the [Benchmark](#benchmark) section.
 
-##### Caustics Suppresion
+##### Caustics Suppression
 
-Caustics Suppresion is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm if we pick environment map with a few very bright spots the variance goes through the roof. And unfortunately there's not much we can do about that, so the only solution is to limit the luminance of the rays that hit those very bright spots.
+Caustics Suppression is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm if we pick environment map with a few very bright spots the variance goes through the roof. And unfortunately there's not much we can do about that, so the only solution is to limit the luminance of the rays that hit those very bright spots.
 
 If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big to even be denoised (at least with my denoiser).
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/Caustics.png" alt="Caustisc" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/Caustics.png" alt="Caustics" width="500" height="500" />
   <img src="./Gallery/materialShowcase/CausticsDenoised.png" alt="Caustics denoised" width="500" height="500" />
 </p>
 
 <p align="center"> 
-The left image shows cornell box lit by a very bright env map, the image has 200k samples per pixel. Right image shows attept at denoising it.
+The left image shows cornell box lit by a very bright env map, the image has 200k samples per pixel. Right image shows attempt at denoising it.
 </p>
 
 So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance.
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="600" height="600" />
+  <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="700" height="700" />
 </p>
 
 <p align="center"> 
 Image Shows the same image as above (200k samples per pixel) but this time max luminance of the env map is limited to 500.
 </p>
 
-As you can see the image is way darker, but that's logical if we're literally limiting brightness. Unfortunately that's really the only way of keeping the noise at "stable" and denoisable level for some environment maps.
+As you can see the image is way darker, but that's logical if we're literally limiting brightness. Unfortunately that's really the only way of keeping the noise at "stable" and denoiseable level for some environment maps.
 
 And that concludes the Ray Generation Shader!
 
@@ -194,11 +205,11 @@ The miss shader is the simplest one, there's really nothing to talk about here, 
 
 ## BSDF And Light Transport
 
-Light transport and BSDF are the most important parts of the path tracer. BSDF determines shading of the pixels and properly implemented light tranport algorithm determines how fast the path tracer will converge on the correct result. So maybe let's talk about specific implementation of these two.
+Light transport and BSDF are the most important parts of the path tracer. BSDF determines shading of the pixels and properly implemented light transport algorithm determines how fast the path tracer will converge on the correct result. So maybe let's talk about specific implementation of these two.
 
 ### Light Transport
 
-For light transport I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemishpere. This approach results in insane amount of noise in large scenes with small lights (or high variance env maps like I've shown above), but that's okay for me, the goal of this project was to create energy conserving global illumination and not the fastest path tracer in the world. So using a complex light transport algorithm was way out of the scope for this project. Maybe some day I'll make it bidirectional or add something like MIS.
+For light transport I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemisphere. This approach results in insane amount of noise in large scenes with small lights (or high variance env maps like I've shown above), but that's okay for me, the goal of this project was to create energy conserving global illumination and not the fastest path tracer in the world. So using a complex light transport algorithm was way out of the scope for this project. Maybe some day I'll make it bidirectional or add something like MIS.
 
 ### BSDF
 
@@ -220,7 +231,7 @@ Metallic lobe returns the material color same as the diffuse lobe. For the ray d
 #### Glass
 Glass lobe can have 2 cases - reflection and refraction. Whether the light will reflect or refract is based on Fresnel term ([more info here](https://pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission#FrDielectric)). Same as before we calculate the half vector, if the ray refracts we choose material color as output color and if it reflects we choose 1 (we choose one because the glass is dielectric so we don't want to tint it).
 
-If you want to see how these lobes work there is a [Material Showcase][https://github.com/Zydak/Vulkan-Path-Tracer/tree/main?tab=readme-ov-file#material-showcase] section in the main readme which shows each specific lobe.
+If you want to see how these lobes work there is a [Material Showcase](https://github.com/Zydak/Vulkan-Path-Tracer/tree/main?tab=readme-ov-file#material-showcase) section in the main readme which shows each specific lobe.
 
 Lobes are sampled semi randomly, each lobe has it's weight, the bigger the weight the bigger the probability that it will be sampled. All of the weights calculation can be found in the code. You can find the code in the [BSDF.glsl](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/BSDF.glsl). Also, all of the lobes described above are energy conserving, as that was the main goal for this project, to make a energy conserving path tracer, but what does that even mean and how did I check that?
 
@@ -293,7 +304,7 @@ As you can see, $L_o(\mathbf{x}, \omega_o) = L_i(\mathbf{x}, \omega_i)$. The $L_
 
 So if I use a perfectly white background and place a perfectly reflective sphere in the scene, I shouldn't be able to see it. And that is exactly what happens!
 <p align="center">
-  <img src="./Gallery/materialShowcase/PassedFurnace.png" alt="Passed Furnace" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/PassedFurnace.png" alt="Passed Furnace" width="700" height="700" />
 </p>
 
 Why is any of this useful? Well, if we mess up any part of the renderer, like the BSDF, the furnace test will fail. If we absorb too much energy (destroy light), we'll see a dark sphere on a white background. On the other hand, if we reflect too much energy (create light), we'll see a sphere brighter than the background. And that's exactly what happens if I intentionally break my BSDF:
@@ -308,26 +319,28 @@ You can clearly see that something is wrong. On the image on the left the BSDF i
 
 #### My Implementation
 
-Now, back to my implementation, does it properly conserve energy? Yes.
+Now back to my implementation, does it save energy properly? Yes, it does.
 
-As a proof, you can see the furnace test done on the Marble Teapot that you can find in a gallery, but this time all materials have albedo equal 1 (perfect reflector). You can try any model with any material settings yourself and it won't be visible.
+As proof, you can see the furnace test done on the Marble Teapot that you can find in a [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery), but this time all materials have an albedo equal to 1 (perfect reflector). You can try any model with any material settings and it won't be visible.
+
 <p align="center">
-  <img src="./Gallery/materialShowcase/FurnaceMarble.png" alt="Furnace Marble" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/FurnaceMarble.png" alt="Furnace Marble" width="700" height="700" />
 </p>
 
 You can't see it but that's the point, I promise it's there!
 
 Here's how it looks with a non-uniform environment map and textures:
 <p align="center">
-  <img src="./Gallery/TeapotMarble.png" alt="Teapot Marble" width="500" height="500" />
+  <img src="./Gallery/TeapotMarble.png" alt="Teapot Marble" width="700" height="700" />
 </p>
 
+Note that in certain scenes rays will get stuck between geometry and it will be hard for them to find the exits to the environment map, so you'll need to edit the bounce limit in the editor. To render this teapot I had to use a limit of 4000 because the rays are getting stuck between the teapot and it's lid. So in general, if you're going to do an furnace test, do it on a sphere and not on complex geometry.
 
 ## Denoising
 
-All of the denoising is performed using Optix Denoiser running on CUDA.
+All denoising is done with [Optix Denoiser](https://developer.nvidia.com/optix-denoiser) running on CUDA.
 
-First, I'm rasterizing the scene into a GBuffer to give optix better context of the scene, the images that are rasterized are called **guiding layers**. I'm rasterizing Albedo of each surface onto one image, and then normals of each surface onto another image. It's important that these images are RGBA32 because they have to match optix buffer layout. After the images are rasterized they are copied into vulkan buffers. Then I get a memory handles of them using **vkGetMemoryWin32HandleKHR** and I import the buffers into cuda using **cudaImportExternalMemory** and **cudaExternalMemoryGetMappedBuffer**. After that the rasterized images are ready to be used by Optix.
+First I rasterize the scene into a GBuffer to give optix a better context of the scene, the rasterized images are called **guiding layers**. I'm rasterizing the albedo of each surface onto one image, and then the normals of each surface onto another image. It's important that these images are RGBA32 because they need to match the optix buffer layout. After the images are rasterized, they are copied into Vulkan buffers. Then I get a memory handle of them with **vkGetMemoryWin32HandleKHR** and import the buffers into cuda with **cudaImportExternalMemory** and **cudaExternalMemoryGetMappedBuffer**. After that the rasterized images are ready to be used by Optix.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/GuideLayerNormal.png" alt="Normal" width="500" height="500" />
@@ -338,7 +351,7 @@ First, I'm rasterizing the scene into a GBuffer to give optix better context of 
 Left image shows rasterized normal information. Right image shows rasterized albedo information.
 </p>
 
-After the rasterized images are ready we wait for vulkan frame rendering to finish, give all of the information to optix (path traced image + 2 guiding layers) and call **optixDenoiserInvoke**. After that we have to wait for it to finish which takes a couple of milliseconds. Then we just copy the resulting cuda buffer onto the vulkan image same as we did before and present it to the screen.
+After the rasterized images are ready, we wait for the Vulkan frame rendering to finish, pass all the information to optix (path traced image + 2 guide layers) and call **optixDenoiserInvoke**. After that we have to wait for it to finish, which takes a few milliseconds. Then we just copy the resulting cuda buffer to the Vulkan image as we did before and present it to the screen.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/NoDenoise.png" alt="Normal" width="500" height="500" />
@@ -346,26 +359,21 @@ After the rasterized images are ready we wait for vulkan frame rendering to fini
 </p>
 
 <p align="center"> 
-Left image shows path tracing result with 15k samples per pixel, a lot of noise is clearly visible. Right image shows the denoised version of the left one. All of the noise is gone. So as you can see Optix does a really good job at clearing all of the noise.
+Left image shows the path tracing result with 15k samples per pixel, a lot of noise is clearly visible. The right image shows the denoised version of the left image. All the noise is gone. As you can see, Optix does a really good job of removing all the noise.
 </p>
 
 ## Conclusion
 
-And that pretty much concludes overview of the path tracing. I went over every single component that is used to path trace my renders, I haven't explained everything in that much detail but that's not the point of this document, if for whatever reason you need more details as to how exactly did I implement all those things, you can just look into the code. There are also ton of online resources which will explain those things way better than I would here. 
+And that pretty much concludes the overview of path tracing. I went through every single component that is used to path trace my renders, I didn't explain everything in that much detail, but that's not the point of this document, if for some reason you need more details on how exactly I implemented all these things, you can just look in the code. There are also tons of online resources that will explain these things much better than I can here. 
 
-So as a further reading:
+So for further reading:
 * Read the code.
-* For more info on the Vulkan Ray Tracing Pipeline refer to [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR) or [ray tracing gems II chapter 16](https://developer.nvidia.com/ray-tracing-gems-ii).
-* For more info on the BSDF and various other techniques like russian roulette refer to [pbrt book](https://pbr-book.org/4ed/contents).
-* For more info on the Optix denoiser refer to nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
-
-# Editor
-TODO
+* For more info on the Vulkan raytracing pipeline, see [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR) or [raytracing gems II](https://developer.nvidia.com/ray-tracing-gems-ii) chapter 16.
+* For more information on BSDF and various other techniques like Russian Roulette, see the [pbrt book](https://pbr-book.org/4ed/contents).
+* For more info on the Optix denoiser see nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
 
 # Architecture
-
 TODO
-
 
 # Benchmark
 
@@ -373,21 +381,21 @@ In this section I will discuss the general performance of the path tracer.
 
 ## Specs
 
-All bencharks were taken on:
+All benchmarks were taken using:
 * Intel Core i5-10400F 2.90GHz
 * RTX 3060
 * Windows 10
-* Visual Studio 2022.
+* Visual Studio 2022
 
 ## Performance
-Performance of the path tracer depends on the scene and material settings. For certain scenes the variance will be bigger than for others which means that you generally have to take more samples, which means longer render times. For some scenes there will be a lot of closed rooms which means more ray bounces which means more time needed per sample. For some scenes there will be a lot of vertices which means more time spent at intersection tests.
+The performance of the path tracer depends on the scene and material settings. Some scenes will have more variance than others, which means you generally have to take more samples, which means longer render times. Some scenes will have a lot of enclosed spaces, which means more ray bounces, which means more time per sample. For some scenes there will be a lot of vertices, which means more time spent on intersection tests.
 
 So here I'll present the performance of rendering 3 different scenes:
 * CornellBox (64 vertices, 96 indices)
 * Sponza (2.2M vertices, 11.2M indices)
 * Dragon (2.5M vertices, 2.5M indices)
 
-We'll also look into how Russian roulette affects their performances.
+We'll also look at how Russian Roulette affects their performance.
 
 ## Cornell Box
 
@@ -395,7 +403,7 @@ We'll also look into how Russian roulette affects their performances.
   <img src="./Gallery/Benchmark/17.5s_15K.png" alt="CornellBoxBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **17.5s**. As discussed earlier, the roulette works best when there is a lot of color absorption which happens here, the walls are dark gold color with left and right one having only single channel, so roulette gives us a nice performance boost. Rendering without roulette takes around **44.2s** so we get a performance increase of around 250%.
+Accumulating 15,000 samples per pixel on a 1000x1000 image (i.e. 15,000,000,000 samples) takes about **17.5s**. As mentioned before, the roulette works best when there is a lot of color absorption, which is the case here, the walls are dark gold and the left and right have only a single channel, so the roulette gives us a nice performance boost. Rendering without roulette takes about **44.2s**, so we get a performance increase of about 250%.
 
 ## Dragon
 
@@ -405,7 +413,7 @@ Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 sa
   <img src="./Gallery/Benchmark/24.6s_15K.png" alt="DragonOpaqueBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **24.6s**. Here where we have a single mesh with white albedo we get no performance boost from running roulette as there is no absorbtion, the material is a perfect reflector. Also because of the fact that we have a single model that is lit by the env map, we do not actually need 15K samples to produce a quality image, that's because the variance from the env map is relativaly low. A 1k spp would suffice for this particular scene.
+Accumulating 15,000 samples per pixel on a 1000x1000 image (i.e. 15,000,000,000 samples) takes about **24.6s**. Here, where we have a single white albedo mesh, we get no performance boost from running Roulette because there is no absorption, the material is a perfect reflector. Also, due to the fact that we have a single model lit by the env map, we don't actually need 15K samples to produce a quality image, because the variance from the env map is relatively small. A 1k spp would be sufficient for this particular scene.
 
 ### Transparent
 
@@ -415,7 +423,7 @@ Let's also look at the case where we have a more complex material. By making it 
   <img src="./Gallery/Benchmark/56s_15K.png" alt="DragonTransparentBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **56s**.
+The accumulation of 15,000 samples per pixel on a 1000x1000 image (i.e. 15,000,000,000 samples) takes about **56s**.
 
 ## Sponza
 
@@ -423,17 +431,99 @@ Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 sa
   <img src="./Gallery/Benchmark/64.1s_15K.png" alt="DragonTransparentBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **64.1s**. But if you zoom into the image you'll see a lot of weird artifacts, that's because the denoiser couldn't handle all of the noise that was produced by this scene. Here, unlike the Dragon scene, we actually need to take more than 15K samples to decrease the noise to a denoisable level. That's mainly because it's a closed room with small lights so it produces way more variance. For the image in the gallery I believe that I took 500K or 700K samples, I don't remember honestly.
+Accumulating 15,000 samples per pixel on a 1000x1000 image (i.e. 15,000,000,000 samples) takes about **64.1s**. But if you zoom into the image, you'll see a lot of weird artifacts. That's because the denoiser couldn't handle all the noise generated by this scene. Here, unlike the dragon scene, we actually have to take more than 15K samples to reduce the noise to a denoiseable level. This is mainly because it's a closed room with small lights, so it produces a lot more variance. For the image in the gallery I used 500K spp. You can also notice that this image is a bit different from the one in the gallery, that's because I forgot what exact settings I used there (like exposure, camera position etc.) and I don't have the ability to save the scene, more on that in the [Limitations](#limitations-and-possible-future-improvements) section, so it's really hard to recreate the scene 1:1.
 
-It is the most complex scene of all, it has the most vertex data, it's practically a closed room, it has textures, small lights etc. And because of all that plus the fact that we have a LOT of absorption going on, it's here that Russian Roulette shines the most. Rendering this scene without a Russian Roulette takes **87.5** minutes! It's over an hour to get barely 15K samples! So we get a **8,190%** performance boost just by adding in 4 lines of code to use the roulette.
+It's the most complex scene of all, it has the most vertex data, it's practically a closed room, it has textures, small lights and so on. And because of all that and the fact that we have a LOT of absorption going on, this is where Russian Roulette shines the brightest. Rendering this scene without Russian Roulette takes **87.5** minutes! That's over an hour to get barely 15K samples! So we get a **8,190%** performance boost just by adding 4 lines of code to use the roulette.
+
+# Editor
+![Editor](./Gallery/Editor/Editor.png)
+
+This project features a fairly simple editor, built using [ImGui](https://github.com/ocornut/imgui), which is used to modify the scene and path tracer settings. Here I'll go through each of the 8 sections of the editor and explain each parameter.
+
+## Info Section
+<p align="center">
+  <img src="./Gallery/Editor/InfoSection.png" alt="Info" width="257" height="188" />
+</p>
+
+In the Info section we can find general information about the status of the application. We can find:
+* Framerate.
+* How many frames it took to render the image.
+* How long it took to render the image.
+* How many spp have been accumulated.
+* How many vertices and indices the scene contains.
+
+There's also a **Reset** button at the bottom. Pressing it will reset the image and the path tracer will start collecting samples from the beginning.
+
+## Viewport Settings section
+<p align="center">
+  <img src="./Gallery/Editor/ViewportSection.png" alt="ViewportSection" width="683" height="64" />
+</p>
+
+This section is quite simple, there's just an input field for the dimensions of the rendered image. The default dimensions are 900x900.
+
+## Camera Settings Section
+<p align="center">
+  <img src="./Gallery/Editor/CameraSection.png" alt="CameraSection" width="583" height="176" />
+</p>
+
+In the Camera section we can find and tweak every detail of the scene camera. We have a **Reset** button which will reset the camera position and rotation to the initial state. We can also find the FOV parameter which stands for Field Of View, it's the angular extent of the world that is seen, the bigger the fov the more world you will see. The rest of the parameters are self-explanatory.
+
+## Shaders Settings Section
+<p align="center">
+  <img src="./Gallery/Editor/ShadersSection.png" alt="ShadersSection" width="331" height="143" />
+</p>
+
+In Shader Settings we can choose which ray tracing shaders to use. We have **Available Shaders** section which lists all found shaders and is updated on the fly. We can click on any shader in the list and press the **Load Shader** button to use the selected shader. Pressing **Load Shader** will also recompile the given shader if any changes are detected. You can see which shaders are currently in use in the **Currently Loaded Shaders** list.
+
+## Scene Settings Section
+<p align="center">
+  <img src="./Gallery/Editor/SceneSection.png" alt="SceneSection" width="657" height="688" />
+</p>
+
+In the Scene section you can select the scene to load and edit its materials. In the **Current Scene** list you can see all detected loadable files in the **assets** directory. To be marked as loadable, a file must be in either GLTF, OBJ or FBX format. The list is updated on the fly without the need to restart the application. Below you can find the **Materials** list, it lists all the materials available in the scene. Below this list you will find sliders that allow you to edit the properties of the selected material. If you need more information about the material properties, check out the [Material Showcase](https://github.com/Zydak/Vulkan-Path-Tracer#material-showcase) and [BSDF](#bsdf) sections.
+
+## Environment Map Section
+<p align="center">
+  <img src="./Gallery/Editor/EnvMapSection.png" alt="EnvMapSection" width="637" height="280" />
+</p>
+
+In the Environment Map section we can choose which env map to load by selecting one of the .HDR files located in the **assets** directory. As before, the list is updated on the fly. You can also rotate the env map, there are 2 sliders for this, Azimuth which is the rotation along the Y-axis (left and right) and Altitude which is the rotation along the X-axis (up and down).
+
+## Path Tracing Section
+
+<p align="center">
+  <img src="./Gallery/Editor/PTSection.png" alt="PTSection" width="687" height="352" />
+</p>
+
+In the path tracing section we have a lot of options regarding the path tracing itself. We can choose if we want to suppress caustics (more on this here [Caustics Suppression](#caustics-suppression)). You can also choose whether to show the skybox or not, if you set this to true, the scene will still be lit, but you'll see a black background instead of the skybox. There's a **Furnace Test Mode** which sets every albedo of every material to 1.0 (more on this here [Furnace Test](#energy-conservation)). Below that we have settings for accumulation like **Max Depth** (maximum ray depth after which it will stop), Max Samples per Pixel which is self explanatory, and Samples per Frame which determines how many samples will be taken per frame, you should usually lower this setting for larger scenes to keep the editor running smoothly as it is not multithreaded, if path tracing takes 100ms to finish, the editor will also be drawn once every 100ms. Then we have settings for blur and depth of field, we can let the editor automatically deduce the focal length, we can visualize at what distance the focal length is using the **Visualize DOF** checkbox. You can also set the focal length manually, and we can set the strength of the depth of field effect (more about this here [Depth Of Field](#depth-of-field)). The last param determines how strong the anti-aliasing will be, or in other words, how big the offset will be (more about this here [Anti Aliasing](#Anti-Aliasing)).
+
+## File Render Section
+<p align="center">
+  <img src="./Gallery/Editor/FileRenderSection.png" alt="FileRender" width="246" height="66" />
+</p>
+
+The last section contains only one button. If you're happy with all the settings you can set in the previous sections, you can click this button to render to file. If you click this button you will have to wait until all the samples are accumulated and when that happens a new section will appear:
+
+<p align="center">
+  <img src="./Gallery/Editor/RenderingFinished.png" alt="RenderingFinished" width="515" height="157" />
+</p>
+
+You can choose whether you want to see a denoised version of the render or not.
+
+## Conclusion
+
+As you can see the editor isn't really complex, it allows you to edit a handful of the most basic settings of a scene and path tracer, but it's far from being able to create your own scenes from scratch, for the scenes in the [Gallery]() I had to modify object positions in blender and then export them to GLTF. All renders you can see in this readme as well as in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery) were created with this editor. So it's simple, but definitely sufficient.
+
 
 # Limitations And Possible Future Improvements
 
 ## Editor
-Currently the editor is quite limited, as an example, it doesn't allow for moving loaded meshes. That's because moving anything would require rebuilding the entire acceleration structure. Which isn't that hard to do but still, some effort is needed. And because I've never needed this feature and focused on different things it's just absent. You also can't load more than one mesh for pretty much the same reasons.
+Currently the editor is quite limited, for example it doesn't allow to move loaded meshes. That's because moving anything would require rebuilding the entire acceleration structure. Which isn't that hard to do, but still requires some effort. And since I've never needed this feature and was focused on other things, it's just not there. You also can't load more than one mesh for pretty much the same reasons.
 
-There are no scenes. What I mean by that is that you can't save settings for your renders (like camera position, materials etc.). That's because of the fact that I would have to make my custom scene format, parse it, serialize it, save it, deserialize it, and load everything back. It's a lot of work and same as before, I haven't really needed this feature and decided to focus on different aspects of the project.
+There are no scenes. What I mean by this is that you can't save settings for your renders (like camera position, materials, etc.). That's because I'd have to create my own scene format, parse it, serialize it, save it, deserialize it, and reload everything. It's a lot of work, and like before, I didn't really need this feature and decided to focus on other aspects of the project.
 
-This project is not using distributions also known as PDFs (Probability Distribution Functions). So you're only able to sample ray direction alongside color. But you can't evaluate some arbitrary ray direction like you'd normally want to for certain techniques like Importance Sampling.
+## Path Tracing
 
-The light transport algorithm is done using naive approach (sampling the BSDF). So as I mentioned before, it produces way more noise than something like MIS or bidirectional path tracing.
+This project does not use distributions, also known as PDFs (Probability Distribution Functions). So you'll only be able to sample ray direction along with color. But you can't evaluate any arbitrary ray direction as you would normally want to do for certain techniques like Importance Sampling.
+
+The light transport algorithm uses a naive approach (sampling the BSDF). So, as I mentioned before, it produces much more noise than something like MIS or bidirectional path tracing.

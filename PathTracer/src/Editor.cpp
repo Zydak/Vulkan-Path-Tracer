@@ -713,9 +713,6 @@ void Editor::ImGuiPathTracingSettings()
 	if (ImGui::Checkbox("Furnace Test Mode", &m_PathTracer.m_DrawInfo.FurnaceTestMode))
 		m_PathTracer.RecreateRayTracingPipeline();
 
-	if (ImGui::Checkbox("Sample Environment Map", &m_PathTracer.m_DrawInfo.SampleEnvMap))
-		m_PathTracer.RecreateRayTracingPipeline();
-
 	ImGui::Text("");
 
 	if (ImGui::SliderInt("Max Depth",			&m_PathTracer.m_DrawInfo.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }

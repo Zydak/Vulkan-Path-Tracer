@@ -168,8 +168,8 @@ void PathTracer::RecreateRayTracingPipeline()
 
 void PathTracer::DrawGBuffer()
 {
-	if (!m_DrawGBuffer)
-		return;
+	//if (!m_DrawGBuffer)
+	//	return;
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
 
@@ -265,8 +265,6 @@ void PathTracer::CreatePipelines()
 			Vulture::Shader shader1({ "src/shaders/GBuffer.vert", VK_SHADER_STAGE_VERTEX_BIT });
 
 			std::vector<Vulture::Shader::Define> defines;
-			if (m_DrawInfo.SampleEnvMap)
-				defines.push_back({ "SAMPLE_ENV_MAP" });
 
 			Vulture::Shader shader2({ "src/shaders/GBuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT, defines });
 			info.Shaders.push_back(&shader1);
@@ -320,8 +318,6 @@ void PathTracer::CreateRayTracingPipeline()
 		info.PushConstants = m_PushContantRayTrace.GetRangePtr();
 
 		std::vector<Vulture::Shader::Define> defines;
-		if (m_DrawInfo.SampleEnvMap)
-			defines.push_back({ "SAMPLE_ENV_MAP" });
 		if (m_DrawInfo.UseCausticsSuppresion)
 			defines.push_back({ "USE_CAUSTICS_SUPPRESION" });
 		if (m_DrawInfo.ShowSkybox)
