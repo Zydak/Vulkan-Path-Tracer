@@ -9,11 +9,23 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![CornellBox](./Gallery/CornellBox.png)
 --------
+![Mustang0](./Gallery/Mustang0.png)
+![Mustang1](./Gallery/Mustang1.png)
+--------
+
+<p align="center">
+  <img src="./Gallery/TeapotMarble.png" alt="TeapotMarble" width="600" height="600" />
+  <img src="./Gallery/TeapotTiled.png" alt="TeapotTiled" width="600" height="600" />
+</p>
+
+--------
 ![BlackDragon](./Gallery/BlackDragon.png)
 --------
 ![Dogs](./Gallery/Dogs.png)
 --------
 ![Caustics](./Gallery/Caustics.png)
+--------
+![Coffee](./Gallery/Coffee.png)
 --------
 ![Sponza](./Gallery/Sponza.png)
 --------
@@ -98,9 +110,13 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 # Credits
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
-- https://pbrt.org/scenes-v3 - Glass & Small Dragon
+- https://pbrt.org/scenes-v3 - Glass
+- https://pbrt.org/scenes-v3 - Small Dragon
 - https://www.blender.org/download/demo-files/ - Monster
 - https://polyhaven.com/hdris - Env Maps
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
+- https://benedikt-bitterli.me/resources/ - Coffee Cup
 - https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
+- https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
+- https://github.com/knightcrawler25/GLSL-PathTracer Teapots
