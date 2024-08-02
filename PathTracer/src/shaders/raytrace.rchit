@@ -78,9 +78,15 @@ void main()
     }
 
     surface.Normal = worldNrm;
-    //surface.Tangent = tang;
-    //surface.Bitangent = bitang;
     CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
+
+    // Normal Maps
+
+    vec3 normalMapVal = texture(uNormalTextures[gl_InstanceCustomIndexEXT], texCoord).xyz;
+    normalMapVal = normalMapVal * 2.0f - 1.0f;
+    
+    normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
+    surface.Normal = normalize(normalMapVal);
 
     // -------------------------------------------
     // Calculate Material Properties
@@ -91,7 +97,12 @@ void main()
 
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
 
+#ifdef FURNACE_TEST_MODE
+    material.Color = vec4(1.0f);
+    material.EmissiveColor = vec4(0.0f);
+#else
     material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
+#endif
 
     material.eta = dot(gl_WorldRayDirectionEXT, surface.GeoNormal) < 0.0 ? (1.0 / material.Ior) : material.Ior;
     

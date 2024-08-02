@@ -84,20 +84,26 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         // Dielectric
         vec3 V = normalize(data.View);
         vec3 N = normalize(surface.Normal);
-
+    
         // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
         // bounce it again instead of ending the path
+
+        const int maxTries = 500;
+        int currentTries = 0;
         while (true)
         {
             vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
             H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
-
+    
             data.RayDir = reflect(-V, H);
-
+    
             if (dot(surface.Normal, data.RayDir) > 0.0f)
             {
                 break;
             }
+            if (currentTries >= maxTries)
+                break;
+            currentTries += 1;
         }
     
         data.BSDF = mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
@@ -107,22 +113,27 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         // Metal
         vec3 V = normalize(data.View);
         vec3 N = normalize(surface.Normal);
-
+    
         // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
         // bounce it again instead of ending the path
+        const int maxTries = 500;
+        int currentTries = 0;
         while (true)
         {
             vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
             H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
-
+    
             data.RayDir = reflect(-V, H);
-
+    
             if (dot(surface.Normal, data.RayDir) > 0.0f)
             {
                 break;
             }
+            if (currentTries >= maxTries)
+                break;
+            currentTries += 1;
         }
-
+    
         data.BSDF = mat.Color.xyz;
     }
     else if (random < glassCDF)

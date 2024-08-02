@@ -1,6 +1,6 @@
 # Overview
 
-The main goal for this project was to create energy conserving offline renderer with global illumination with variety of flexible and easy to use materials using Vulkan. I think that the goal has been achieved pretty well. There are 8 different material parameters available: Albedo, Emissive, Roughness, Metallic, Specular Strength, Specular Tint, Transparency, IOR, that can be easily tweaked to create whatever combination you like the most. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers. All of the renders that you can find in the gallery are either 1000x1000 or 2000x2000 and haven't taken more than 5-10 minutes to render (except for the sponza one) (all of them were rendered using RTX 3060) (More info in the [Benchmark](#benchmark) section) and their quality is I'd say really good, especially after denoising. So let's take a deeper look how exactly is everything working.
+The main goal for this project was to create energy conserving offline renderer with global illumination with variety of flexible and easy to use materials using Vulkan. I think that the goal has been achieved pretty well. There are 8 different material parameters available: Albedo, Emissive, Roughness, Metallic, Specular Strength, Specular Tint, Transparency, IOR, that can be easily tweaked to create whatever combination you like the most. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers. All of the renders that you can find in the gallery are either 1000x1000 or 2000x2000 and haven't taken more than 5-10 minutes to render (except for the sponza one, more info in the [Benchmark](#benchmark) section) and their quality is I'd say really good, especially after denoising. So let's take a deeper look how exactly is everything working.
 
 # Table Of Contents
 
@@ -34,6 +34,14 @@ The main goal for this project was to create energy conserving offline renderer 
 - [Editor](#editor)
 - [Architecture](#architecture)
 - [Benchmark](#benchmark)
+  - [Specs](#specs)
+  - [Performance](#performance)
+  - [Cornell Box](#cornell-box)
+  - [Dragon](#dragon)
+    - [Opaque](#opaque)
+    - [Transparent](#transparent)
+  - [Sponza](#sponza)
+- [Limitations And Possible Improvements](#limitations-and-possible-improvements)
 
     
 
@@ -65,7 +73,7 @@ First let's talk about ray gen shader. There are 2 approaches for generating ray
 
 ##### Ray Generation
 * In recursive approach you generate only 1 ray per pixel in raygen shader, shoot it into the scene, and if it hits something the closest hit shader takes over. Then you spawn another ray but this time you do it from hit shader and not raygen. That's why it's called recursive, you invoke hit shader from hit shader.
-* In loop based approach on the other hand, you create a loop inside the ray gen shader which spawns rays over and over again and don't use recursion in closest hit shader. You just get back into the raygen and spawn another ray when the last one left off.
+* In loop based approach on the other hand, you create a loop inside the ray gen shader which spawns rays over and over again and don't use recursion in closest hit shader. You just get back into the raygen and spawn another ray where the last one left off.
 
 I used the loop based approach as it is way better than a recursive one, why?
 * I found out that for whatever reason it's about 2-3 times faster depending on scene than the recursive method. It's not only my machine as other guides on RT pipeline I saw noticed that as well.
@@ -162,7 +170,7 @@ If I pick a 2k env map that has 3 pixels that are really bright and I just path 
 The left image shows cornell box lit by a very bright env map, the image has 200k samples per pixel. Right image shows attept at denoising it.
 </p>
 
-So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance. Here's an image with luminance limited to 500:
+So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="600" height="600" />
@@ -190,7 +198,7 @@ Light transport and BSDF are the most important parts of the path tracer. BSDF d
 
 ### Light Transport
 
-For light transport I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemishpere. This approach results in insane amount of noise in large scenes with small lights, but that's okay for me, the goal of this project was to create energy conserving global illumination and not the fastest path tracer in the world. So using a complex light transport algorithm was way out of the scope for this project. Maybe some day I'll make it bidirectional or add something like MIS.
+For light transport I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemishpere. This approach results in insane amount of noise in large scenes with small lights (or high variance env maps like I've shown above), but that's okay for me, the goal of this project was to create energy conserving global illumination and not the fastest path tracer in the world. So using a complex light transport algorithm was way out of the scope for this project. Maybe some day I'll make it bidirectional or add something like MIS.
 
 ### BSDF
 
@@ -211,6 +219,8 @@ Metallic lobe returns the material color same as the diffuse lobe. For the ray d
 
 #### Glass
 Glass lobe can have 2 cases - reflection and refraction. Whether the light will reflect or refract is based on Fresnel term ([more info here](https://pbr-book.org/4ed/Reflection_Models/Specular_Reflection_and_Transmission#FrDielectric)). Same as before we calculate the half vector, if the ray refracts we choose material color as output color and if it reflects we choose 1 (we choose one because the glass is dielectric so we don't want to tint it).
+
+If you want to see how these lobes work there is a [Material Showcase][https://github.com/Zydak/Vulkan-Path-Tracer/tree/main?tab=readme-ov-file#material-showcase] section in the main readme which shows each specific lobe.
 
 Lobes are sampled semi randomly, each lobe has it's weight, the bigger the weight the bigger the probability that it will be sampled. All of the weights calculation can be found in the code. You can find the code in the [BSDF.glsl](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/BSDF.glsl). Also, all of the lobes described above are energy conserving, as that was the main goal for this project, to make a energy conserving path tracer, but what does that even mean and how did I check that?
 
@@ -300,16 +310,16 @@ You can clearly see that something is wrong. On the image on the left the BSDF i
 
 Now, back to my implementation, does it properly conserve energy? Yes.
 
-As a proof, you can see the furnace test done on the cornell box that you can find in a gallery, but this time all materials have albedo equal 1 (perfect reflector) with roughness and metallic factors also set to 1. You can try any model with any material settings yourself and it won't be visible.
+As a proof, you can see the furnace test done on the Marble Teapot that you can find in a gallery, but this time all materials have albedo equal 1 (perfect reflector). You can try any model with any material settings yourself and it won't be visible.
 <p align="center">
-  <img src="./Gallery/materialShowcase/CornellFurnace.png" alt="Furnace Cornell" width="500" height="500" />
+  <img src="./Gallery/materialShowcase/FurnaceMarble.png" alt="Furnace Marble" width="500" height="500" />
 </p>
 
 You can't see it but that's the point, I promise it's there!
 
-Here's how it looks with a non-uniform environment map:
+Here's how it looks with a non-uniform environment map and textures:
 <p align="center">
-  <img src="./Gallery/materialShowcase/CornellFurnace1.png" alt="Furnace Cornell1" width="500" height="500" />
+  <img src="./Gallery/TeapotMarble.png" alt="Teapot Marble" width="500" height="500" />
 </p>
 
 
@@ -345,7 +355,7 @@ And that pretty much concludes overview of the path tracing. I went over every s
 
 So as a further reading:
 * Read the code.
-* For more info on the Vulkan Ray Tracing Pipeline refer to [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR).
+* For more info on the Vulkan Ray Tracing Pipeline refer to [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR) or [ray tracing gems II chapter 16](https://developer.nvidia.com/ray-tracing-gems-ii).
 * For more info on the BSDF and various other techniques like russian roulette refer to [pbrt book](https://pbr-book.org/4ed/contents).
 * For more info on the Optix denoiser refer to nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
 
@@ -363,15 +373,26 @@ In this section I will discuss the general performance of the path tracer.
 
 ## Specs
 
-All bencharks were taken on Intel Core i5-10400F CPU @ 2.90GHz + RTX 3060 + Windows 10 + Visual Studio 2022.
+All bencharks were taken on:
+* Intel Core i5-10400F 2.90GHz
+* RTX 3060
+* Windows 10
+* Visual Studio 2022.
 
 ## Performance
-Performance of the path tracer depends on the scene and material settings. For certain scenes the variance will be bigger than for others which means that you generally have to take more samples. For some scenes there will be a lot of closed rooms which means more ray bounces which means more time needed per sample. For some scenes there will be a lot of vertices which means more time spent at intersection tests. So here I'll present the performance of each of those cases, I'll path trace 3 scenes which more or less represent each case, CornellBox (64 vertices, 96 indices, Closed space with small light case), Sponza (2.2M vertices, 11.2M indices, Closed space with a lot of geometry case), and Dragon (2.5M vertices, 2.5M indices, Complex geometry case). We'll also look into how Russian roulette affects their performances.
+Performance of the path tracer depends on the scene and material settings. For certain scenes the variance will be bigger than for others which means that you generally have to take more samples, which means longer render times. For some scenes there will be a lot of closed rooms which means more ray bounces which means more time needed per sample. For some scenes there will be a lot of vertices which means more time spent at intersection tests.
+
+So here I'll present the performance of rendering 3 different scenes:
+* CornellBox (64 vertices, 96 indices)
+* Sponza (2.2M vertices, 11.2M indices)
+* Dragon (2.5M vertices, 2.5M indices)
+
+We'll also look into how Russian roulette affects their performances.
 
 ## Cornell Box
 
 <p align="center">
-  <img src="./Gallery/Benchmark/17.5s_15K.png" alt="CornellBoxBenchmark" width="500" height="500" />
+  <img src="./Gallery/Benchmark/17.5s_15K.png" alt="CornellBoxBenchmark" width="700" height="700" />
 </p>
 
 Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **17.5s**. As discussed earlier, the roulette works best when there is a lot of color absorption which happens here, the walls are dark gold color with left and right one having only single channel, so roulette gives us a nice performance boost. Rendering without roulette takes around **44.2s** so we get a performance increase of around 250%.
@@ -384,7 +405,7 @@ Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 sa
   <img src="./Gallery/Benchmark/24.6s_15K.png" alt="DragonOpaqueBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **24.6s**. Here where we have a single mesh white white albedo we get no performance boost from running roulette as there is no absorbtion, the material is a perfect reflector. Also because of the fact that we have a single model that is lit by the env map we do not actually need 15K samples to produce a quality image, that's because the variance from the env map is relativaly slow. A 1k would suffice for this particular scene.
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **24.6s**. Here where we have a single mesh with white albedo we get no performance boost from running roulette as there is no absorbtion, the material is a perfect reflector. Also because of the fact that we have a single model that is lit by the env map, we do not actually need 15K samples to produce a quality image, that's because the variance from the env map is relativaly low. A 1k spp would suffice for this particular scene.
 
 ### Transparent
 
@@ -402,6 +423,17 @@ Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 sa
   <img src="./Gallery/Benchmark/64.1s_15K.png" alt="DragonTransparentBenchmark" width="700" height="700" />
 </p>
 
-Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **64.1s**. But if you zoom into the image you'll see a lot of weird artifacts, that's because the denoiser couldn't handle all of the noise that was produced by this scene. Here, unlike the Dragon scene we actually need to take more than 15K samples to decrease the noise to the denoisable level. That's mainly because it's a closed room with small lights so it produces way more variance. For the image in the gallery I believe that I took 500K or 700K samples, I don't remember honestly.
+Accumulating 15.000 samples per pixel on a 1000x1000 image (so 15,000,000,000 samples) takes around **64.1s**. But if you zoom into the image you'll see a lot of weird artifacts, that's because the denoiser couldn't handle all of the noise that was produced by this scene. Here, unlike the Dragon scene, we actually need to take more than 15K samples to decrease the noise to a denoisable level. That's mainly because it's a closed room with small lights so it produces way more variance. For the image in the gallery I believe that I took 500K or 700K samples, I don't remember honestly.
 
 It is the most complex scene of all, it has the most vertex data, it's practically a closed room, it has textures, small lights etc. And because of all that plus the fact that we have a LOT of absorption going on, it's here that Russian Roulette shines the most. Rendering this scene without a Russian Roulette takes **87.5** minutes! It's over an hour to get barely 15K samples! So we get a **8,190%** performance boost just by adding in 4 lines of code to use the roulette.
+
+# Limitations And Possible Future Improvements
+
+## Editor
+Currently the editor is quite limited, as an example, it doesn't allow for moving loaded meshes. That's because moving anything would require rebuilding the entire acceleration structure. Which isn't that hard to do but still, some effort is needed. And because I've never needed this feature and focused on different things it's just absent. You also can't load more than one mesh for pretty much the same reasons.
+
+There are no scenes. What I mean by that is that you can't save settings for your renders (like camera position, materials etc.). That's because of the fact that I would have to make my custom scene format, parse it, serialize it, save it, deserialize it, and load everything back. It's a lot of work and same as before, I haven't really needed this feature and decided to focus on different aspects of the project.
+
+This project is not using distributions also known as PDFs (Probability Distribution Functions). So you're only able to sample ray direction alongside color. But you can't evaluate some arbitrary ray direction like you'd normally want to for certain techniques like Importance Sampling.
+
+The light transport algorithm is done using naive approach (sampling the BSDF). So as I mentioned before, it produces way more noise than something like MIS or bidirectional path tracing.

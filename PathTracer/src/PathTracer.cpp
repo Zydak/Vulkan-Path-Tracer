@@ -326,6 +326,8 @@ void PathTracer::CreateRayTracingPipeline()
 			defines.push_back({ "USE_CAUSTICS_SUPPRESION" });
 		if (m_DrawInfo.ShowSkybox)
 			defines.push_back({ "SHOW_SKYBOX" });
+		if (m_DrawInfo.FurnaceTestMode)
+			defines.push_back({ "FURNACE_TEST_MODE" });
 
 		Vulture::Shader rgShader;
 		if (!rgShader.Init({ m_DrawInfo.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
