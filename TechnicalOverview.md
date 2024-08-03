@@ -49,6 +49,7 @@ The main goal for this project was to create energy conserving offline renderer 
   - [Environment Map Section](#environment-map-section)
   - [Path Tracing Section](#path-tracing-section)
   - [File Render Section](#file-render-section)
+  - [Post Processing Graph](#post-processing-graph)
   - [Conclusion](#conclusion-1)
 - [Limitations And Possible Future Improvements](#limitations-and-possible-future-improvements)
   - [Editor](#editor-1)
@@ -315,7 +316,7 @@ Here's the result of incorrectly calculating dielectric reflection color:
   <img src="./Gallery/materialShowcase/FailedFurnace1.png" alt="Failed Furnace1" width="500" height="500" />
 </p>
 
-You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the image on the right the BSDF is reflecting too much energy at high angles. In both cases $L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF which no longer equals $\frac{1}{\pi}$.
+You can clearly see that something is wrong. On the image on the left the BSDF is absorbing too much energy at high angles. On the image on the right the BSDF is reflecting too much energy at high angles. In both cases $L_o(\mathbf{x}, \omega_o) \neq L_i(\mathbf{x}, \omega_i)$ which means that some part of the rendering equation is messed up, in this case it's BSDF which no longer equals $\frac{1}{\pi}$. With this knowledge we can easily narrow down our search to the specular part of the BSDF and fix it. Then we can try to validate it again.
 
 #### My Implementation
 
@@ -373,6 +374,9 @@ So for further reading:
 * For more info on the Optix denoiser see nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
 
 # Architecture
+
+In this section I'll discuss code related architectural decisions that I made and what's most important - why I made them. We'll also touch on the code structure.
+
 TODO
 
 # Benchmark
@@ -510,10 +514,16 @@ The last section contains only one button. If you're happy with all the settings
 
 You can choose whether you want to see a denoised version of the render or not.
 
+## Post Processing Graph
+<p align="center">
+  <img src="./Gallery/Editor/Graph.png" alt="Graph" width="1076" height="617" />
+</p>
+
+The Editor also features a post processing graph made using [ImNodeFlow](https://github.com/Fattorino/ImNodeFlow) framework. It's super limited because it only features 3 nodes but it has a promise, and pretty nice foundations for more nodes. I have no idea why I decided to even add it here. I was just curious if making a graph in [ImGui](https://github.com/ocornut/imgui) is possible, then I added a couple of nodes and got bored with the concept, maybe I'll add something more complex into there one day, who knows. But at least I know how to make a graph for my future projects. So I hope it will come handy one day.
+
 ## Conclusion
 
-As you can see the editor isn't really complex, it allows you to edit a handful of the most basic settings of a scene and path tracer, but it's far from being able to create your own scenes from scratch, for the scenes in the [Gallery]() I had to modify object positions in blender and then export them to GLTF. All renders you can see in this readme as well as in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery) were created with this editor. So it's simple, but definitely sufficient.
-
+As you can see the editor isn't really complex, it allows you to edit a handful of the most basic settings of a scene and path tracer, but it's far from allowing you to create your own scenes from scratch, for the scenes in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery) I had to modify object positions in blender and then export them to GLTF. It also doesn't allow you to switch textures on models so you also have to do that in blender. But despite all this, I managed to create all renders that you can find in this readme as well as in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery). So it's simple, but definitely sufficient for showcasing the path tracer.
 
 # Limitations And Possible Future Improvements
 
@@ -521,6 +531,8 @@ As you can see the editor isn't really complex, it allows you to edit a handful 
 Currently the editor is quite limited, for example it doesn't allow to move loaded meshes. That's because moving anything would require rebuilding the entire acceleration structure. Which isn't that hard to do, but still requires some effort. And since I've never needed this feature and was focused on other things, it's just not there. You also can't load more than one mesh for pretty much the same reasons.
 
 There are no scenes. What I mean by this is that you can't save settings for your renders (like camera position, materials, etc.). That's because I'd have to create my own scene format, parse it, serialize it, save it, deserialize it, and reload everything. It's a lot of work, and like before, I didn't really need this feature and decided to focus on other aspects of the project.
+
+And as I mentioned before you can't choose textures for materials. They are loaded from the object file and stick to the material permanently.
 
 ## Path Tracing
 
