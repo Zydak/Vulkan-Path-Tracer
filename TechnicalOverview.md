@@ -122,32 +122,34 @@ Left image was rendered with Depth of Field effect on, you can clearly see how f
 
 ##### Russian Roulette
 
-The entire path tracer is basically one big monte carlo simulation
+We compute each ray color (throughput) like following:
 
-$$F = \frac{1}{N} \sum_{i=1}^{N} F_i$$
+$$F = \prod_{i=0}^{N} F_i$$
 
-where $F$ is the integrand (light contribution of the ray), $F_i$ are random samples (different directions sampled), and $N$ is the number of samples.
+where $F$ is the integrand (light contribution of the ray), $F_i$ is contribution of each bounce, and $N$ is the number of ray bounces.
 
-To speed up the rendering we can use a method called **Russian Roulette** which terminates path with low throughput without biasing the result (keeping the expected value the same). Here's how it works:
+Because the ray accumulation is a monte carlo simulation, to have a completely unbiased and mathematically correct result of the sample we should bounce the ray through the scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases due to color absorption) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how do we choose this limit? If it's too small we're biasing the result so much that it's no longer visually appealing, if it's too large we're wasting time on computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
 
-Theoretically to have a completely unbiased and mathematically correct result of the sample we should bounce the ray through the scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how do we choose this limit? If it's too small we're biasing the result, if it's too large we're wasting time on computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
+At each ray-surface intersection, we set a probability $p$ it can be chosen in any manner, I set it based on the maximum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p}$ to account for the termination of other paths. Here's a mathematical formulation of this:
 
-At each ray-surface intersection, we set a probability $p_i$ it can be chosen in any manner, I set it based on the maximum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p_i$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p_i}$ to account for the termination of other paths. Here's a mathematical formulation of this:
+When applying Russian Roulette, after each bounce we compute new integrand:
 
-When applying Russian Roulette, we replace each term $F_i$ with $F_i\prime$ where:
-
-$$ F_i\prime = \begin{cases} 
-0 & \text{with probability } (1 - p_i) \\
-\frac{F_i}{p_i} & \text{with probability } p_i 
+$$ F\prime = \begin{cases} 
+0 & \text{with probability } (1 - p) \\
+\frac{F}{p} & \text{with probability } p
 \end{cases} $$
 
-We can see that as long as we divide the $F_i$ by $p_i$ the expected value remains mathematically unbiased:
+And then just set the old integrand $F$ to newly computed one $F\prime$.
 
-$$ E[F_i\prime] = \left(1 - p_i\right) \cdot 0 + p_i \cdot \frac{E[F_i]}{p_i} = E[F_i] $$
+So We can see that as long as we divide the $F$ by $p$ the expected value remains mathematically unbiased:
+
+$$ E[F\prime] = \left(1 - p\right) \cdot 0 + p \cdot \frac{E[F]}{p} = E[F] $$
+
+Of course if we choose to sample with probability $(1 - p)$ which means we set the $F\prime$ to 0, we can stop bouncing the ray any further, it's throughput is 0. And every other bounce, no matter it's throughput, will also be zero since anything times 0 is 0.
 
 And because we're terminating only paths with low throughput we're not introducing too much variance and keeping the convergence rate relatively similar to the original one. This way the result is not only mathematically correct, but we're also saving a lot of computation time by not evaluating low throughput paths. 
 
-By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweighs small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible. I'm not the greatest statistician in the world but If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be super dark, you'll be lucky to get 2 or even 1 bounce most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
+By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweighs small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, it will eventually converge on the right result. But visually it's horrible. If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be super dark, you'll be lucky to get 2 or even 1 bounce most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/NoRoulette366s.png" alt="No Roulette" width="300" height="300" />
