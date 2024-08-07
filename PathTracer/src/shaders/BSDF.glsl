@@ -82,58 +82,101 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     else if (random < dielectricCDF)
     {
         // Dielectric
-        vec3 V = normalize(data.View);
-        vec3 N = normalize(surface.Normal);
     
         // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
         // bounce it again instead of ending the path
-
-        const int maxTries = 500;
-        int currentTries = 0;
-        while (true)
+        for (int i = 0; i < 10; i++)
         {
             vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
             H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
-    
-            data.RayDir = reflect(-V, H);
-    
-            if (dot(surface.Normal, data.RayDir) > 0.0f)
+
+            data.RayDir = reflect(-data.View, H);
+
+            if ((dot(surface.Normal, data.RayDir) > 0.0f) && (dot(surface.NormalNoTex, data.RayDir) > 0.0f))
             {
                 break;
             }
-            if (currentTries >= maxTries)
-                break;
-            currentTries += 1;
         }
-    
+
+        // When using normal mapping the direction generated might be wrong sometimes and go under the surface
+        // in that case just generate a direction based on the geomtry normal and ignore the texture normal
+        // it's not ideal but still better than just discarding the sample
+        if (dot(surface.NormalNoTex, data.RayDir) < 0.0f)
+        {
+            vec3 T;
+            vec3 B;
+            vec3 N = surface.NormalNoTex;
+
+            CalculateTangents(N, T, B);
+
+            for (int i = 0; i < 5; i++)
+            {
+                vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
+                H = TangentToWorld(T, B, N, H);
+
+                data.RayDir = reflect(-data.View, H);
+
+                if ((dot(surface.Normal, data.RayDir) > 0.0f) && (dot(surface.NormalNoTex, data.RayDir) > 0.0f))
+                {
+                    break;
+                }
+            }
+        }
+
+        // If for some reason it's still wrong avoid the internal reflection and discard the sample
+        if ((dot(surface.Normal, data.RayDir) < 0.0f) || (dot(surface.NormalNoTex, data.RayDir) < 0.0f))
+            return false;
+
         data.BSDF = mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
     }
     else if (random < metallicCDF)
     {
         // Metal
-        vec3 V = normalize(data.View);
-        vec3 N = normalize(surface.Normal);
     
         // Multiple surface scattering, if ray is blocked by a microfacet and it goes below the surface
         // bounce it again instead of ending the path
-        const int maxTries = 500;
-        int currentTries = 0;
-        while (true)
+        for (int i = 0; i < 10; i++)
         {
             vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
             H = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, H);
-    
-            data.RayDir = reflect(-V, H);
-    
-            if (dot(surface.Normal, data.RayDir) > 0.0f)
+
+            data.RayDir = reflect(-data.View, H);
+
+            if ((dot(surface.Normal, data.RayDir) > 0.0f) && (dot(surface.NormalNoTex, data.RayDir) > 0.0f))
             {
                 break;
             }
-            if (currentTries >= maxTries)
-                break;
-            currentTries += 1;
         }
-    
+
+        // When using normal mapping the direction generated might be wrong sometimes and go under the surface
+        // in that case just generate a direction based on the geomtry normal and ignore the texture normal
+        // it's not ideal but still better than just discarding the sample
+        if (dot(surface.NormalNoTex, data.RayDir) < 0.0f)
+        {
+            vec3 T;
+            vec3 B;
+            vec3 N = surface.NormalNoTex;
+
+            CalculateTangents(N, T, B);
+
+            for (int i = 0; i < 5; i++)
+            {
+                vec3 H = GgxSampling(mat.Roughness, Rnd(seed), Rnd(seed));
+                H = TangentToWorld(T, B, N, H);
+
+                data.RayDir = reflect(-data.View, H);
+
+                if ((dot(surface.Normal, data.RayDir) > 0.0f) && (dot(surface.NormalNoTex, data.RayDir) > 0.0f))
+                {
+                    break;
+                }
+            }
+        }
+
+        // If for some reason it's still wrong avoid the internal reflection and discard the sample
+        if ((dot(surface.Normal, data.RayDir) < 0.0f) || (dot(surface.NormalNoTex, data.RayDir) < 0.0f))
+            return false;
+
         data.BSDF = mat.Color.xyz;
     }
     else if (random < glassCDF)

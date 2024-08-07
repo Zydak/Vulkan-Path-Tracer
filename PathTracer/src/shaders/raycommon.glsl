@@ -84,6 +84,7 @@ struct Surface
     vec3 Bitangent;
 
     vec3 GeoNormal;
+    vec3 NormalNoTex;
 };
 
 struct EnvAccel

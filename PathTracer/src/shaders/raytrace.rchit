@@ -33,6 +33,13 @@ layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
     EnvAccel[] uAccels;
 };
 
+vec3 GetViewReflectedNormal(vec3 N, vec3 V)
+{
+    float NdotV = dot(N, V);
+    N += (2.0 * clamp(-NdotV, 0.0f, 1.0f)) * V;
+    return normalize(N);
+}
+
 void main() 
 {
     // -------------------------------------------
@@ -76,6 +83,7 @@ void main()
     {
         worldNrm = -worldNrm;
     }
+    surface.NormalNoTex = worldNrm;
 
     surface.Normal = worldNrm;
     CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
@@ -87,6 +95,11 @@ void main()
     
     normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
     surface.Normal = normalize(normalMapVal);
+
+    if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
+    {
+        surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
+    }
 
     // -------------------------------------------
     // Calculate Material Properties
