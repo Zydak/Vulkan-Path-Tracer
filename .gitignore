@@ -5,7 +5,6 @@ bin-int/
 **/*.vcxproj
 **.sln
 **/Vulture.log
-PathTracer/assets/panther.obj
 **/CachedShaders/**
-PathTracer/assets/SmallDragon.obj
-PathTracer/assets/SmallDragon.mtl
+**/*.cmd
+**/*.rsp
