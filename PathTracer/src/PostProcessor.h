@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #pragma once
 
 #include "Vulture.h"
@@ -70,13 +73,13 @@ private:
 
 	// ImGui Graph Stuff
 	ImFlow::BaseNode* SpawnFunction();
-	Vulture::Scope<ImFlow::ImNodeFlow> m_Handler;
+	Vulture::Scope<ImFlow::ImNodeFlow> m_Handler = nullptr;
 	Vulture::FunctionQueue m_NodeQueue;
-	std::shared_ptr<OutputNode> m_OutputNode;
-	std::shared_ptr<PathTracerOutputNode> m_InputNode;
+	std::shared_ptr<OutputNode> m_OutputNode = nullptr;
+	std::shared_ptr<PathTracerOutputNode> m_InputNode = nullptr;
 
 	VkExtent2D m_ViewportSize = { 900, 900 };
-	Vulture::Image* m_InputImage;
+	Vulture::Image* m_InputImage = nullptr;
 	Vulture::Image  m_OutputImage;
 
 	std::vector<std::shared_ptr<ImFlow::BaseNode>> m_NodesRef;
@@ -107,10 +110,13 @@ public:
 
 					auto leftPin = link->left();
 					BaseNodeVul* leftNode = dynamic_cast<BaseNodeVul*>(leftPin->getParent());
-					if (!leftNode->PinsEvaluated())
+					if (leftNode != nullptr)
 					{
-						leftNode->SetPinsEvaluated(true);
-						leftPin->resolve();
+						if (!leftNode->PinsEvaluated())
+						{
+							leftNode->SetPinsEvaluated(true);
+							leftPin->resolve();
+						}
 					}
 				}
 
@@ -297,12 +303,9 @@ public:
 		info.Format = VK_FORMAT_R16G16B16A16_SFLOAT;
 		info.Height = size.height;
 		info.Width = size.width;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Bloom Output Image";
 		m_OutputImage.Init(info);
 	}
@@ -446,12 +449,9 @@ public:
 		info.Format = VK_FORMAT_R16G16B16A16_SFLOAT;
 		info.Height = size.height;
 		info.Width = size.width;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Tonemap Output Image";
 		m_OutputImage.Init(info);
 
@@ -592,12 +592,9 @@ public:
 		info.Format = VK_FORMAT_R8G8B8A8_UNORM;
 		info.Height = size.height;
 		info.Width = size.width;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Posterize Output Image";
 		m_OutputImage.Init(info);
 

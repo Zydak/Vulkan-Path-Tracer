@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #pragma once
 
 #include "Vulture.h"
@@ -86,9 +89,10 @@ public:
 class ModelComponent
 {
 public:
-	ModelComponent(const std::string filepath)
+	ModelComponent(const std::string& filepath)
+		: ModelHandle(Vulture::AssetManager::LoadAsset(filepath))
 	{
-		ModelHandle = Vulture::AssetManager::LoadAsset(filepath);
+
 	}
 
 	Vulture::AssetHandle ModelHandle;
@@ -98,8 +102,9 @@ class TransformComponent
 {
 public:
 	TransformComponent(const Vulture::Transform& transform)
+		: Transform(transform)
 	{
-		Transform = transform;
+
 	}
 
 	TransformComponent(Vulture::Transform&& transform) noexcept
@@ -113,7 +118,7 @@ public:
 class SkyboxComponent
 {
 public:
-	SkyboxComponent(const std::string filepath)
+	SkyboxComponent(const std::string& filepath)
 	{
 		ImageHandle = Vulture::AssetManager::LoadAsset(filepath);
 	}

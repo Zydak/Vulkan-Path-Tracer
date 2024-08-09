@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #include "pch.h"
 #include "Editor.h"
 
@@ -28,13 +31,10 @@ void Editor::Init()
 	imageInfo.Width = m_ImageSize.x;
 	imageInfo.Height = m_ImageSize.y;
 	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	imageInfo.Tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	imageInfo.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	imageInfo.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	imageInfo.LayerCount = 1;
 	imageInfo.SamplerInfo = Vulture::SamplerInfo{};
-	imageInfo.Type = Vulture::Image::ImageType::Image2D;
 	imageInfo.DebugName = "Denoised Image";
 	m_DenoisedImage.Init(imageInfo);
 }
@@ -174,16 +174,6 @@ void Editor::Render()
 	}
 }
 
-Editor::Editor()
-{
-
-}
-
-Editor::~Editor()
-{
-
-}
-
 void Editor::CreateQuadPipeline()
 {
 	Vulture::Shader::CreateInfo vertexShaderInfo{};
@@ -196,24 +186,17 @@ void Editor::CreateQuadPipeline()
 	fragmentShaderInfo.Type = VK_SHADER_STAGE_FRAGMENT_BIT;
 	Vulture::Shader fragmentShader(fragmentShaderInfo);
 
-	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
+	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } }; //-V826
 	Vulture::DescriptorSetLayout layout(bindings);
 
 	Vulture::Pipeline::GraphicsCreateInfo info{};
 	info.AttributeDesc = Vulture::Mesh::Vertex::GetAttributeDescriptions();
 	info.BindingDesc = Vulture::Mesh::Vertex::GetBindingDescriptions();
-	info.BlendingEnable = false;
-	info.ColorAttachmentCount = 1;
-	info.PolygonMode = VK_POLYGON_MODE_FILL;
-	info.CullMode = VK_CULL_MODE_NONE;
 	info.debugName = "Quad Pipeline";
-	info.DepthClamp = false;
-	info.DepthTestEnable = false;
 	info.DescriptorSetLayouts = { layout.GetDescriptorSetLayoutHandle() };
 	info.Height = m_ViewportSize.height;
 	info.Width = m_ViewportSize.width;
 	info.PushConstants = m_QuadPush.GetRangePtr();
-	info.Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	info.Shaders = { &vertexShader, &fragmentShader };
 	info.RenderPass = m_QuadRenderTarget.GetRenderPass();
 
@@ -479,7 +462,7 @@ void Editor::ImGuiShaderSettings()
 	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 	if (ImGui::ListBox("", &selectedShaderIndex, shadersCStr.data(), (int)shadersCStr.size(), shadersCStr.size() > 10 ? 10 : (int)shadersCStr.size()))
 	{
-		std::string extension = shadersStr[selectedShaderIndex].substr(shadersStr[selectedShaderIndex].find_last_of(".") + 1);
+		std::string extension = shadersStr[selectedShaderIndex].substr(shadersStr[selectedShaderIndex].find_last_of('.') + 1);
 		if (extension == "rchit")
 			selectedShaderType = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 		else if (extension == "rmiss")
@@ -495,16 +478,14 @@ void Editor::ImGuiShaderSettings()
 		return;
 	}
 
-	std::string selectedShaderPath = shadersStr[selectedShaderIndex];
-
 	if (ImGui::Button("Load Shader"))
 	{
 		if (selectedShaderType == VK_SHADER_STAGE_RAYGEN_BIT_KHR)
-			m_PathTracer.m_DrawInfo.RayGenShaderPath = selectedShaderPath;
+			m_PathTracer.m_DrawInfo.RayGenShaderPath = shadersStr[selectedShaderIndex];
 		else if (selectedShaderType == VK_SHADER_STAGE_MISS_BIT_KHR)
-			m_PathTracer.m_DrawInfo.MissShaderPath = selectedShaderPath;
+			m_PathTracer.m_DrawInfo.MissShaderPath = shadersStr[selectedShaderIndex];
 		else if (selectedShaderType == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
-			m_PathTracer.m_DrawInfo.HitShaderPath = selectedShaderPath;
+			m_PathTracer.m_DrawInfo.HitShaderPath = shadersStr[selectedShaderIndex];
 
 		m_PathTracer.RecreateRayTracingPipeline();
 		m_PathTracer.ResetFrameAccumulation();
@@ -557,9 +538,10 @@ void Editor::ImGuiSceneEditor()
 	int i = 0;
 	for (const auto& entry : std::filesystem::directory_iterator("assets/"))
 	{
+		auto& path = entry.path();
 		if (entry.is_regular_file())
 		{
-			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj" || entry.path().extension() == ".fbx")
+			if (path.extension() == ".gltf" || path.extension() == ".obj" || path.extension() == ".fbx")
 			{
 				i++;
 			}
@@ -573,10 +555,11 @@ void Editor::ImGuiSceneEditor()
 	{
 		if (entry.is_regular_file())
 		{
-			if (entry.path().extension() == ".gltf" || entry.path().extension() == ".obj" || entry.path().extension() == ".fbx")
+			auto& path = entry.path();
+			if (path.extension() == ".gltf" || path.extension() == ".obj" || path.extension() == ".fbx")
 			{
-				modelsStr.push_back(entry.path().filename().string());
-				modelsCStr.push_back(modelsStr[i].c_str());
+				modelsStr.emplace_back(path.filename().string());
+				modelsCStr.emplace_back(modelsStr[i].c_str());
 				i++;
 			}
 		}
@@ -678,8 +661,8 @@ void Editor::ImGuiEnvMapSettings()
 		{
 			if (entry.path().extension() == ".hdr")
 			{
-				envMapsString.push_back(entry.path().filename().string());
-				envMaps.push_back(envMapsString[i].c_str());
+				envMapsString.emplace_back(entry.path().filename().string());
+				envMaps.emplace_back(envMapsString[i].c_str());
 				i++;
 			}
 		}
@@ -751,7 +734,7 @@ void Editor::ImGuiCameraSettings()
 
 	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	PerspectiveCameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<PerspectiveCameraComponent>(cameraEntity);
-	CameraScript* camScript;
+	CameraScript* camScript = nullptr;
 
 	if (scComp)
 	{
@@ -759,7 +742,7 @@ void Editor::ImGuiCameraSettings()
 	}
 
 	ImGui::Separator();
-	if (camScript)
+	if (camScript != nullptr)
 	{
 		if (ImGui::Button("Reset Camera"))
 		{

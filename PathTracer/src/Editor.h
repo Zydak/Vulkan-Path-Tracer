@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #pragma once
 
 #include "pch.h"
@@ -17,8 +20,8 @@ public:
 
 	void Render();
 
-	Editor();
-	~Editor();
+	Editor() = default;
+	~Editor() = default;
 
 private:
 	void CreateQuadPipeline();
@@ -48,11 +51,11 @@ private:
 	PostProcessor m_PostProcessor;
 	Vulture::Denoiser m_Denoiser;
 	Vulture::Image m_DenoisedImage;
-	VkDescriptorSet m_PathTracerOutputImageSet;
-	VkDescriptorSet m_DenoisedOutputImageSet;
+	VkDescriptorSet m_PathTracerOutputImageSet = VK_NULL_HANDLE;
+	VkDescriptorSet m_DenoisedOutputImageSet = VK_NULL_HANDLE;
 
 	// Scene
-	Vulture::Scene* m_CurrentScene;
+	Vulture::Scene* m_CurrentScene = nullptr;
 	// Model
 	bool m_ModelChanged = false;
 	std::string m_ChangedModelFilepath = "";

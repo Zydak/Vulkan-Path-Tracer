@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #include "PostProcessor.h"
 
 void PostProcessor::Init(Vulture::Image* inputImage)
@@ -11,12 +14,9 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 		info.Format = VK_FORMAT_R8G8B8A8_UNORM;
 		info.Height = 1;
 		info.Width = 1;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Post Processor Black Image";
 		m_OutputImage.Init(info);
 
@@ -29,9 +29,10 @@ void PostProcessor::Init(Vulture::Image* inputImage)
 	m_InputImage = inputImage;
 
 	m_Handler = std::make_unique<ImFlow::ImNodeFlow>("Main");
-	m_Handler->getStyle().colors.subGrid = IM_COL32(100, 100, 100, 255);
-	m_Handler->getStyle().grid_size = 100.0f;
-	m_Handler->getStyle().colors.grid = IM_COL32(100, 100, 100, 255);
+	auto& style = m_Handler->getStyle();
+	style.colors.subGrid = IM_COL32(100, 100, 100, 255);
+	style.grid_size = 100.0f;
+	style.colors.grid = IM_COL32(100, 100, 100, 255);
 	m_Handler->getGrid().config().color = IM_COL32(35, 35, 35, 255);
 
 	CreateImages();
@@ -179,12 +180,9 @@ void PostProcessor::CreateImages()
 		info.Format = VK_FORMAT_R8G8B8A8_UNORM;
 		info.Height = m_ViewportSize.height;
 		info.Width = m_ViewportSize.width;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Post Processor Output Image";
 		m_OutputImage.Init(info);
 	}

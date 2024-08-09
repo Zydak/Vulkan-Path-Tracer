@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #include "PathTracer.h"
 #include "Components.h"
 
@@ -11,11 +14,6 @@ void PathTracer::Init(VkExtent2D size)
 	CreatePipelines();
 }
 
-PathTracer::~PathTracer()
-{
-
-}
-
 void PathTracer::Resize(VkExtent2D newSize)
 {
 	m_ViewportSize = newSize;
@@ -26,9 +24,15 @@ void PathTracer::Resize(VkExtent2D newSize)
 	CreatePipelines();
 
 	// Update Ray tracing set
+	VkDescriptorImageInfo info = { 
+		Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), 
+		m_PathTracingImage.GetImageView(), 
+		VK_IMAGE_LAYOUT_GENERAL 
+	};
+
 	m_RayTracingDescriptorSet.UpdateImageSampler(
 		1, 
-		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL }
+		info
 	);
 
 	UpdateDescriptorSetsData();
@@ -45,11 +49,15 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 		skybox = &scene->GetRegistry().get<SkyboxComponent>(entity);
 	}
 
+	VkDescriptorImageInfo info = { 
+		Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+		skybox->ImageHandle.GetImage()->GetImageView(),
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL 
+	};
+
 	m_GlobalDescriptorSets.UpdateImageSampler(
 		1,
-		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
-		skybox->ImageHandle.GetImage()->GetImageView(),
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+		info
 	);
 
 	m_GlobalDescriptorSets.UpdateBuffer(2, skybox->ImageHandle.GetImage()->GetAccelBuffer()->DescriptorInfo());
@@ -71,27 +79,31 @@ bool PathTracer::Render()
 	}
 
 	// Set Push data
-	m_PushContantRayTrace.GetDataPtr()->maxDepth = m_DrawInfo.RayDepth;
-	m_PushContantRayTrace.GetDataPtr()->FocalLength = m_DrawInfo.FocalLength;
-	m_PushContantRayTrace.GetDataPtr()->DoFStrength = m_DrawInfo.DOFStrength;
-	m_PushContantRayTrace.GetDataPtr()->AliasingJitter = m_DrawInfo.AliasingJitterStr;
-	m_PushContantRayTrace.GetDataPtr()->SuppressCausticsLuminance = m_DrawInfo.CausticsSuppresionMaxLuminance;
-	m_PushContantRayTrace.GetDataPtr()->SamplesPerFrame = m_DrawInfo.SamplesPerFrame;
-	m_PushContantRayTrace.GetDataPtr()->EnvAzimuth = glm::radians(m_DrawInfo.EnvAzimuth);
-	m_PushContantRayTrace.GetDataPtr()->EnvAltitude = glm::radians(m_DrawInfo.EnvAltitude);
+	auto data = m_PushContantRayTrace.GetDataPtr();
+	data->maxDepth = m_DrawInfo.RayDepth;
+	data->FocalLength = m_DrawInfo.FocalLength;
+	data->DoFStrength = m_DrawInfo.DOFStrength;
+	data->AliasingJitter = m_DrawInfo.AliasingJitterStr;
+	data->SuppressCausticsLuminance = m_DrawInfo.CausticsSuppresionMaxLuminance;
+	data->SamplesPerFrame = m_DrawInfo.SamplesPerFrame;
+	data->EnvAzimuth = glm::radians(m_DrawInfo.EnvAzimuth);
+	data->EnvAltitude = glm::radians(m_DrawInfo.EnvAltitude);
 
 	// Draw Albedo, Roughness, Metallness, Normal into GBuffer
 	DrawGBuffer();
 
 	static glm::mat4 previousViewMat{ 0.0f };
 	static glm::mat4 previousProjMat{ 0.0f };
-	if (previousViewMat != PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat ||
-		previousProjMat != PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ProjMat) // if camera moved
+	auto camComp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
+	VL_CORE_ASSERT(camComp != nullptr, "There is no camera");
+
+	if (previousViewMat != camComp->Camera.ViewMat ||
+		previousProjMat != camComp->Camera.ProjMat) // if camera moved
 	{
 		UpdateDescriptorSetsData();
 		ResetFrameAccumulation();
-		previousViewMat = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ViewMat;
-		previousProjMat = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera.ProjMat;
+		previousViewMat = camComp->Camera.ViewMat;
+		previousProjMat = camComp->Camera.ProjMat;
 	}
 	else
 	{
@@ -135,10 +147,11 @@ bool PathTracer::Render()
 
 	if (m_DrawInfo.VisualizedDOF)
 	{
-		m_DOfVisualizer.GetPush().GetDataPtr()->Near = cam->NearFar.x;
-		m_DOfVisualizer.GetPush().GetDataPtr()->Far = cam->NearFar.y;
-		m_DOfVisualizer.GetPush().GetDataPtr()->FocalPoint = m_DrawInfo.FocalLength;
-		m_DOfVisualizer.GetPush().GetDataPtr()->VPInverse = glm::inverse(cam->GetProjView());
+		auto data = m_DOfVisualizer.GetPush().GetDataPtr();
+		data->Near = cam->NearFar.x;
+		data->Far = cam->NearFar.y;
+		data->FocalPoint = m_DrawInfo.FocalLength;
+		data->VPInverse = glm::inverse(cam->GetProjView());
 		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer());
 	}
 	return true;
@@ -168,19 +181,20 @@ void PathTracer::RecreateRayTracingPipeline()
 
 void PathTracer::DrawGBuffer()
 {
-	//if (!m_DrawGBuffer)
-	//	return;
+	if (!m_DrawGBuffer)
+		return;
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
 
 	m_DrawGBuffer = false;
 	auto view = m_CurrentSceneRendered->GetRegistry().view<ModelComponent, TransformComponent>();
 	std::vector<VkClearValue> clearColors;
-	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.push_back({ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.push_back({ 1.0f, 0 });
+	clearColors.reserve(5);
+	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
+	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
+	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
+	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
+	clearColors.emplace_back(VkClearValue{ 1.0f, 0 });
 
 	m_GBufferFramebuffer.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
 	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
@@ -269,10 +283,7 @@ void PathTracer::CreatePipelines()
 			Vulture::Shader shader2({ "src/shaders/GBuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT, defines });
 			info.Shaders.push_back(&shader1);
 			info.Shaders.push_back(&shader2);
-			info.BlendingEnable = false;
 			info.DepthTestEnable = true;
-			info.CullMode = VK_CULL_MODE_NONE;
-			info.Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 			info.Width = m_ViewportSize.width;
 			info.Height = m_ViewportSize.height;
 			info.PushConstants = m_PushContantGBuffer.GetRangePtr();
@@ -280,13 +291,10 @@ void PathTracer::CreatePipelines()
 			info.RenderPass = m_GBufferFramebuffer.GetRenderPass();
 			info.debugName = "GBuffer Pipeline";
 
-			// Descriptor set layouts for the pipeline
-			std::vector<VkDescriptorSetLayout> layouts
-			{
+			info.DescriptorSetLayouts = {
 				m_GlobalDescriptorSets.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle(),
 				texturesLayout.GetDescriptorSetLayoutHandle()
-			};
-			info.DescriptorSetLayouts = layouts;
+			};;
 
 			m_GBufferPipeline.Init(info);
 		}
@@ -318,6 +326,7 @@ void PathTracer::CreateRayTracingPipeline()
 		info.PushConstants = m_PushContantRayTrace.GetRangePtr();
 
 		std::vector<Vulture::Shader::Define> defines;
+		defines.reserve(3);
 		if (m_DrawInfo.UseCausticsSuppresion)
 			defines.push_back({ "USE_CAUSTICS_SUPPRESION" });
 		if (m_DrawInfo.ShowSkybox)
@@ -341,13 +350,10 @@ void PathTracer::CreateRayTracingPipeline()
 		info.HitShaders.push_back(&htShader);
 		info.MissShaders.push_back(&msShader);
 
-		// Descriptor set layouts for the pipeline
-		std::vector<VkDescriptorSetLayout> layouts
-		{
-			m_RayTracingDescriptorSet.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle(),
-			m_GlobalDescriptorSets.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle()
+		info.DescriptorSetLayouts = {
+				m_RayTracingDescriptorSet.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle(),
+				m_GlobalDescriptorSets.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle()
 		};
-		info.DescriptorSetLayouts = layouts;
 		info.debugName = "Ray Tracing Pipeline";
 
 		m_RtPipeline.Init(info);
@@ -375,12 +381,9 @@ void PathTracer::CreateFramebuffers()
 		info.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		info.Height = m_ViewportSize.height;
 		info.Width = m_ViewportSize.width;
-		info.LayerCount = 1;
-		info.Tiling = VK_IMAGE_TILING_OPTIMAL;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		info.SamplerInfo = Vulture::SamplerInfo{};
-		info.Type = Vulture::Image::ImageType::Image2D;
 		info.DebugName = "Path Tracing Image";
 		m_PathTracingImage.Init(info);
 		m_PathTracingImage.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL);
@@ -388,17 +391,14 @@ void PathTracer::CreateFramebuffers()
 
 	// GBuffer
 	{
-		std::vector<Vulture::FramebufferAttachment> attachments
-		{
+		Vulture::Framebuffer::CreateInfo info{};
+		info.AttachmentsFormats = {
 			Vulture::FramebufferAttachment::ColorRGBA32, // This has to be 32 per channel otherwise optix won't work
 			Vulture::FramebufferAttachment::ColorRGBA32, // This has to be 32 per channel otherwise optix won't work
 			Vulture::FramebufferAttachment::ColorRG8,
 			Vulture::FramebufferAttachment::ColorRGBA32,
 			Vulture::FramebufferAttachment::Depth16
-		};
-
-		Vulture::Framebuffer::CreateInfo info{};
-		info.AttachmentsFormats = attachments;
+		};;
 		info.Extent = m_ViewportSize;
 		info.CustomBits = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		Vulture::Framebuffer::RenderPassCreateInfo rPassInfo{};
@@ -420,8 +420,7 @@ void PathTracer::CreateFramebuffers()
 		dependency2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		dependency2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		std::vector<VkSubpassDependency> dependencies{ dependency1, dependency2 };
-		info.RenderPassInfo->Dependencies = dependencies;
+		info.RenderPassInfo->Dependencies = { dependency1, dependency2 };
 
 		m_GBufferFramebuffer.Init(info);
 	}
@@ -456,10 +455,11 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 	uint32_t texturesCount = 0;
 	{
-		auto view = m_CurrentSceneRendered->GetRegistry().view<ModelComponent>();
+		auto& reg = m_CurrentSceneRendered->GetRegistry();
+		auto view = reg.view<ModelComponent>();
 		for (auto& entity : view)
 		{
-			auto& modelComp = m_CurrentSceneRendered->GetRegistry().get<ModelComponent>(entity);
+			auto& modelComp = reg.get<ModelComponent>(entity);
 			Vulture::Model* model = modelComp.ModelHandle.GetModel();
 			texturesCount += 4 * model->GetMeshCount(); // Each mesh has 4 textures: albedo, normal, rough, metal
 		}
@@ -488,10 +488,11 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.AddBuffer(2, m_RayTracingMeshesBuffer.DescriptorInfo());
 		m_RayTracingDescriptorSet.AddBuffer(3, m_RayTracingMaterialsBuffer.DescriptorInfo());
 
-		auto view = m_CurrentSceneRendered->GetRegistry().view<ModelComponent>();
+		auto& reg = m_CurrentSceneRendered->GetRegistry();
+		auto view = reg.view<ModelComponent>();
 		for (auto& entity : view)
 		{
-			auto& modelComp = m_CurrentSceneRendered->GetRegistry().get<ModelComponent>(entity);
+			auto& modelComp = reg.get<ModelComponent>(entity);
 			Vulture::Model* model = modelComp.ModelHandle.GetModel();
 			for (int j = 0; j < (int)model->GetAlbedoTextureCount(); j++)
 			{
@@ -539,12 +540,13 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	{
 		std::vector<MeshAdresses> meshAddresses;
 		std::vector<Vulture::Material> materials;
-		auto modelView = m_CurrentSceneRendered->GetRegistry().view<ModelComponent, TransformComponent>();
+		auto& reg = m_CurrentSceneRendered->GetRegistry();
+		auto modelView = reg.view<ModelComponent, TransformComponent>();
 		uint32_t meshSizes = 0;
 		uint32_t materialSizes = 0;
 		for (auto& entity : modelView)
 		{
-			auto& [modelComp, transformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
+			auto& [modelComp, transformComp] = reg.get<ModelComponent, TransformComponent>(entity);
 
 			Vulture::Model* model = modelComp.ModelHandle.GetModel();
 			for (int i = 0; i < (int)model->GetMeshCount(); i++)

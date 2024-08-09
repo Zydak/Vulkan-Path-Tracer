@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #pragma once
 #include "Vulture.h"
 
@@ -11,15 +14,15 @@ struct GlobalUbo
 struct PushConstantRay
 {
 	uint64_t frame = 0;
-	int maxDepth;
-	int SamplesPerFrame;
-	float EnvAzimuth;
-	float EnvAltitude;
+	int maxDepth = 0;
+	int SamplesPerFrame = 0;
+	float EnvAzimuth = 0.0f;
+	float EnvAltitude = 0.0f;
 
-	float FocalLength;
-	float DoFStrength;
-	float AliasingJitter;
-	float SuppressCausticsLuminance;
+	float FocalLength = 0.0f;
+	float DoFStrength = 0.0f;
+	float AliasingJitter = 0.0f;
+	float SuppressCausticsLuminance = 0.0f;
 };
 
 struct PushConstantGBuffer
@@ -50,7 +53,7 @@ public:
 
 	void Init(VkExtent2D size);
 
-	~PathTracer();
+	~PathTracer() = default;
 	PathTracer(const PathTracer& other) = delete;
 	PathTracer(PathTracer&& other) noexcept = delete;
 	PathTracer& operator=(const PathTracer& other) = delete;

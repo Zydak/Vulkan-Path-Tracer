@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
+
 #define VL_ENTRY_POINT
 
 #include <Vulture.h>
@@ -104,5 +107,21 @@ Vulture::Application* Vulture::CreateApplication()
 	appInfo.WindowWidth = 1600;
 	appInfo.MaxFramesInFlight = 1;
 
-	return new ::Application(appInfo);
+	Application* app = new ::Application(appInfo);
+
+	vkGetPhysicalDeviceFeatures2(Vulture::Device::GetPhysicalDevice(), &features);
+
+	// Verify that all features are present
+	VL_CHECK(accelerationStructureFeatures.accelerationStructure, "acceleration structures not supported!");
+	VL_CHECK(rayTracingFeatures.rayTracingPipeline, "Ray Tracing Pipeline not supported!");
+	VL_CHECK(deviceAddressFeatures.bufferDeviceAddress, "Device address not supported!");
+	VL_CHECK(scalarBlockLayoutFeatures.scalarBlockLayout, "Scalar block layout not supported!");
+	VL_CHECK(shaderClockFeatures.shaderDeviceClock, "Shader Clock not supported!");
+	VL_CHECK(hostQueryResetFeatures.hostQueryReset, "Host Query not supported!");
+	VL_CHECK(timelineSemaphoreFeatures.timelineSemaphore, "Timeline semaphore not supported!");
+	VL_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
+	VL_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
+	VL_CHECK(rayQueryFeatures.rayQuery, "Ray query not supported!");
+
+	return app;
 }
