@@ -122,6 +122,7 @@ Vulture::Application* Vulture::CreateApplication()
 	VL_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
 	VL_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
 	VL_CHECK(rayQueryFeatures.rayQuery, "Ray query not supported!");
+	VL_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
 
 	return app;
 }
