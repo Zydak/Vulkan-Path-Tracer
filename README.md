@@ -114,5 +114,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
 - https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
+- https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/Sponza/glTF - Sponza 2
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://github.com/knightcrawler25/GLSL-PathTracer Teapots
