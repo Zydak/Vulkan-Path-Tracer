@@ -9,7 +9,6 @@
 Application::Application(Vulture::ApplicationInfo appInfo)
 	: Vulture::Application(appInfo)
 {
-	m_Scene = std::make_unique<Vulture::Scene>(m_Window);
 	Init();
 	InitScripts();
 }
@@ -22,8 +21,8 @@ Application::~Application()
 void Application::Destroy()
 {
 	DestroyScripts();
+	m_Scene.Unload();
 	Vulture::AssetManager::Destroy();
-	m_Scene.reset();
 
 	m_Editor.reset();
 }
@@ -37,17 +36,20 @@ void Application::OnUpdate(double deltaTime)
 
 void Application::InitScripts()
 {
-	m_Scene->InitScripts();
+	Vulture::Scene* scene = m_Scene.GetScene();
+	scene->InitScripts();
 }
 
 void Application::UpdateScripts(double deltaTime)
 {
-	m_Scene->UpdateScripts(deltaTime);
+	Vulture::Scene* scene = m_Scene.GetScene();
+	scene->UpdateScripts(deltaTime);
 }
 
 void Application::DestroyScripts()
 {
-	m_Scene->DestroyScripts();
+	Vulture::Scene* scene = m_Scene.GetScene();
+	scene->DestroyScripts();
 }
 
 void Application::Init()
@@ -55,21 +57,39 @@ void Application::Init()
 	m_Editor = std::make_unique<Editor>();
 	m_Editor->Init();
 
-	// Add camera
-	Vulture::Entity camera = m_Scene->CreateEntity();
-	camera.AddComponent<PerspectiveCameraComponent>().MainCamera = true;
-	auto& cameraScComponent = camera.AddComponent<Vulture::ScriptComponent>();
-	cameraScComponent.AddScript<CameraScript>();
+	REGISTER_CLASS_IN_SERIALIZER(PerspectiveCameraComponent);
+	REGISTER_CLASS_IN_SERIALIZER(OrthographicCameraComponent);
+	REGISTER_CLASS_IN_SERIALIZER(ModelComponent);
+	REGISTER_CLASS_IN_SERIALIZER(TransformComponent);
+	REGISTER_CLASS_IN_SERIALIZER(SkyboxComponent);
+	REGISTER_CLASS_IN_SERIALIZER(CameraScript);
 
-	// Load Initial Skybox
-	Vulture::Entity skyboxEntity = m_Scene->CreateEntity();
-	skyboxEntity.AddComponent<SkyboxComponent>("assets/Black.hdr").ImageHandle.WaitToLoad();
+	m_Scene = Vulture::AssetManager::LoadSceneAsset<ModelComponent, TransformComponent, SkyboxComponent, PerspectiveCameraComponent, OrthographicCameraComponent, Vulture::ScriptComponent>("assets/scenes/CornellBox.ptscene");
+	m_Scene.WaitToLoad();
+	Vulture::Scene* scene = m_Scene.GetScene();
 
-	// Load Initial model
-	Vulture::Entity entity = m_Scene->CreateEntity();
-	entity.AddComponent<ModelComponent>("assets/cornellBox.gltf").ModelHandle.WaitToLoad();
-	entity.AddComponent<TransformComponent>(Vulture::Transform(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 180.0f), glm::vec3(0.5f)));
+	auto view = scene->GetRegistry().view<SkyboxComponent>();
+	for (auto& entity : view)
+	{
+		SkyboxComponent* skybox = &scene->GetRegistry().get<SkyboxComponent>(entity);
+		skybox->ImageHandle.WaitToLoad();
+	}
+
+	auto view1 = scene->GetRegistry().view<ModelComponent>();
+	for (auto& entity : view1)
+	{
+		ModelComponent* model = &scene->GetRegistry().get<ModelComponent>(entity);
+		model->ModelHandle.WaitToLoad();
+	}
+
+	auto view2 = scene->GetRegistry().view<PerspectiveCameraComponent>();
+	for (auto& entity : view2)
+	{
+		PerspectiveCameraComponent* camera = &scene->GetRegistry().get<PerspectiveCameraComponent>(entity);
+
+		camera->Camera.SetPerspectiveMatrix(45.0f, m_Window->GetAspectRatio(), 0.1f, 100.0f);
+	}
 
 	// Initialize path tracing stuff
-	m_Editor->SetCurrentScene(m_Scene.get());
+	m_Editor->SetCurrentScene(scene);
 }

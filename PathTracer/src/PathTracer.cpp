@@ -210,7 +210,7 @@ void PathTracer::DrawGBuffer()
 
 	for (auto& entity : view)
 	{
-		auto& [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
+		auto [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
 
 		Vulture::Model* model = modelComp.ModelHandle.GetModel();
 		std::vector<Vulture::Ref<Vulture::Mesh>> meshes = model->GetMeshes();
@@ -546,7 +546,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		uint32_t materialSizes = 0;
 		for (auto& entity : modelView)
 		{
-			auto& [modelComp, transformComp] = reg.get<ModelComponent, TransformComponent>(entity);
+			auto [modelComp, transformComp] = reg.get<ModelComponent, TransformComponent>(entity);
 
 			Vulture::Model* model = modelComp.ModelHandle.GetModel();
 			for (int i = 0; i < (int)model->GetMeshCount(); i++)
@@ -586,7 +586,7 @@ void PathTracer::CreateAccelerationStructure()
 
 	for (auto& entity : view)
 	{
-		auto& [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
+		auto [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
 		Vulture::AccelerationStructure::Instance instance;
 		instance.transform = TransformComp.Transform.GetKhrMat();
 

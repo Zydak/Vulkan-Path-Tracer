@@ -8,7 +8,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/compatibility.hpp"
 
-class CameraScript : public Vulture::ScriptInterface
+class CameraScript : public Vulture::ScriptInterface, public Vulture::SerializeBaseClass
 {
 public:
 	CameraScript() {}
@@ -18,8 +18,6 @@ public:
 	{
 		auto cameraCp = &m_Entity.GetComponent<PerspectiveCameraComponent>();
 		cameraCp->Camera.Reset();
-
-		cameraCp->Camera.SetPerspectiveMatrix(45.0f, m_Entity.GetScene()->GetWindow()->GetAspectRatio(), 0.1f, 100.0f);
 
 		cameraCp->Camera.Translation.z = -8.0f;
 		cameraCp->Camera.UpdateViewMatrix();

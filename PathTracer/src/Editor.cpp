@@ -301,18 +301,19 @@ void Editor::ImGuiRenderPathTracingViewport()
 	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	CameraScript* camScript = scComp ? scComp->GetScript<CameraScript>(0) : nullptr;
 
-	VL_CORE_ASSERT(camScript != nullptr, "No main camera found!");
-
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	m_PathTracerViewportVisible = ImGui::Begin("Path Tracer Preview Viewport");
 
 	bool isWindowHoveredAndDocked = ImGui::IsWindowHovered() && ImGui::IsWindowDocked();
 
-	if (m_PathTracerViewportVisible)
-		camScript->m_CameraLocked = !isWindowHoveredAndDocked;
+	if (camScript)
+	{
+		if (m_PathTracerViewportVisible)
+			camScript->m_CameraLocked = !isWindowHoveredAndDocked;
 
-	if (m_RenderToFile)
-		camScript->m_CameraLocked = true; // Always lock camera when rendering to file
+		if (m_RenderToFile)
+			camScript->m_CameraLocked = true; // Always lock camera when rendering to file
+	}
 
 	static ImVec2 prevViewportSize = { 0, 0 };
 	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
