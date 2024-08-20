@@ -187,7 +187,7 @@ void PathTracer::DrawGBuffer()
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
 
 	m_DrawGBuffer = false;
-	auto view = m_CurrentSceneRendered->GetRegistry().view<ModelComponent, TransformComponent>();
+	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
 	std::vector<VkClearValue> clearColors;
 	clearColors.reserve(5);
 	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -207,25 +207,23 @@ void PathTracer::DrawGBuffer()
 		Vulture::Renderer::GetCurrentCommandBuffer()
 	);
 
-
 	for (auto& entity : view)
 	{
-		auto [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
+		auto [meshComp, materialComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>(entity);
 
-		Vulture::Model* model = modelComp.ModelHandle.GetModel();
-		std::vector<Vulture::Ref<Vulture::Mesh>> meshes = model->GetMeshes();
-		std::vector<Vulture::Ref<Vulture::DescriptorSet>> sets = model->GetDescriptors();
-		for (uint32_t i = 0; i < model->GetMeshCount(); i++)
-		{
-			m_PushContantGBuffer.GetDataPtr()->Material = model->GetMaterial(i);
-			m_PushContantGBuffer.GetDataPtr()->Model = TransformComp.Transform.GetMat4();
+		Vulture::MeshAsset* meshAsset = (Vulture::MeshAsset*)meshComp.AssetHandle.GetAsset();
+		Vulture::Mesh* mesh = &meshAsset->Mesh;
+		Vulture::Material* material = materialComp.AssetHandle.GetMaterial();
+		Vulture::DescriptorSet* set = &material->Textures.TexturesSet;
 
-			m_PushContantGBuffer.Push(m_GBufferPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
+		m_PushContantGBuffer.GetDataPtr()->Material = material->Properties;
+		m_PushContantGBuffer.GetDataPtr()->Model = TransformComp.Transform.GetMat4();
 
-			sets[i]->Bind(1, m_GBufferPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, Vulture::Renderer::GetCurrentCommandBuffer());
-			meshes[i]->Bind(Vulture::Renderer::GetCurrentCommandBuffer());
-			meshes[i]->Draw(Vulture::Renderer::GetCurrentCommandBuffer(), 1, 0);
-		}
+		m_PushContantGBuffer.Push(m_GBufferPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
+
+		set->Bind(1, m_GBufferPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, Vulture::Renderer::GetCurrentCommandBuffer());
+		mesh->Bind(Vulture::Renderer::GetCurrentCommandBuffer());
+		mesh->Draw(Vulture::Renderer::GetCurrentCommandBuffer(), 1, 0);
 	}
 
 	m_GBufferFramebuffer.Unbind(Vulture::Renderer::GetCurrentCommandBuffer());
@@ -438,7 +436,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 	{
 		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(Vulture::Material) * 50000; // TODO: dynamic amount of meshes
+		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 50000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMaterialsBuffer.Init(bufferInfo);
@@ -456,12 +454,10 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	uint32_t texturesCount = 0;
 	{
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto view = reg.view<ModelComponent>();
+		auto view = reg.view<Vulture::MeshComponent>();
 		for (auto& entity : view)
 		{
-			auto& modelComp = reg.get<ModelComponent>(entity);
-			Vulture::Model* model = modelComp.ModelHandle.GetModel();
-			texturesCount += 4 * model->GetMeshCount(); // Each mesh has 4 textures: albedo, normal, rough, metal
+			texturesCount += 4; // Each mesh has 4 textures: albedo, normal, rough, metal
 		}
 	}
 
@@ -489,49 +485,42 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.AddBuffer(3, m_RayTracingMaterialsBuffer.DescriptorInfo());
 
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto view = reg.view<ModelComponent>();
+		auto view = reg.view<Vulture::MeshComponent, Vulture::MaterialComponent>();
 		for (auto& entity : view)
 		{
-			auto& modelComp = reg.get<ModelComponent>(entity);
-			Vulture::Model* model = modelComp.ModelHandle.GetModel();
-			for (int j = 0; j < (int)model->GetAlbedoTextureCount(); j++)
-			{
-				m_RayTracingDescriptorSet.AddImageSampler(
-					4,
-					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-					model->GetAlbedoTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-				);
-			}
-			for (int j = 0; j < (int)model->GetNormalTextureCount(); j++)
-			{
-				m_RayTracingDescriptorSet.AddImageSampler(
-					5,
-					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-					model->GetNormalTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-				);
-			}
-			for (int j = 0; j < (int)model->GetRoughnessTextureCount(); j++)
-			{
-				m_RayTracingDescriptorSet.AddImageSampler(
-					6,
-					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-					model->GetRoughnessTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-				);
-			}
-			for (int j = 0; j < (int)model->GetMetallnessTextureCount(); j++)
-			{
-				m_RayTracingDescriptorSet.AddImageSampler(
-					7,
-					{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-					model->GetMetallnessTexture(j)->GetImageView(),
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-				);
-			}
-			m_RayTracingDescriptorSet.AddBuffer(8, m_RayTracingDoFBuffer.DescriptorInfo());
+			auto [meshComp, materialComp] = reg.get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+			Vulture::MaterialTextures* materialTextures = &materialComp.AssetHandle.GetMaterial()->Textures;
+
+			m_RayTracingDescriptorSet.AddImageSampler(
+				4,
+				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				materialTextures->AlbedoTexture.GetImage()->GetImageView(),
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+			);
+
+			m_RayTracingDescriptorSet.AddImageSampler(
+				5,
+				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				materialTextures->NormalTexture.GetImage()->GetImageView(),
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+			);
+
+			m_RayTracingDescriptorSet.AddImageSampler(
+				6,
+				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				materialTextures->RoughnessTexture.GetImage()->GetImageView(),
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+			);
+
+			m_RayTracingDescriptorSet.AddImageSampler(
+				7,
+				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				materialTextures->MetallnessTexture.GetImage()->GetImageView(),
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+			);
 		}
+
+		m_RayTracingDescriptorSet.AddBuffer(8, m_RayTracingDoFBuffer.DescriptorInfo());
 
 		m_RayTracingDescriptorSet.Build();
 	}
@@ -539,29 +528,26 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	for (int i = 0; i < (int)Vulture::Renderer::GetMaxFramesInFlight(); i++)
 	{
 		std::vector<MeshAdresses> meshAddresses;
-		std::vector<Vulture::Material> materials;
+		std::vector<Vulture::MaterialProperties> materials;
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto modelView = reg.view<ModelComponent, TransformComponent>();
+		auto modelView = reg.view<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>();
 		uint32_t meshSizes = 0;
 		uint32_t materialSizes = 0;
 		for (auto& entity : modelView)
 		{
-			auto [modelComp, transformComp] = reg.get<ModelComponent, TransformComponent>(entity);
+			auto [meshComp, materialComp, transformComp] = reg.get<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>(entity);
 
-			Vulture::Model* model = modelComp.ModelHandle.GetModel();
-			for (int i = 0; i < (int)model->GetMeshCount(); i++)
-			{
-				MeshAdresses adr{};
-				adr.VertexAddress = model->GetMesh(i).GetVertexBuffer()->GetDeviceAddress();
-				adr.IndexAddress = model->GetMesh(i).GetIndexBuffer()->GetDeviceAddress();
+			Vulture::Mesh* mesh = meshComp.AssetHandle.GetMesh();
+			Vulture::Material* material = materialComp.AssetHandle.GetMaterial();
 
-				Vulture::Material material = model->GetMaterial(i);
+			MeshAdresses adr{};
+			adr.VertexAddress = mesh->GetVertexBuffer()->GetDeviceAddress();
+			adr.IndexAddress = mesh->GetIndexBuffer()->GetDeviceAddress();
 
-				materials.push_back(material);
-				meshAddresses.push_back(adr);
-			}
-			meshSizes += sizeof(MeshAdresses) * model->GetMeshCount();
-			materialSizes += sizeof(Vulture::Material) * model->GetMeshCount();
+			materials.push_back(material->Properties);
+			meshAddresses.push_back(adr);
+			meshSizes += sizeof(MeshAdresses);
+			materialSizes += sizeof(Vulture::MaterialProperties);
 		}
 
 		VL_CORE_ASSERT(meshSizes, "No meshes found?");
@@ -582,20 +568,18 @@ void PathTracer::CreateAccelerationStructure()
 	Vulture::AccelerationStructure::CreateInfo info{};
 
 	m_DrawGBuffer = false;
-	auto view = m_CurrentSceneRendered->GetRegistry().view<ModelComponent, TransformComponent>();
+	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
 
 	for (auto& entity : view)
 	{
-		auto [modelComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<ModelComponent, TransformComponent>(entity);
+		auto [meshComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::MeshComponent, Vulture::TransformComponent>(entity);
 		Vulture::AccelerationStructure::Instance instance;
 		instance.transform = TransformComp.Transform.GetKhrMat();
 
-		Vulture::Model* model = modelComp.ModelHandle.GetModel();
-		for (uint32_t i = 0; i < model->GetMeshCount(); i++)
-		{
-			instance.mesh = &model->GetMesh(i);
-			info.Instances.push_back(instance);
-		}
+		Vulture::Mesh* mesh = meshComp.AssetHandle.GetMesh();
+
+		instance.mesh = mesh;
+		info.Instances.push_back(instance);
 	}
 
 	m_AS.Init(info);

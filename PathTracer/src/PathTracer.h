@@ -28,7 +28,7 @@ struct PushConstantRay
 struct PushConstantGBuffer
 {
 	glm::mat4 Model;
-	Vulture::Material Material;
+	Vulture::MaterialProperties Material;
 };
 
 struct PushConstantDOF

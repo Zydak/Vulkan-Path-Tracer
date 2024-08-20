@@ -17,9 +17,7 @@ public:
 	void OnCreate() override
 	{
 		auto cameraCp = &m_Entity.GetComponent<PerspectiveCameraComponent>();
-		cameraCp->Camera.Reset();
 
-		cameraCp->Camera.Translation.z = -8.0f;
 		cameraCp->Camera.UpdateViewMatrix();
 
 		m_StartingTranslation = cameraCp->Camera.Translation;

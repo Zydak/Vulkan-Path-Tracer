@@ -21,6 +21,6 @@ public:
 private:
 	void Init();
 
-	Vulture::AssetHandle m_Scene;
+	Vulture::Scene m_Scene;
 	Vulture::Scope<Editor> m_Editor;
 };

@@ -50,15 +50,19 @@ void Editor::SetCurrentScene(Vulture::Scene* scene)
 
 	m_PathTracer.SetScene(scene);
 	
-	// Get Vertex and index count
-	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
-	for (auto& entity : view)
-	{
-		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
-		Vulture::Model* model = modelComp->ModelHandle.GetModel();
-		m_VertexCount = model->GetVertexCount();
-		m_IndexCount = model->GetIndexCount();
-	}
+	// TODO
+// 	// Get Vertex and index count
+// 	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
+// 	for (auto& entity : view)
+// 	{
+// 		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
+// 		Vulture::Model* model = modelComp->ModelHandle.GetModel();
+// 		m_VertexCount = model->GetVertexCount();
+// 		m_IndexCount = model->GetIndexCount();
+// 	}
+
+	m_VertexCount = 0;
+	m_IndexCount = 0;
 }
 
 void Editor::Render()
@@ -523,6 +527,21 @@ void Editor::ImGuiInfoHeader()
 		m_Time = 0.0f;
 	}
 
+	if (ImGui::Button("Serialize Test"))
+	{
+		Vulture::Serializer::SerializeScene<
+			PerspectiveCameraComponent,
+			OrthographicCameraComponent,
+			SkyboxComponent,
+			CameraScript,
+			Vulture::ScriptComponent,
+			Vulture::MeshComponent,
+			Vulture::MaterialComponent,
+			Vulture::NameComponent,
+			Vulture::TransformComponent
+		>(m_CurrentScene, "assets/scenes/Cornell1.ptscene");
+	}
+
 	ImGui::SeparatorText("Info");
 }
 
@@ -577,54 +596,85 @@ void Editor::ImGuiSceneEditor()
 	}
 	ImGui::SeparatorText("Materials");
 
-	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
-	ModelComponent* modelComp = nullptr;
+	std::vector<std::string> materialNamesNonRepeated;
+	std::vector<std::string> materialNamesAll;
+
+	auto view = m_CurrentScene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
+		Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity);
+		std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
+		materialNamesAll.push_back(name);
+
+		bool alreadyPresent = false;
+		for (int i = 0; i < materialNamesNonRepeated.size(); i++)
+		{
+			if (materialNamesNonRepeated[i] == name)
+				alreadyPresent = true;
+		}
+
+		if (alreadyPresent)
+			continue;
+
+		materialNamesNonRepeated.push_back(name);
 	}
 
-	VL_CORE_ASSERT(modelComp != nullptr, "No model in scene");
-
-
-	auto currentMaterials = &modelComp->ModelHandle.GetModel()->GetMaterials();
-	auto currentMeshesNames = modelComp->ModelHandle.GetModel()->GetNames();
-
-	std::vector<const char*> meshesNames(currentMeshesNames.size());
-	for (int i = 0; i < meshesNames.size(); i++)
+	std::vector<const char*> materialNamesCstr(materialNamesNonRepeated.size());
+	for (int i = 0; i < materialNamesCstr.size(); i++)
 	{
-		meshesNames[i] = currentMeshesNames[i].c_str();
+		materialNamesCstr[i] = materialNamesNonRepeated[i].c_str();
 	}
 
-	ImGui::ListBox("Materials", &currentMaterialItem, meshesNames.data(), (int)meshesNames.size(), meshesNames.size() > 10 ? 10 : (int)meshesNames.size());
+	ImGui::ListBox("Materials", &currentMaterialItem, materialNamesCstr.data(), (int)materialNamesCstr.size(), materialNamesCstr.size() > 10 ? 10 : (int)materialNamesCstr.size());
 
 	ImGui::SeparatorText("Material Values");
-
-	bool valuesChanged = false;
-	if (ImGui::ColorEdit3("Albedo",				(float*)&(*currentMaterials)[currentMaterialItem].Color)) { valuesChanged = true; };
-	if (ImGui::ColorEdit3("Emissive Color",		(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Emissive Strength",	(float*)&(*currentMaterials)[currentMaterialItem].EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Roughness",			(float*)&(*currentMaterials)[currentMaterialItem].Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Metallic",			(float*)&(*currentMaterials)[currentMaterialItem].Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Specular Strength", (float*)&(*currentMaterials)[currentMaterialItem].SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("Specular Tint",		(float*)&(*currentMaterials)[currentMaterialItem].SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
-	ImGui::Separator();
-	
-	if (ImGui::SliderFloat("Transparency",	(float*)&(*currentMaterials)[currentMaterialItem].Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
-	if (ImGui::SliderFloat("IOR",			(float*)&(*currentMaterials)[currentMaterialItem].Ior, 1.0f, 2.0f)) { valuesChanged = true; };
-	ImGui::Separator();
-
-	if (valuesChanged)
+	for (auto& entity : view)
 	{
-		// Upload to GPU
-		m_PathTracer.GetMaterialsBuffer()->WriteToBuffer(
-			((uint8_t*)currentMaterials->data()) + (uint8_t)sizeof(Vulture::Material) * (uint8_t)currentMaterialItem,
-			sizeof(Vulture::Material),
-			sizeof(Vulture::Material) * currentMaterialItem
-		);
+		Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity);
+		Vulture::Material* material = materialComp->AssetHandle.GetMaterial();
 
-		m_PathTracer.ResetFrameAccumulation();
-		m_Time = 0.0f;
+		if (material->MaterialName != materialNamesNonRepeated[currentMaterialItem])
+			continue;
+
+		Vulture::MaterialProperties* materialProps = &material->Properties;
+
+		bool valuesChanged = false;
+		if (ImGui::ColorEdit3("Albedo", (float*)&materialProps->Color)) { valuesChanged = true; };
+		if (ImGui::ColorEdit3("Emissive Color", (float*)&materialProps->EmissiveColor)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Emissive Strength", (float*)&materialProps->EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Roughness", (float*)&materialProps->Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Metallic", (float*)&materialProps->Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Specular Strength", (float*)&materialProps->SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Specular Tint", (float*)&materialProps->SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
+		ImGui::Separator();
+
+		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 2.0f)) { valuesChanged = true; };
+		ImGui::Separator();
+
+		if (valuesChanged)
+		{
+			int index = 0;
+			for (auto& entity1 : view)
+			{
+				Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity1);
+				std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
+
+				if (material->MaterialName == name)
+				{
+					// Upload to GPU
+					m_PathTracer.GetMaterialsBuffer()->WriteToBuffer(
+						materialProps,
+						sizeof(Vulture::MaterialProperties),
+						sizeof(Vulture::MaterialProperties) * index
+					);
+				}
+				index++;
+			}
+
+			m_PathTracer.ResetFrameAccumulation();
+			m_Time = 0.0f;
+		}
 	}
 }
 
@@ -811,20 +861,27 @@ void Editor::UpdateModel()
 {
 	Vulture::AssetHandle newAssetHandle;
 
-	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
+	// Unload current scene
+	auto view = m_CurrentScene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
-		modelComp->ModelHandle.Unload();
-		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
-		modelComp->ModelHandle = newAssetHandle;
-		newAssetHandle.WaitToLoad();
+		auto [meshComp, materialComp] = m_CurrentScene->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+		
+		// Unload everything
+		meshComp.AssetHandle.Unload();
+		if (materialComp.AssetHandle.DoesHandleExist())
+			materialComp.AssetHandle.Unload();
 
-		// Get Vertex and index count
-		Vulture::Model* model = newAssetHandle.GetModel();
-		m_VertexCount = model->GetVertexCount();
-		m_IndexCount = model->GetIndexCount();
+		// Delete the entity
+		m_CurrentScene->GetRegistry().destroy(entity);
 	}
+
+	// Load new one
+	Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
+	modelAssetHandle.WaitToLoad();
+
+	Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
+	modelAsset->CreateEntities(m_CurrentScene);
 
 	m_PathTracer.SetScene(m_CurrentScene);
 	m_PathTracer.ResetFrameAccumulation();
