@@ -44,11 +44,12 @@ void Editor::Destroy()
 
 }
 
-void Editor::SetCurrentScene(Vulture::Scene* scene)
+void Editor::SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneHandle)
 {
 	m_CurrentScene = scene;
+	m_SceneHandle = sceneHandle;
 
-	m_PathTracer.SetScene(scene);
+	m_PathTracer.SetScene(*scene);
 	
 	// TODO
 // 	// Get Vertex and index count
@@ -300,9 +301,9 @@ void Editor::RenderImGui()
 
 void Editor::ImGuiRenderPathTracingViewport()
 {
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
+	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
 
-	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
 	CameraScript* camScript = scComp ? scComp->GetScript<CameraScript>(0) : nullptr;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -341,7 +342,7 @@ void Editor::ImGuiPathTracerSettings()
 {
 	ImGui::Begin("Settings");
 
-	ImGuiInfoHeader();
+	ImGuiInfoHeader(true);
 	m_Timer.Reset();
 
 	ImGuiViewportSettings();
@@ -358,6 +359,8 @@ void Editor::ImGuiPathTracerSettings()
 
 	ImGuiFileRenderSettings();
 
+	ImGuiSerializationSettings();
+
 	ImGui::End();
 }
 
@@ -365,7 +368,7 @@ void Editor::ImGuiRenderingToFileSettings()
 {
 	ImGui::Begin("Settings");
 
-	ImGuiInfoHeader();
+	ImGuiInfoHeader(false);
 	m_Timer.Reset();
 
 	ImGui::Separator();
@@ -509,7 +512,7 @@ void Editor::ImGuiShaderSettings()
 	ImGui::PopID();
 }
 
-void Editor::ImGuiInfoHeader()
+void Editor::ImGuiInfoHeader(bool resetButton)
 {
 	ImGui::SeparatorText("Info");
 
@@ -521,25 +524,13 @@ void Editor::ImGuiInfoHeader()
 	ImGui::Text("Vertices Count: %i", m_VertexCount);
 	ImGui::Text("Indices Count: %i", m_IndexCount);
 
-	if (ImGui::Button("Reset"))
+	if (resetButton)
 	{
-		m_PathTracer.ResetFrameAccumulation();
-		m_Time = 0.0f;
-	}
-
-	if (ImGui::Button("Serialize Test"))
-	{
-		Vulture::Serializer::SerializeScene<
-			PerspectiveCameraComponent,
-			OrthographicCameraComponent,
-			SkyboxComponent,
-			CameraScript,
-			Vulture::ScriptComponent,
-			Vulture::MeshComponent,
-			Vulture::MaterialComponent,
-			Vulture::NameComponent,
-			Vulture::TransformComponent
-		>(m_CurrentScene, "assets/scenes/Cornell1.ptscene");
+		if (ImGui::Button("Reset"))
+		{
+			m_PathTracer.ResetFrameAccumulation();
+			m_Time = 0.0f;
+		}
 	}
 
 	ImGui::SeparatorText("Info");
@@ -567,10 +558,20 @@ void Editor::ImGuiSceneEditor()
 			}
 		}
 	}
+	for (const auto& entry : std::filesystem::directory_iterator("assets/scenes/"))
+	{
+		auto& path = entry.path();
+		if (entry.is_regular_file())
+		{
+			if (path.extension() == ".ptscene")
+			{
+				i++;
+			}
+		}
+	}
 
 	modelsStr.reserve(i);
 	modelsCStr.reserve(i);
-	i = 0;
 	for (const auto& entry : std::filesystem::directory_iterator("assets/"))
 	{
 		if (entry.is_regular_file())
@@ -579,12 +580,23 @@ void Editor::ImGuiSceneEditor()
 			if (path.extension() == ".gltf" || path.extension() == ".obj" || path.extension() == ".fbx")
 			{
 				modelsStr.emplace_back(path.filename().string());
-				modelsCStr.emplace_back(modelsStr[i].c_str());
-				i++;
+				modelsCStr.emplace_back(modelsStr[modelsStr.size() - 1].c_str());
 			}
 		}
 	}
 
+	for (const auto& entry : std::filesystem::directory_iterator("assets/scenes/"))
+	{
+		if (entry.is_regular_file())
+		{
+			auto& path = entry.path();
+			if (path.extension() == ".ptscene")
+			{
+				modelsStr.emplace_back("scenes/" + path.filename().string());
+				modelsCStr.emplace_back(modelsStr[modelsStr.size() - 1].c_str());
+			}
+		}
+	}
 
 	static int currentSceneItem = 0;
 	static int currentMaterialItem = 0;
@@ -597,12 +609,13 @@ void Editor::ImGuiSceneEditor()
 	ImGui::SeparatorText("Materials");
 
 	std::vector<std::string> materialNamesNonRepeated;
+	std::vector<Vulture::Material*> materialsNonRepeated;
 	std::vector<std::string> materialNamesAll;
 
-	auto view = m_CurrentScene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity);
+		Vulture::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity);
 		std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
 		materialNamesAll.push_back(name);
 
@@ -617,6 +630,7 @@ void Editor::ImGuiSceneEditor()
 			continue;
 
 		materialNamesNonRepeated.push_back(name);
+		materialsNonRepeated.push_back(materialComp->AssetHandle.GetMaterial());
 	}
 
 	std::vector<const char*> materialNamesCstr(materialNamesNonRepeated.size());
@@ -628,10 +642,9 @@ void Editor::ImGuiSceneEditor()
 	ImGui::ListBox("Materials", &currentMaterialItem, materialNamesCstr.data(), (int)materialNamesCstr.size(), materialNamesCstr.size() > 10 ? 10 : (int)materialNamesCstr.size());
 
 	ImGui::SeparatorText("Material Values");
-	for (auto& entity : view)
+	for (int i = 0; i < materialsNonRepeated.size(); i++)
 	{
-		Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity);
-		Vulture::Material* material = materialComp->AssetHandle.GetMaterial();
+		Vulture::Material* material = materialsNonRepeated[i];
 
 		if (material->MaterialName != materialNamesNonRepeated[currentMaterialItem])
 			continue;
@@ -657,7 +670,7 @@ void Editor::ImGuiSceneEditor()
 			int index = 0;
 			for (auto& entity1 : view)
 			{
-				Vulture::MaterialComponent* materialComp = &m_CurrentScene->GetRegistry().get<Vulture::MaterialComponent>(entity1);
+				Vulture::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity1);
 				std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
 
 				if (material->MaterialName == name)
@@ -781,10 +794,10 @@ void Editor::ImGuiCameraSettings()
 	if (!ImGui::CollapsingHeader("Camera Settings"))
 		return;
 
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(m_CurrentScene);
+	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity((*m_CurrentScene));
 
-	Vulture::ScriptComponent* scComp = m_CurrentScene->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
-	PerspectiveCameraComponent* camComp = m_CurrentScene->GetRegistry().try_get<PerspectiveCameraComponent>(cameraEntity);
+	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	PerspectiveCameraComponent* camComp = (*m_CurrentScene)->GetRegistry().try_get<PerspectiveCameraComponent>(cameraEntity);
 	CameraScript* camScript = nullptr;
 
 	if (scComp)
@@ -842,6 +855,86 @@ void Editor::ImGuiFileRenderSettings()
 	ImGui::Separator();
 }
 
+void Editor::ImGuiSerializationSettings()
+{
+	if (!ImGui::CollapsingHeader("Serialization Settings"))
+		return;
+
+	ImGui::Separator();
+
+	static std::array<char, 50> sceneName;
+	static bool empty = false;
+	if (!empty)
+	{
+		sceneName.fill('\0');
+		empty = true;
+	}
+	
+	ImGui::InputText("Scene Name", sceneName.data(), 50);
+
+	std::string sceneNameStr;
+	int index = 0;
+	while (true)
+	{
+		char ch = sceneName[index];
+		index++;
+
+		if (ch == '\0')
+			break;
+		sceneNameStr.push_back(ch);
+	}
+
+	if (ImGui::Button("Serialize"))
+	{
+		if (std::filesystem::exists("assets/scenes/" + sceneNameStr + ".ptscene"))
+		{
+			ImGui::OpenPopup("Overwrite file?");
+		}
+		else
+		{
+			Vulture::Serializer::SerializeScene<
+				PerspectiveCameraComponent,
+				OrthographicCameraComponent,
+				SkyboxComponent,
+				CameraScript,
+				Vulture::ScriptComponent,
+				Vulture::MeshComponent,
+				Vulture::MaterialComponent,
+				Vulture::NameComponent,
+				Vulture::TransformComponent
+			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
+		}
+	}
+
+	if (ImGui::BeginPopupModal("Overwrite file?"))
+	{
+		ImGui::Text("There already exist file with the same name.\nAre you sure you want to overwrite it?");
+		if (ImGui::Button("Yes"))
+		{
+			Vulture::Serializer::SerializeScene<
+				PerspectiveCameraComponent,
+				OrthographicCameraComponent,
+				SkyboxComponent,
+				CameraScript,
+				Vulture::ScriptComponent,
+				Vulture::MeshComponent,
+				Vulture::MaterialComponent,
+				Vulture::NameComponent,
+				Vulture::TransformComponent
+			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("No"))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+
+	ImGui::Separator();
+}
+
 void Editor::Resize()
 {
 	RescaleQuad();
@@ -862,10 +955,10 @@ void Editor::UpdateModel()
 	Vulture::AssetHandle newAssetHandle;
 
 	// Unload current scene
-	auto view = m_CurrentScene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		auto [meshComp, materialComp] = m_CurrentScene->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+		auto [meshComp, materialComp] = (*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
 		
 		// Unload everything
 		meshComp.AssetHandle.Unload();
@@ -873,27 +966,81 @@ void Editor::UpdateModel()
 			materialComp.AssetHandle.Unload();
 
 		// Delete the entity
-		m_CurrentScene->GetRegistry().destroy(entity);
+		(*m_CurrentScene)->GetRegistry().destroy(entity);
 	}
 
-	// Load new one
-	Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
-	modelAssetHandle.WaitToLoad();
+	std::string extension = m_ChangedModelFilepath.substr(m_ChangedModelFilepath.find_last_of('.'));
 
-	Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
-	modelAsset->CreateEntities(m_CurrentScene);
+	if (extension == ".ptscene")
+	{
+		// Reload entire scene asset
+		m_SceneHandle.Unload();
 
-	m_PathTracer.SetScene(m_CurrentScene);
+		m_SceneHandle = Vulture::AssetManager::LoadSceneAsset<
+			PerspectiveCameraComponent,
+			OrthographicCameraComponent,
+			SkyboxComponent,
+			CameraScript,
+			Vulture::ScriptComponent,
+			Vulture::MeshComponent,
+			Vulture::MaterialComponent,
+			Vulture::NameComponent,
+			Vulture::TransformComponent
+		>(m_ChangedModelFilepath);
+
+		m_SceneHandle.WaitToLoad();
+		*m_CurrentScene = m_SceneHandle.GetScene();
+
+		// Wait for every component to load
+		auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+		for (auto& entity : view)
+		{
+			Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity);
+			meshComp->AssetHandle.WaitToLoad();
+		}
+
+		auto view1 = (*m_CurrentScene)->GetRegistry().view<Vulture::MaterialComponent>();
+		for (auto& entity : view1)
+		{
+			Vulture::MaterialComponent* matComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity);
+			Vulture::Material* mat = matComp->AssetHandle.GetMaterial();
+			mat->Textures.CreateSet();
+		}
+
+		auto view2 = (*m_CurrentScene)->GetRegistry().view<SkyboxComponent>();
+		for (auto& entity : view2)
+		{
+			SkyboxComponent* skyComp = &(*m_CurrentScene)->GetRegistry().get<SkyboxComponent>(entity);
+			skyComp->ImageHandle.WaitToLoad();
+		}
+
+		(*m_CurrentScene)->InitScripts();
+		(*m_CurrentScene)->InitSystems();
+	}
+	else
+	{
+		// Reload only mesh components so that camera and rest of the components are unaffected
+
+		// Load new one
+		Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
+		modelAssetHandle.WaitToLoad();
+
+		Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
+		modelAsset->CreateEntities((*m_CurrentScene));
+		modelAssetHandle.Unload(); // Unload the model asset since it's only references to mesh data
+	}
+
+	m_PathTracer.SetScene((*m_CurrentScene));
 	m_PathTracer.ResetFrameAccumulation();
 }
 
 void Editor::UpdateSkybox()
 {
 	Vulture::AssetHandle newAssetHandle;
-	auto view = m_CurrentScene->GetRegistry().view<SkyboxComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<SkyboxComponent>();
 	for (auto& entity : view)
 	{
-		SkyboxComponent* skyboxComp = &m_CurrentScene->GetRegistry().get<SkyboxComponent>(entity); // TODO: support more than one model
+		SkyboxComponent* skyboxComp = &(*m_CurrentScene)->GetRegistry().get<SkyboxComponent>(entity); // TODO: support more than one model
 		skyboxComp->ImageHandle.Unload();
 
 		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
@@ -902,7 +1049,7 @@ void Editor::UpdateSkybox()
 	}
 
 	newAssetHandle.WaitToLoad();
-	m_PathTracer.SetScene(m_CurrentScene);
+	m_PathTracer.SetScene((*m_CurrentScene));
 	m_PathTracer.ResetFrameAccumulation();
 
 	m_ModelChanged = false;

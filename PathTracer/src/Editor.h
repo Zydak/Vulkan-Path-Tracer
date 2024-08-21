@@ -16,7 +16,7 @@ public:
 	void Init();
 	void Destroy();
 
-	void SetCurrentScene(Vulture::Scene* scene);
+	void SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneHandle);
 
 	void Render();
 
@@ -37,13 +37,14 @@ private:
 
 	void ImGuiRenderPathTracingViewport();
 	void ImGuiShaderSettings();
-	void ImGuiInfoHeader();
+	void ImGuiInfoHeader(bool resetButton);
 	void ImGuiSceneEditor();
 	void ImGuiEnvMapSettings();
 	void ImGuiPathTracingSettings();
 	void ImGuiViewportSettings();
 	void ImGuiCameraSettings();
 	void ImGuiFileRenderSettings();
+	void ImGuiSerializationSettings();
 
 	void Resize();
 
@@ -55,7 +56,8 @@ private:
 	VkDescriptorSet m_DenoisedOutputImageSet = VK_NULL_HANDLE;
 
 	// Scene
-	Vulture::Scene* m_CurrentScene = nullptr;
+	Vulture::Scene** m_CurrentScene = nullptr; // ** because we have to change the pointer inside the Application, so we need a pointer to pointer
+	Vulture::AssetHandle m_SceneHandle;
 	// Model
 	bool m_ModelChanged = false;
 	std::string m_ChangedModelFilepath = "";

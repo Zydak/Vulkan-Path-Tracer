@@ -53,7 +53,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     float schlick = SchlickWeight(NdotV);
 
     float diffuseProb = (1.0f - mat.Metallic) * (1.0f - mat.SpecTrans);
-    float dielectricProb = ((mat.SpecularStrength * 0.16) + schlick) * (1.0f - mat.Metallic);
+    float dielectricProb = ((mat.SpecularStrength * 0.16)) * (1.0f - mat.Metallic);
     float metallicProb = mat.Metallic;
     float glassProb = (1.0f - mat.Metallic) * mat.SpecTrans;
 
