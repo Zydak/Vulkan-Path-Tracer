@@ -8,7 +8,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "raycommon.glsl"
-#include "BSDF.glsl"
+#include "BSDFExperimental.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
