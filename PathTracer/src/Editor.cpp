@@ -657,6 +657,7 @@ void Editor::ImGuiSceneEditor()
 		if (ImGui::SliderFloat("Emissive Strength", (float*)&materialProps->EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Roughness", (float*)&materialProps->Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Metallic", (float*)&materialProps->Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Anisotropy", (float*)&materialProps->Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Specular Strength", (float*)&materialProps->SpecularStrength, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Specular Tint", (float*)&materialProps->SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 		ImGui::Separator();

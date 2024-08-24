@@ -92,7 +92,7 @@ void main()
     
     normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
     surface.Normal = normalize(normalMapVal);
-
+    
     if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
     {
         surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
@@ -110,6 +110,7 @@ void main()
     material.SpecularStrength = loadedMaterial.SpecularStrength;
     material.Ior = loadedMaterial.Ior;
     material.SpecTrans = loadedMaterial.SpecTrans;
+    material.Anisotropy = loadedMaterial.Anisotropy;
 
     material.Ior = min(material.Ior, 3.0f);
     material.Roughness = max(material.Roughness, 0.0001f);
@@ -117,7 +118,7 @@ void main()
 
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
 
-    const float anisotropic = 0.0f; // TODO
+    const float anisotropic = material.Anisotropy; // TODO
     const float aspect = sqrt(1.0 - anisotropic * 0.9);
     material.ax = max(0.001, material.Roughness / aspect);
     material.ay = max(0.001, material.Roughness * aspect);

@@ -190,14 +190,18 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         if (FresnelWeight > Rnd(seed))
         {
             data.RayDir = reflect(-data.View, H);
-            data.BSDF = vec3(1.0f);
     
-            if (dot(data.RayDir, surface.Normal) < 0.0f) // refraction
-                data.BSDF = mat.Color.xyz;
+            if (dot(data.RayDir, surface.Normal) < 0.0f)
+                return false;
+
+            data.BSDF = vec3(1.0f);
         }
         else
         {
             data.RayDir = normalize(refract(-data.View, H, mat.eta));
+
+            if (dot(data.RayDir, surface.Normal) > 0.0f)
+                return false;
     
             data.BSDF = mat.Color.xyz;
         }

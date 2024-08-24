@@ -80,7 +80,7 @@ struct MaterialLoad
     float Ior;
     float SpecTrans;
 
-    float eta;
+    float Anisotropy;
 };
 
 struct Material
@@ -94,6 +94,8 @@ struct Material
 
     float Ior;
     float SpecTrans;
+
+    float Anisotropy;
 
     float eta;
 
