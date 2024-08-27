@@ -54,6 +54,49 @@ void Application::Init()
 	m_Editor = std::make_unique<Editor>();
 	m_Editor->Init();
 
+	//m_Scene = new Vulture::Scene();
+	//m_Scene->Init();
+	//
+	//// Add camera
+	//Vulture::Entity camera = m_Scene->CreateEntity();
+	//auto& camComp = camera.AddComponent<PerspectiveCameraComponent>();
+	//camComp.MainCamera = true;
+	//camComp.Camera.Translation.z = -16.0f;
+	//
+	//auto& cameraScComponent = camera.AddComponent<Vulture::ScriptComponent>();
+	//cameraScComponent.AddScript<CameraScript>();
+	//
+	//// Load Initial Skybox
+	//Vulture::Entity skyboxEntity = m_Scene->CreateEntity();
+	//skyboxEntity.AddComponent<SkyboxComponent>("assets/Black.hdr").ImageHandle.WaitToLoad();
+	//
+	//// Load Initial model
+	//Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset("assets/cornellBox.gltf");
+	//modelAssetHandle.WaitToLoad();
+	//
+	//Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
+	//modelAsset->CreateEntities(m_Scene);
+	//
+	////Vulture::Entity entity = m_Scene.CreateEntity();
+	////entity.AddComponent<ModelComponent>("assets/cornellBox.gltf").ModelHandle.WaitToLoad();
+	////entity.AddComponent<Vulture::TransformComponent>(Vulture::Transform(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 180.0f), glm::vec3(0.5f)));
+	//
+	//Vulture::Serializer::SerializeScene<
+	//	PerspectiveCameraComponent,
+	//	OrthographicCameraComponent,
+	//	SkyboxComponent,
+	//	CameraScript,
+	//	Vulture::ScriptComponent,
+	//	Vulture::MeshComponent,
+	//	Vulture::MaterialComponent,
+	//	Vulture::NameComponent,
+	//	Vulture::TransformComponent
+	//>(m_Scene, "assets/scenes/CornellBox.ptscene");
+	//
+	//m_Scene->Destroy();
+	//
+	//delete m_Scene;
+
 	REGISTER_CLASS_IN_SERIALIZER(PerspectiveCameraComponent);
 	REGISTER_CLASS_IN_SERIALIZER(OrthographicCameraComponent);
 	REGISTER_CLASS_IN_SERIALIZER(SkyboxComponent);

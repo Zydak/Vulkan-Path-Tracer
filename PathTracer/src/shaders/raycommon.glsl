@@ -65,9 +65,6 @@ struct MeshAdresses
     uint64_t IndexBuffer;
 };
 
-#define MEDIUM_ABSORB 1;
-#define MEDIUM_NONE 0;
-
 struct MaterialLoad
 {
     vec4 Color;
@@ -75,7 +72,6 @@ struct MaterialLoad
     float Metallic;
     float Roughness;
     float SpecularTint;
-    float SpecularStrength;
 
     float Ior;
     float SpecTrans;
@@ -90,7 +86,6 @@ struct Material
     float Metallic;
     float Roughness;
     float SpecularTint;
-    float SpecularStrength;
 
     float Ior;
     float SpecTrans;
@@ -161,65 +156,6 @@ vec3 sphericalEnvmapToDirection(vec2 tex)
     return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 }
 
-vec3 RandomVec(inout uint seed)
-{
-    vec3 vec;
-    vec.x = Rnd(seed) * 2.0f - 1.0f;
-    vec.y = Rnd(seed) * 2.0f - 1.0f;
-    vec.z = Rnd(seed) * 2.0f - 1.0f;
-
-    return vec;
-}
-
-vec3 RandomSphereVec(inout uint seed)
-{
-    // Rejection Method
-
-    //while (true)
-    //{
-    //    vec3 vec;
-    //    vec.x = Rnd(seed) * 2.0f - 1.0f;
-    //    vec.y = Rnd(seed) * 2.0f - 1.0f;
-    //    vec.z = Rnd(seed) * 2.0f - 1.0f;
-    //
-    //    // Return only if it's inside unit sphere
-    //    if (sqrt(dot(vec, vec)) < 1.0f)
-    //        return vec;
-    //}
-
-
-    // Spherical Coordinates
-
-    float theta = 2.0f * M_PI * Rnd(seed);
-    float phi = acos(2.0f * Rnd(seed) - 1.0f);
-
-    vec3 dir;
-    dir.x = sin(phi) * cos(theta);
-    dir.y = sin(phi) * sin(theta);
-    dir.z = cos(phi);
-
-    return dir;
-}
-
-vec3 UniformSamplingHemisphere(inout uint seed, in vec3 normal)
-{
-    vec3 direction = normalize(RandomSphereVec(seed));
-    if (dot(direction, normal) < 0.0)
-        direction = -direction;
-    
-    return direction;
-}
-
-vec3 CosineSamplingHemisphere(inout uint seed, in vec3 normal)
-{
-    vec3 direction = normalize(RandomSphereVec(seed));
-
-    // Case where direction is equal to -normal should be handled but I 
-    // delete all of the nans later on anyway so who cares, it's always one less if statement
-
-    return normalize(direction + normal);
-}
-
 // Return the tangent and binormal from the incoming normal
 void CreateCoordinateSystem(in vec3 N, out vec3 Nt, out vec3 Nb)
 {
@@ -240,20 +176,6 @@ vec2 RandomPointInCircle(inout uint seed)
 float GetLuminance(vec3 color)
 {
     return color.r * 0.212671f + color.g * 0.715160f + color.b * 0.072169f;
-}
-
-vec3 Slerp(vec3 p0, vec3 p1, float t)
-{
-    float dotp = dot(normalize(p0), normalize(p1));
-    if ((dotp > 0.9999) || (dotp < -0.9999))
-    {
-        if (t <= 0.5)
-            return p0;
-        return p1;
-    }
-    float theta = acos(dotp);
-    vec3 P = ((p0 * sin((1 - t) * theta) + p1 * sin(t * theta)) / sin(theta));
-    return P;
 }
 
 vec3 OffsetRay(in vec3 p, in vec3 n)

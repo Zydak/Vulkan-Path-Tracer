@@ -3,6 +3,7 @@
 
 #include "PathTracer.h"
 #include "Components.h"
+#include <glm/gtc/random.hpp>
 
 void PathTracer::Init(VkExtent2D size)
 {
@@ -12,6 +13,18 @@ void PathTracer::Init(VkExtent2D size)
 
 	CreateDescriptorSets();
 	CreatePipelines();
+
+	BuildEnergyLookupTable();
+
+	Vulture::Image::CreateInfo info{};
+	info.Data = m_EnergyLookupTable.data();
+	info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	info.Usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	info.Width = 32;
+	info.Height = 32;
+	info.Format = VK_FORMAT_R32_SFLOAT;
+	info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+	m_LookupTexture.Init(info);
 }
 
 void PathTracer::Resize(VkExtent2D newSize)
@@ -48,6 +61,8 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 	{
 		skybox = &scene->GetRegistry().get<SkyboxComponent>(entity);
 	}
+
+	VL_CORE_ASSERT(skybox != nullptr, "There is no skybox in the scene!");
 
 	VkDescriptorImageInfo info = { 
 		Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
@@ -471,8 +486,9 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin7{ 7, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin8{ 8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin9{ 9, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 
-		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8 }, &Vulture::Renderer::GetLinearSampler());
+		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9 }, &Vulture::Renderer::GetLinearSampler());
 
 		VkAccelerationStructureKHR tlas = m_AS.GetTlas().Accel;
 		VkWriteDescriptorSetAccelerationStructureKHR asInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
@@ -521,6 +537,13 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		}
 
 		m_RayTracingDescriptorSet.AddBuffer(8, m_RayTracingDoFBuffer.DescriptorInfo());
+
+		m_RayTracingDescriptorSet.AddImageSampler(
+			9, 
+			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+				m_LookupTexture.GetImageView(),
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+		);
 
 		m_RayTracingDescriptorSet.Build();
 	}
@@ -601,4 +624,113 @@ void PathTracer::UpdateDescriptorSetsData()
 	m_GlobalSetBuffer.WriteToBuffer(&ubo);
 
 	m_GlobalSetBuffer.Flush();
+}
+
+static float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
+{
+	float Hx2 = H.x * H.x;
+	float Hy2 = H.y * H.y;
+	float Hz2 = H.z * H.z;
+
+	float ax2 = ax * ax;
+	float ay2 = ay * ay;
+
+	return 1.0f / M_PI * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
+}
+
+float Lambda(glm::vec3 V, float ax, float ay)
+{
+	float Vx2 = V.x * V.x;
+	float Vy2 = V.y * V.y;
+	float Vz2 = V.z * V.z;
+
+	float ax2 = ax * ax;
+	float ay2 = ay * ay;
+
+	float nominator = -1.0f + glm::sqrt(1.0f + (ax2 * Vx2 + ay2 * Vy2) / Vz2);
+
+	return nominator / 2.0f;
+}
+
+float GGXSmithAnisotropic(glm::vec3 V, float ax, float ay)
+{
+	return 1.0f / (1.0f + Lambda(V, ax, ay));
+}
+
+glm::vec3 GGXSampleAnisotopic(glm::vec3 Ve, float ax, float ay, float u1, float u2)
+{
+	glm::vec3 Vh = glm::normalize(glm::vec3(ax * Ve.x, ay * Ve.y, Ve.z));
+
+	float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+	glm::vec3 T1 = lensq > 0 ? glm::vec3(-Vh.y, Vh.x, 0) * glm::inversesqrt(lensq) : glm::vec3(1, 0, 0);
+	glm::vec3 T2 = glm::cross(Vh, T1);
+
+	float r = glm::sqrt(u1);
+	float phi = 2.0 * M_PI * u2;
+	float t1 = r * glm::cos(phi);
+	float t2 = r * glm::sin(phi);
+	float s = 0.5 * (1.0 + Vh.z);
+	t2 = (1.0 - s) * glm::sqrt(1.0 - t1 * t1) + s * t2;
+
+	glm::vec3 Nh = t1 * T1 + t2 * T2 + glm::sqrt(glm::max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
+
+	glm::vec3 Ne = normalize(glm::vec3(ax * Nh.x, ay * Nh.y, glm::max(0.0f, Nh.z)));
+
+	return Ne;
+}
+
+float BRDF(glm::vec3 V, float roughness)
+{
+	glm::vec3 H = GGXSampleAnisotopic(V, roughness, roughness, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
+
+	glm::vec3 L = reflect(-V, H);
+
+	if (L.z < 0.0f)
+		return false;
+
+	float GL = GGXSmithAnisotropic(L, roughness, roughness);
+
+	return GL;
+}
+
+void PathTracer::BuildEnergyLookupTable()
+{
+	m_EnergyLookupTable.clear();
+
+	for (int i = 0; i < 32; i++)
+	{
+		for (int j = 0; j < 32; j++)
+		{
+			float roughness = float(i) / 32.0f;
+			float viewCosine = glm::clamp(float(j) / 32.0f, 1e-7f, 1.0f - 1e-7f);
+
+			int sampleCount = 10'000;
+			float totalEnergy = 0.0f;
+
+			for (int i = 0; i < sampleCount; i++)
+			{
+				// Generate random view dir
+				float xyMagnitudeSquared = 1.0f - viewCosine * viewCosine;
+				float phiV = glm::linearRand(0.0f, glm::two_pi<float>());
+				float x = glm::sqrt(xyMagnitudeSquared) * glm::cos(phiV);
+				float y = glm::sqrt(xyMagnitudeSquared) * glm::sin(phiV);
+
+				// leave z as viewCosine
+				float z = viewCosine;
+
+				glm::vec3 V(x, y, z);
+				V = glm::normalize(V);
+
+				float brdf = BRDF(V, roughness);
+
+				totalEnergy += brdf;
+			}
+
+			totalEnergy /= float(sampleCount);
+			//if (totalEnergy >= 0)
+			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
+
+			m_EnergyLookupTable.push_back(totalEnergy);
+		}
+	}
 }

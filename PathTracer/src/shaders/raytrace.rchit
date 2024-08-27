@@ -7,6 +7,8 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 
+layout(set = 0, binding = 9) uniform sampler2D uEnergyLookupTexture;
+
 #include "raycommon.glsl"
 #include "BSDF.glsl"
 
@@ -107,7 +109,6 @@ void main()
     material.Metallic = loadedMaterial.Metallic;
     material.Roughness = loadedMaterial.Roughness;
     material.SpecularTint = loadedMaterial.SpecularTint;
-    material.SpecularStrength = loadedMaterial.SpecularStrength;
     material.Ior = loadedMaterial.Ior;
     material.SpecTrans = loadedMaterial.SpecTrans;
     material.Anisotropy = loadedMaterial.Anisotropy;
@@ -118,10 +119,19 @@ void main()
 
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
 
-    const float anisotropic = material.Anisotropy; // TODO
-    const float aspect = sqrt(1.0 - anisotropic * 0.9);
-    material.ax = max(0.001, material.Roughness / aspect);
-    material.ay = max(0.001, material.Roughness * aspect);
+    const float anisotropy = material.Anisotropy;
+    if (anisotropy >= 0)
+    {
+        const float aspect = sqrt(1.0 - sqrt(anisotropy) * 0.9);
+        material.ax = max(0.001, material.Roughness / aspect);
+        material.ay = max(0.001, material.Roughness * aspect);
+    }
+    else
+    {
+        const float aspect = sqrt(1.0 - sqrt(abs(anisotropy)) * 0.9);
+        material.ax = max(0.001, material.Roughness * aspect);
+        material.ay = max(0.001, material.Roughness / aspect);
+    }
 
 #ifdef FURNACE_TEST_MODE
     material.Color = vec4(1.0f);

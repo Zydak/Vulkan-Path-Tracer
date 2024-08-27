@@ -92,6 +92,9 @@ private:
 	// GBuffer
 	void DrawGBuffer();
 
+	// Lookup table
+	void BuildEnergyLookupTable();
+
 public:
 	// Draw Parameters
 	struct DrawInfo
@@ -157,4 +160,8 @@ private:
 
 	// DOF
 	Vulture::Effect<PushConstantDOF> m_DOfVisualizer;
+
+	// Lookup Table
+	std::vector<float> m_EnergyLookupTable;
+	Vulture::Image m_LookupTexture;
 };
