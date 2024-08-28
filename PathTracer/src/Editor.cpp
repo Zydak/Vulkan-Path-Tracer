@@ -662,7 +662,7 @@ void Editor::ImGuiSceneEditor()
 		ImGui::Separator();
 
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
-		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 2.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 3.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
 		if (valuesChanged)

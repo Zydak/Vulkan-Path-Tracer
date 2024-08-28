@@ -110,7 +110,7 @@ void main()
     material.Roughness = loadedMaterial.Roughness;
     material.SpecularTint = loadedMaterial.SpecularTint;
     material.Ior = loadedMaterial.Ior;
-    material.SpecTrans = loadedMaterial.SpecTrans;
+    material.Transparency = loadedMaterial.Transparency;
     material.Anisotropy = loadedMaterial.Anisotropy;
 
     material.Ior = min(material.Ior, 3.0f);

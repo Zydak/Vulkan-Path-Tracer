@@ -23,7 +23,7 @@ float Lambda(vec3 V, float ax, float ay)
 {
     float Vx2 = V.x * V.x;
     float Vy2 = V.y * V.y;
-    float Vz2 = V.z * V.z;
+    float Vz2 = abs(V.z) * abs(V.z);
 
     float ax2 = ax * ax;
     float ay2 = ay * ay;
@@ -40,7 +40,7 @@ float GGXSmithAnisotropic(vec3 V, float ax, float ay)
 
 vec3 GGXSampleAnisotopic(vec3 Ve, float ax, float ay, float u1, float u2)
 {
-    vec3 Vh = normalize(vec3(ax * Ve.x, ay * Ve.y, Ve.z));
+    vec3 Vh = normalize(vec3(ax * Ve.x, ay * Ve.y, abs(Ve.z)));
 
     float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
     vec3 T1 = lensq > 0 ? vec3(-Vh.y, Vh.x, 0) * inversesqrt(lensq) : vec3(1, 0, 0);

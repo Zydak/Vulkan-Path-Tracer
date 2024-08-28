@@ -679,16 +679,33 @@ glm::vec3 GGXSampleAnisotopic(glm::vec3 Ve, float ax, float ay, float u1, float 
 	return Ne;
 }
 
-float BRDF(glm::vec3 V, float roughness)
+float BRDF(glm::vec3 V, float ax, float ay)
 {
-	glm::vec3 H = GGXSampleAnisotopic(V, roughness, roughness, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
+	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
 
 	glm::vec3 L = reflect(-V, H);
 
 	if (L.z < 0.0f)
 		return false;
 
-	float GL = GGXSmithAnisotropic(L, roughness, roughness);
+	// BRDF = D * F * GV * GL / (4.0f * NdotV)
+	// 
+	// PDF is VNDF / jacobian of reflect()
+	// PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
+	//
+	// F = BRDF / PDF
+	//
+	// If we expand it we get
+	// 
+	//      D * F * GV * GL * 4.0f * NdotV * VdotH
+	//  F = --------------------------------------
+	//      4.0f * VdotH * NdotV * GV * D
+	//
+	// almost everything cancels out and we're only left with F * GL,
+	// But since we assume that the color is 1 and only return energy lost as a
+	// float we can just ignore fresnel and we're left only with GL term.
+
+	float GL = GGXSmithAnisotropic(L, ax, ay);
 
 	return GL;
 }
@@ -721,14 +738,14 @@ void PathTracer::BuildEnergyLookupTable()
 				glm::vec3 V(x, y, z);
 				V = glm::normalize(V);
 
-				float brdf = BRDF(V, roughness);
+				float brdf = BRDF(V, roughness, roughness);
 
 				totalEnergy += brdf;
 			}
 
 			totalEnergy /= float(sampleCount);
-			//if (totalEnergy >= 0)
-			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
+			if (totalEnergy >= 0)
+				totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
 
 			m_EnergyLookupTable.push_back(totalEnergy);
 		}
