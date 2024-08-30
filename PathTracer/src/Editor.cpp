@@ -12,7 +12,7 @@
 
 void Editor::Init()
 {
-	m_PathTracer.Init({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+	m_PathTracer.Init({ 900, 900 });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
@@ -25,11 +25,11 @@ void Editor::Init()
 	CreateQuadDescriptor();
 
 	m_Denoiser.Init();
-	m_Denoiser.AllocateBuffers({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+	m_Denoiser.AllocateBuffers({ 900, 900 });
 
 	Vulture::Image::CreateInfo imageInfo{};
-	imageInfo.Width = m_ImageSize.x;
-	imageInfo.Height = m_ImageSize.y;
+	imageInfo.Width = 900;
+	imageInfo.Height = 900;
 	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	imageInfo.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	imageInfo.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -49,7 +49,23 @@ void Editor::SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneH
 	m_CurrentScene = scene;
 	m_SceneHandle = sceneHandle;
 
+	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	EditorSettingsComponent* editorSettings = nullptr;
+	for (auto& entity : viewEditor)
+	{
+		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+	}
+
+	// No settings found, create one
+	if (editorSettings == nullptr)
+	{
+		auto entity = (*m_CurrentScene)->CreateEntity();
+		editorSettings = &entity.AddComponent<EditorSettingsComponent>();
+	}
+
 	m_PathTracer.SetScene(*scene);
+	m_PostProcessor.SetScene(*scene);
 	
 	// TODO
 // 	// Get Vertex and index count
@@ -82,6 +98,28 @@ void Editor::Render()
 
 	m_PathTracer.UpdateResources();
 
+	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	EditorSettingsComponent* editorSettings = nullptr;
+	for (auto& entity : viewEditor)
+	{
+		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+	}
+
+	// No settings found, create one
+	if (editorSettings == nullptr)
+	{
+		auto entity = (*m_CurrentScene)->CreateEntity();
+		editorSettings = &entity.AddComponent<EditorSettingsComponent>();
+	}
+
+	static VkOffset2D prevSize = { 900, 900 };
+	if (prevSize.x != editorSettings->ImageSize.x || prevSize.y != editorSettings->ImageSize.y)
+	{
+		prevSize = editorSettings->ImageSize;
+		m_ImageResized = true;
+	}
+
 	if (m_ImGuiViewportResized)
 	{
 		m_ImGuiViewportResized = false;
@@ -90,14 +128,22 @@ void Editor::Render()
 	}
 	if (m_ImageResized)
 	{
-		m_Denoiser.AllocateBuffers({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-		m_DenoisedImage.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
-		m_PathTracer.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y });
+		auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+		EditorSettingsComponent* editorSettings = nullptr;
+		for (auto& entity : viewEditor)
+		{
+			VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+			editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+		}
+
+		m_Denoiser.AllocateBuffers({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
+		m_DenoisedImage.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
+		m_PathTracer.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
 
 		if (m_ShowDenoisedImage)
-			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, &m_DenoisedImage);
+			m_PostProcessor.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y }, &m_DenoisedImage);
 		else
-			m_PostProcessor.Resize({ (uint32_t)m_ImageSize.x, (uint32_t)m_ImageSize.y }, m_PathTracer.GetOutputImage());
+			m_PostProcessor.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y }, m_PathTracer.GetOutputImage());
 
 		m_ImageResized = false;
 		Resize();
@@ -113,14 +159,23 @@ void Editor::Render()
 			if (!m_PathTracingFinished)
 				m_Time += m_Timer.ElapsedSeconds();
 
-			m_PostProcessor.Evaluate();
 			m_PostProcessor.Render();
 
 			RenderViewportImage();
 
 			Vulture::Renderer::ImGuiPass();
 
-			m_PathTracingFinished = m_PathTracer.GetSamplesAccumulated() >= m_PathTracer.m_DrawInfo.TotalSamplesPerPixel;
+			auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+			PathTracingSettingsComponent* pathTracingSettings = nullptr;
+			for (auto& entity : viewPathTracing)
+			{
+				VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+				pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
+			}
+
+			VL_CORE_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
+
+			m_PathTracingFinished = m_PathTracer.GetSamplesAccumulated() >= pathTracingSettings->Settings.TotalSamplesPerPixel;
 
 			if (m_ReadyToSaveRender)
 			{
@@ -157,7 +212,6 @@ void Editor::Render()
 			}
 
 			Vulture::Renderer::EndFrame();
-			m_PostProcessor.EndFrame();
 			
 			// Denoiser
 			// step 2:
@@ -295,8 +349,6 @@ void Editor::RenderImGui()
 		ImGuiRenderingToFileSettings();
 	else
 		ImGuiPathTracerSettings();
-
-	m_PostProcessor.RenderGraph();
 }
 
 void Editor::ImGuiRenderPathTracingViewport()
@@ -355,6 +407,8 @@ void Editor::ImGuiPathTracerSettings()
 
 	ImGuiEnvMapSettings();
 
+	ImGuiPostProcessingSettings();
+
 	ImGuiPathTracingSettings();
 
 	ImGuiFileRenderSettings();
@@ -373,7 +427,15 @@ void Editor::ImGuiRenderingToFileSettings()
 
 	ImGui::Separator();
 
-	ImGui::Text("%d / %d samples accumulated", m_PathTracer.GetSamplesAccumulated(), m_PathTracer.m_DrawInfo.TotalSamplesPerPixel);
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
+	ImGui::Text("%d / %d samples accumulated", m_PathTracer.GetSamplesAccumulated(), pathTracingSettings->Settings.TotalSamplesPerPixel);
 
 	ImGui::Separator();
 
@@ -486,20 +548,28 @@ void Editor::ImGuiShaderSettings()
 		return;
 	}
 
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
 	if (ImGui::Button("Load Shader"))
 	{
 		if (selectedShaderType == VK_SHADER_STAGE_RAYGEN_BIT_KHR)
-			m_PathTracer.m_DrawInfo.RayGenShaderPath = shadersStr[selectedShaderIndex];
+			pathTracingSettings->Settings.RayGenShaderPath = shadersStr[selectedShaderIndex];
 		else if (selectedShaderType == VK_SHADER_STAGE_MISS_BIT_KHR)
-			m_PathTracer.m_DrawInfo.MissShaderPath = shadersStr[selectedShaderIndex];
+			pathTracingSettings->Settings.MissShaderPath = shadersStr[selectedShaderIndex];
 		else if (selectedShaderType == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
-			m_PathTracer.m_DrawInfo.HitShaderPath = shadersStr[selectedShaderIndex];
+			pathTracingSettings->Settings.HitShaderPath = shadersStr[selectedShaderIndex];
 
 		m_PathTracer.RecreateRayTracingPipeline();
 		m_PathTracer.ResetFrameAccumulation();
 	}
 
-	std::vector<const char*> loadedShaderPaths = { m_PathTracer.m_DrawInfo.RayGenShaderPath.c_str(), m_PathTracer.m_DrawInfo.MissShaderPath.c_str(), m_PathTracer.m_DrawInfo.HitShaderPath.c_str() };
+	std::vector<const char*> loadedShaderPaths = { pathTracingSettings->Settings.RayGenShaderPath.c_str(), pathTracingSettings->Settings.MissShaderPath.c_str(), pathTracingSettings->Settings.HitShaderPath.c_str() };
 
 	ImGui::Separator();
 
@@ -698,8 +768,16 @@ void Editor::ImGuiEnvMapSettings()
 
 	ImGui::Separator();
 
-	if (ImGui::SliderFloat("Azimuth", &m_PathTracer.m_DrawInfo.EnvAzimuth, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
-	if (ImGui::SliderFloat("Altitude", &m_PathTracer.m_DrawInfo.EnvAltitude, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
+	if (ImGui::SliderFloat("Azimuth", &pathTracingSettings->Settings.EnvAzimuth, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
+	if (ImGui::SliderFloat("Altitude", &pathTracingSettings->Settings.EnvAltitude, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
 
 	std::vector<std::string> envMapsString;
 	std::vector<const char*> envMaps;
@@ -749,28 +827,108 @@ void Editor::ImGuiPathTracingSettings()
 
 	ImGui::Separator();
 
-	if (ImGui::Checkbox("Suppress Caustics", &m_PathTracer.m_DrawInfo.UseCausticsSuppresion))
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
+	if (ImGui::Checkbox("Suppress Caustics", &pathTracingSettings->Settings.UseCausticsSuppresion))
 		m_PathTracer.RecreateRayTracingPipeline();
 
-	if (ImGui::SliderFloat("Caustics Suppresion Max Luminance", &m_PathTracer.m_DrawInfo.CausticsSuppresionMaxLuminance, 1.0f, 500.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("Caustics Suppresion Max Luminance", &pathTracingSettings->Settings.CausticsSuppresionMaxLuminance, 1.0f, 500.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 
-	if (ImGui::Checkbox("Show Skybox", &m_PathTracer.m_DrawInfo.ShowSkybox))
+	if (ImGui::Checkbox("Show Skybox", &pathTracingSettings->Settings.ShowSkybox))
 		m_PathTracer.RecreateRayTracingPipeline();
 
-	if (ImGui::Checkbox("Furnace Test Mode", &m_PathTracer.m_DrawInfo.FurnaceTestMode))
+	if (ImGui::Checkbox("Furnace Test Mode", &pathTracingSettings->Settings.FurnaceTestMode))
 		m_PathTracer.RecreateRayTracingPipeline();
 
 	ImGui::Text("");
 
-	if (ImGui::SliderInt("Max Depth",			&m_PathTracer.m_DrawInfo.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderInt("Samples Per Pixel",	&m_PathTracer.m_DrawInfo.TotalSamplesPerPixel, 1, 50'000)) {  }
-	if (ImGui::SliderInt("Samples Per Frame",	&m_PathTracer.m_DrawInfo.SamplesPerFrame, 1, 40)) {  }
+	if (ImGui::SliderInt("Max Depth",			&pathTracingSettings->Settings.RayDepth, 1, 20)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderInt("Samples Per Pixel",	&pathTracingSettings->Settings.TotalSamplesPerPixel, 1, 50'000)) {  }
+	if (ImGui::SliderInt("Samples Per Frame",	&pathTracingSettings->Settings.SamplesPerFrame, 1, 40)) {  }
 	
-	if (ImGui::Checkbox(   "Auto Focal Length",	&m_PathTracer.m_DrawInfo.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::Checkbox(   "Visualize DOF",		&m_PathTracer.m_DrawInfo.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("Focal Length",		&m_PathTracer.m_DrawInfo.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("DoF Strength",		&m_PathTracer.m_DrawInfo.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("Anti Aliasing Strength", &m_PathTracer.m_DrawInfo.AliasingJitterStr, 0.0f, 2.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::Checkbox(   "Auto Focal Length",	&pathTracingSettings->Settings.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::Checkbox(   "Visualize DOF",		&pathTracingSettings->Settings.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("Focal Length",		&pathTracingSettings->Settings.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("DoF Strength",		&pathTracingSettings->Settings.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("Anti Aliasing Strength", &pathTracingSettings->Settings.AliasingJitterStr, 0.0f, 2.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	ImGui::Separator();
+}
+
+void Editor::ImGuiPostProcessingSettings()
+{
+	if (!ImGui::CollapsingHeader("Post Processing Settings"))
+		return;
+	ImGui::Separator();
+
+	auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
+	Vulture::TonemapperSettingsComponent* tonemapSettings = nullptr;
+	for (auto& entity : viewTonemap)
+	{
+		VL_CORE_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		tonemapSettings = &(*m_CurrentScene)->GetRegistry().get<Vulture::TonemapperSettingsComponent>(entity);
+	}
+
+	VL_CORE_ASSERT(tonemapSettings != nullptr, "Couldn't find post processor settings!");
+
+	ImGui::SliderFloat("Exposure", &tonemapSettings->Settings.Exposure, 0.0f, 2.0f);
+	ImGui::SliderFloat("Contrast", &tonemapSettings->Settings.Contrast, 0.0f, 2.0f);
+	ImGui::SliderFloat("Saturation", &tonemapSettings->Settings.Saturation, 0.0f, 2.0f);
+	ImGui::SliderFloat("Brightness", &tonemapSettings->Settings.Brightness, 0.0f, 0.1f);
+	ImGui::SliderFloat("Vignette", &tonemapSettings->Settings.Vignette, 0.0f, 1.0f);
+	ImGui::SliderFloat("Gamma", &tonemapSettings->Settings.Gamma, 0.0f, 2.0f);
+	ImGui::SliderFloat("Temperature", &tonemapSettings->Settings.Temperature, -1.0f, 1.0f);
+	ImGui::SliderFloat("Tint", &tonemapSettings->Settings.Tint, -1.0f, 1.0f);
+
+	ImGui::ColorEdit3("ColorFilter", (float*)&tonemapSettings->Settings.ColorFilter);
+
+	ImGui::Checkbox("Chromatic Aberration", &tonemapSettings->Settings.ChromaticAberration);
+
+	if (tonemapSettings->Settings.ChromaticAberration)
+	{
+		ImGui::SliderFloat("Aberration Vignette", &tonemapSettings->Settings.AberrationVignette, 0.0f, 10.0f);
+
+		ImGui::SliderFloat2("Offset XY R", (float*)&tonemapSettings->Settings.AberrationOffsets[0], -3.0f, 3.0f);
+		ImGui::SliderFloat2("Offset XY G", (float*)&tonemapSettings->Settings.AberrationOffsets[1], -3.0f, 3.0f);
+		ImGui::SliderFloat2("Offset XY B", (float*)&tonemapSettings->Settings.AberrationOffsets[2], -3.0f, 3.0f);
+	}
+	
+	const char* tonemappers[] = { "Filmic", "Hill Aces", "Narkowicz Aces", "Exposure Mapping", "Uncharted 2", "Reinchard Extended" };
+
+	ImGui::Text("Tonemappers");
+	static int currentTonemapper = 0;
+	if (ImGui::ListBox("##Tonemappers", &currentTonemapper, tonemappers, IM_ARRAYSIZE(tonemappers), IM_ARRAYSIZE(tonemappers)))
+	{
+		tonemapSettings->Settings.Tonemapper = (Vulture::Tonemap::Tonemappers)currentTonemapper;
+	}
+
+	if (currentTonemapper == Vulture::Tonemap::Tonemappers::ReinchardExtended)
+	{
+		ImGui::SliderFloat("White Point", &tonemapSettings->Settings.whitePointReinhard, 0.0f, 5.0f);
+	}
+
+	ImGui::Separator();
+
+	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
+	Vulture::BloomSettingsComponent* bloomSettings = nullptr;
+	for (auto& entity : viewBloom)
+	{
+		VL_CORE_ASSERT(bloomSettings == nullptr, "Can't have more than one bloom settings inside a scene!");
+		bloomSettings = &(*m_CurrentScene)->GetRegistry().get<Vulture::BloomSettingsComponent>(entity);
+	}
+	VL_CORE_ASSERT(bloomSettings != nullptr, "Couldn't find post bloom settings!");
+
+	ImGui::SliderFloat("Threshold", &bloomSettings->Settings.Threshold, 0.0f, 3.0f);
+	ImGui::SliderFloat("Strength", &bloomSettings->Settings.Strength, 0.0f, 2.0f);
+	static int mipCount = 10;
+	ImGui::SliderInt("Mips Count", &mipCount, 1, 10);
+	bloomSettings->Settings.MipCount = (uint32_t)mipCount;
+
 	ImGui::Separator();
 }
 
@@ -781,10 +939,19 @@ void Editor::ImGuiViewportSettings()
 
 	ImGui::Separator();
 
-	if (ImGui::InputInt2("Rendered Image Size", (int*)&m_ImageSize)) { m_ImageResized = true; }
+	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	EditorSettingsComponent* editorSettings = nullptr;
+	for (auto& entity : viewEditor)
+	{
+		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+	}
+	VL_CORE_ASSERT(editorSettings != nullptr, "Couldn't find editor settings!");
 
-	m_ImageSize.x = glm::max(m_ImageSize.x, 1);
-	m_ImageSize.y = glm::max(m_ImageSize.y, 1);
+	if (ImGui::InputInt2("Rendered Image Size", (int*)&editorSettings->ImageSize)) { m_ImageResized = true; }
+
+	editorSettings->ImageSize.x = glm::max(editorSettings->ImageSize.x, 1);
+	editorSettings->ImageSize.y = glm::max(editorSettings->ImageSize.y, 1);
 
 	ImGui::Separator();
 }
@@ -897,11 +1064,15 @@ void Editor::ImGuiSerializationSettings()
 				OrthographicCameraComponent,
 				SkyboxComponent,
 				CameraScript,
+				PathTracingSettingsComponent,
+				EditorSettingsComponent,
 				Vulture::ScriptComponent,
 				Vulture::MeshComponent,
 				Vulture::MaterialComponent,
 				Vulture::NameComponent,
-				Vulture::TransformComponent
+				Vulture::TransformComponent,
+				Vulture::TonemapperSettingsComponent,
+				Vulture::BloomSettingsComponent
 			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
 		}
 	}
@@ -916,11 +1087,15 @@ void Editor::ImGuiSerializationSettings()
 				OrthographicCameraComponent,
 				SkyboxComponent,
 				CameraScript,
+				PathTracingSettingsComponent,
+				EditorSettingsComponent,
 				Vulture::ScriptComponent,
 				Vulture::MeshComponent,
 				Vulture::MaterialComponent,
 				Vulture::NameComponent,
-				Vulture::TransformComponent
+				Vulture::TransformComponent,
+				Vulture::TonemapperSettingsComponent,
+				Vulture::BloomSettingsComponent
 			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
 			ImGui::CloseCurrentPopup();
 		}
@@ -969,6 +1144,30 @@ void Editor::UpdateModel()
 		(*m_CurrentScene)->GetRegistry().destroy(entity);
 	}
 
+	auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
+	for (auto& entity : viewTonemap)
+	{
+		(*m_CurrentScene)->GetRegistry().destroy(entity);
+	}
+
+	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
+	for (auto& entity : viewBloom)
+	{
+		(*m_CurrentScene)->GetRegistry().destroy(entity);
+	}
+
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	for (auto& entity : viewPathTracing)
+	{
+		(*m_CurrentScene)->GetRegistry().destroy(entity);
+	}
+
+	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	for (auto& entity : viewEditor)
+	{
+		(*m_CurrentScene)->GetRegistry().destroy(entity);
+	}
+
 	std::string extension = m_ChangedModelFilepath.substr(m_ChangedModelFilepath.find_last_of('.'));
 
 	if (extension == ".ptscene")
@@ -981,11 +1180,15 @@ void Editor::UpdateModel()
 			OrthographicCameraComponent,
 			SkyboxComponent,
 			CameraScript,
+			PathTracingSettingsComponent,
+			EditorSettingsComponent,
 			Vulture::ScriptComponent,
 			Vulture::MeshComponent,
 			Vulture::MaterialComponent,
 			Vulture::NameComponent,
-			Vulture::TransformComponent
+			Vulture::TransformComponent,
+			Vulture::TonemapperSettingsComponent,
+			Vulture::BloomSettingsComponent
 		>(m_ChangedModelFilepath);
 
 		m_SceneHandle.WaitToLoad();
@@ -1031,6 +1234,7 @@ void Editor::UpdateModel()
 	}
 
 	m_PathTracer.SetScene((*m_CurrentScene));
+	m_PostProcessor.SetScene(*m_CurrentScene);
 	m_PathTracer.ResetFrameAccumulation();
 }
 

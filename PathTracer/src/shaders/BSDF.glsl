@@ -107,9 +107,10 @@ vec3 EvalMetal(in Material mat, vec3 L, vec3 V, vec3 H, out float pdf)
     //vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
 
     // Lookup table for energy compensation
-    float energyCompensation = texture(uEnergyLookupTexture, vec2(V.z, mat.Roughness)).r;
+    float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
+    float energyCompensation = texture(uEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
 
-    //data.BSDF += vec3(energyCompensation) * bsdf + bsdf * metallicProbability; // No fresnel
+    //bsdf = vec3(energyCompensation) * bsdf + bsdf; // No fresnel
     bsdf = (1.0f + F * vec3(energyCompensation)) * bsdf; // Fresnel
 
     return bsdf;
@@ -148,46 +149,39 @@ vec3 EvalDielectricReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, o
     //vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
 
     // Lookup table for energy compensation
-    float energyCompensation = texture(uEnergyLookupTexture, vec2(V.z, mat.Roughness)).r;
+    float layer = floor(((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f);
+    float energyCompensation = texture(uEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
 
-    //data.BSDF += vec3(energyCompensation) * bsdf + bsdf * metallicProbability; // No fresnel
+    //data.BSDF += vec3(energyCompensation) * bsdf + bsdf; // No fresnel
     bsdf = (1.0f + F * vec3(energyCompensation)) * bsdf; // Fresnel
 
     return bsdf;
 }
 
-vec3 EvalDielectricRefraction(in Material mat, in Surface surface, vec3 L, vec3 V, vec3 H, vec3 F, out float pdf)
+vec3 EvalDielectricRefraction(in Material mat, in Surface surface, vec3 L, vec3 V, vec3 H, float F, out float pdf)
 {
-    if (L.z >= 0.0f)
-        return vec3(0.0f);
-
-    // BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
-    // 
-    // PDF is VNDF * jacobian of refract()
-    // PDF = (GV * VdotH * D / NdotV) * (eta * eta * abs(LdotH)) / pow(VdotH + eta * abs(LdotH), 2)
-    //
-    // Fr = BRDF / PDF
-
-    float LdotH = dot(L, H);
-    float VdotH = dot(V, H);
-
+    float VdotH = abs(dot(V, H));
+    float LdotH = abs(dot(L, H));
+    
     float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-
-    float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
+    float G1 = GGXSmithAnisotropic(V, mat.ax, mat.ay);
     float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
-    float G = GV * GL;
+    float G2 = G1 * GL;
 
     float denominator = (LdotH + mat.eta * VdotH);
+    float denominator2 = denominator * denominator;
     float eta2 = mat.eta * mat.eta;
 
-    pdf = (GV * max(VdotH, 0.0f) * D / V.z) * (eta2 / (denominator * denominator));
-    vec3 bsdf = eta2 * (vec3(1.0f) - F) * G * D / (denominator * denominator);
+    float jacobian = (eta2 * abs(LdotH)) / denominator2;
 
-    //// Lookup table for energy compensation
-    //float energyCompensation = texture(uEnergyLookupTexture, vec2(V.z, mat.Roughness)).r;
+    pdf = (G1 * VdotH * D / V.z) * jacobian;
+    vec3 bsdf = (mat.Color.xyz * (1.0f - F) * D * G2 * eta2 / denominator2) * (abs(VdotH) * abs(LdotH) / (abs(L.z) * abs(V.z)));
+
+    //vec3 Ft = mat.Color.xyz * (1.0f - F) * G;
     //
-    //data.BSDF += vec3(energyCompensation) * bsdf + bsdf * metallicProbability; // No fresnel
-    //bsdf = (1.0f + F * vec3(energyCompensation)) * bsdf; // Fresnel
+    //pdf = (LdotH) / (abs(L.z));
+    //
+    //vec3 bsdf = Ft * abs(L.z) / (V.z);
 
     return bsdf;
 }
@@ -265,12 +259,20 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         {
             // Reflect
             data.RayDir = normalize(reflect(-V, H));
+
+            if (data.RayDir.z < 0.0f)
+                return false;
+
             data.BSDF = EvalDielectricReflection(mat, data.RayDir, V, H, vec3(F), data.PDF);
         }
         else
         {
             data.RayDir = normalize(refract(-V, H, mat.eta));
-            data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, vec3(F), data.PDF);
+
+            if (data.RayDir.z > 0.0f)
+                return false;
+
+            data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, F, data.PDF);
         }
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);

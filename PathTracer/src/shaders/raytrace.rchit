@@ -7,7 +7,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 
-layout(set = 0, binding = 9) uniform sampler2D uEnergyLookupTexture;
+layout(set = 0, binding = 9) uniform sampler2DArray uEnergyLookupTexture;
 
 #include "raycommon.glsl"
 #include "BSDF.glsl"
@@ -92,13 +92,13 @@ void main()
     vec3 normalMapVal = texture(uNormalTextures[gl_InstanceCustomIndexEXT], texCoord).xyz;
     normalMapVal = normalMapVal * 2.0f - 1.0f;
     
-    normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
-    surface.Normal = normalize(normalMapVal);
+    //normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
+    //surface.Normal = normalize(normalMapVal);
 
-    if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
-    {
-        surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
-    }
+    //if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
+    //{
+    //    surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
+    //}
 
     // -------------------------------------------
     // Calculate Material Properties
@@ -113,7 +113,7 @@ void main()
     material.Transparency = loadedMaterial.Transparency;
     material.Anisotropy = loadedMaterial.Anisotropy;
 
-    material.Ior = min(material.Ior, 3.0f);
+    material.Ior = max(material.Ior, 1.0001f);
     material.Roughness = max(material.Roughness, 0.0001f);
     material.Roughness *= material.Roughness;
 

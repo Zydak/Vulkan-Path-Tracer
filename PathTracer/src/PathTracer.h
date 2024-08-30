@@ -120,8 +120,6 @@ public:
 		std::string RayGenShaderPath = "src/shaders/raytrace.rgen";
 	};
 
-	DrawInfo m_DrawInfo{};
-
 private:
 	Vulture::AccelerationStructure m_AS;
 	Vulture::Scene* m_CurrentSceneRendered;
@@ -162,6 +160,6 @@ private:
 	Vulture::Effect<PushConstantDOF> m_DOfVisualizer;
 
 	// Lookup Table
-	std::vector<float> m_EnergyLookupTable;
+	std::vector<std::vector<float>> m_ReflectionEnergyLookupTable;
 	Vulture::Image m_LookupTexture;
 };

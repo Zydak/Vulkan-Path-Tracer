@@ -41,6 +41,7 @@ private:
 	void ImGuiSceneEditor();
 	void ImGuiEnvMapSettings();
 	void ImGuiPathTracingSettings();
+	void ImGuiPostProcessingSettings();
 	void ImGuiViewportSettings();
 	void ImGuiCameraSettings();
 	void ImGuiFileRenderSettings();
@@ -73,7 +74,6 @@ private:
 	float m_Time = 0;
 	bool m_ImGuiViewportResized = false;
 	bool m_ImageResized = false;
-	VkOffset2D m_ImageSize = {900, 900}; // Using offset so that components are ints and not uints for ImGui
 	VkExtent2D m_ViewportSize = {900, 900};
 
 	bool m_RenderToFile = false;

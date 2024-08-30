@@ -17,14 +17,22 @@ void PathTracer::Init(VkExtent2D size)
 	BuildEnergyLookupTable();
 
 	Vulture::Image::CreateInfo info{};
-	info.Data = m_EnergyLookupTable.data();
 	info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	info.Usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	info.Width = 32;
 	info.Height = 32;
 	info.Format = VK_FORMAT_R32_SFLOAT;
 	info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+	info.LayerCount = 32;
 	m_LookupTexture.Init(info);
+
+	VkCommandBuffer cmd;
+	Vulture::Device::BeginSingleTimeCommands(cmd, Vulture::Device::GetGraphicsCommandPool());
+	for (int i = 0; i < 32; i++)
+	{
+		m_LookupTexture.WritePixels(m_ReflectionEnergyLookupTable[i].data(), cmd, i);
+	}
+	Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
 }
 
 void PathTracer::Resize(VkExtent2D newSize)
@@ -54,6 +62,21 @@ void PathTracer::Resize(VkExtent2D newSize)
 void PathTracer::SetScene(Vulture::Scene* scene)
 {
 	m_CurrentSceneRendered = scene;
+
+	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
+	// No settings found, create one
+	if (pathTracingSettings == nullptr)
+	{
+		auto entity = m_CurrentSceneRendered->CreateEntity();
+		pathTracingSettings = &entity.AddComponent<PathTracingSettingsComponent>();
+	}
 
 	auto view = scene->GetRegistry().view<SkyboxComponent>();
 	SkyboxComponent* skybox = nullptr;
@@ -86,6 +109,21 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 
 bool PathTracer::Render()
 {
+	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
+	// No settings found, create one
+	if (pathTracingSettings == nullptr)
+	{
+		auto entity = m_CurrentSceneRendered->CreateEntity();
+		pathTracingSettings = &entity.AddComponent<PathTracingSettingsComponent>();
+	}
+
 	Vulture::Device::InsertLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Inserted label", { 0.0f, 1.0f, 0.0f, 1.0f }); // test
 
 	if (m_PathTracingImage.GetLayout() != VK_IMAGE_LAYOUT_GENERAL)
@@ -95,14 +133,14 @@ bool PathTracer::Render()
 
 	// Set Push data
 	auto data = m_PushContantRayTrace.GetDataPtr();
-	data->maxDepth = m_DrawInfo.RayDepth;
-	data->FocalLength = m_DrawInfo.FocalLength;
-	data->DoFStrength = m_DrawInfo.DOFStrength;
-	data->AliasingJitter = m_DrawInfo.AliasingJitterStr;
-	data->SuppressCausticsLuminance = m_DrawInfo.CausticsSuppresionMaxLuminance;
-	data->SamplesPerFrame = m_DrawInfo.SamplesPerFrame;
-	data->EnvAzimuth = glm::radians(m_DrawInfo.EnvAzimuth);
-	data->EnvAltitude = glm::radians(m_DrawInfo.EnvAltitude);
+	data->maxDepth = pathTracingSettings->Settings.RayDepth;
+	data->FocalLength = pathTracingSettings->Settings.FocalLength;
+	data->DoFStrength = pathTracingSettings->Settings.DOFStrength;
+	data->AliasingJitter = pathTracingSettings->Settings.AliasingJitterStr;
+	data->SuppressCausticsLuminance = pathTracingSettings->Settings.CausticsSuppresionMaxLuminance;
+	data->SamplesPerFrame = pathTracingSettings->Settings.SamplesPerFrame;
+	data->EnvAzimuth = glm::radians(pathTracingSettings->Settings.EnvAzimuth);
+	data->EnvAltitude = glm::radians(pathTracingSettings->Settings.EnvAltitude);
 
 	// Draw Albedo, Roughness, Metallness, Normal into GBuffer
 	DrawGBuffer();
@@ -122,12 +160,12 @@ bool PathTracer::Render()
 	}
 	else
 	{
-		if (m_CurrentSamplesPerPixel >= (uint32_t)m_DrawInfo.TotalSamplesPerPixel)
+		if (m_CurrentSamplesPerPixel >= (uint32_t)pathTracingSettings->Settings.TotalSamplesPerPixel)
 		{
 			return false;
 		}
 
-		m_CurrentSamplesPerPixel += m_DrawInfo.SamplesPerFrame;
+		m_CurrentSamplesPerPixel += pathTracingSettings->Settings.SamplesPerFrame;
 	}
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Ray Trace Pass", { 1.0f, 0.0f, 0.0f, 1.0f });
@@ -153,19 +191,19 @@ bool PathTracer::Render()
 
 	Vulture::Device::EndLabel(Vulture::Renderer::GetCurrentCommandBuffer());
 
-	if (m_DrawInfo.AutoDoF)
+	if (pathTracingSettings->Settings.AutoDoF)
 	{
-		memcpy(&m_DrawInfo.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
+		memcpy(&pathTracingSettings->Settings.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
 	}
 
 	Vulture::PerspectiveCamera* cam = &PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera;
 
-	if (m_DrawInfo.VisualizedDOF)
+	if (pathTracingSettings->Settings.VisualizedDOF)
 	{
 		auto data = m_DOfVisualizer.GetPush().GetDataPtr();
 		data->Near = cam->NearFar.x;
 		data->Far = cam->NearFar.y;
-		data->FocalPoint = m_DrawInfo.FocalLength;
+		data->FocalPoint = pathTracingSettings->Settings.FocalLength;
 		data->VPInverse = glm::inverse(cam->GetProjView());
 		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer());
 	}
@@ -328,6 +366,14 @@ void PathTracer::CreatePipelines()
 
 void PathTracer::CreateRayTracingPipeline()
 {
+	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
+	PathTracingSettingsComponent* pathTracingSettings = nullptr;
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
+	}
+
 	ResetFrameAccumulation();
 	{
 		Vulture::PushConstant<PushConstantRay>::CreateInfo pushInfo{};
@@ -340,23 +386,23 @@ void PathTracer::CreateRayTracingPipeline()
 
 		std::vector<Vulture::Shader::Define> defines;
 		defines.reserve(3);
-		if (m_DrawInfo.UseCausticsSuppresion)
+		if (pathTracingSettings->Settings.UseCausticsSuppresion)
 			defines.push_back({ "USE_CAUSTICS_SUPPRESION" });
-		if (m_DrawInfo.ShowSkybox)
+		if (pathTracingSettings->Settings.ShowSkybox)
 			defines.push_back({ "SHOW_SKYBOX" });
-		if (m_DrawInfo.FurnaceTestMode)
+		if (pathTracingSettings->Settings.FurnaceTestMode)
 			defines.push_back({ "FURNACE_TEST_MODE" });
 
 		Vulture::Shader rgShader;
-		if (!rgShader.Init({ m_DrawInfo.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
+		if (!rgShader.Init({ pathTracingSettings->Settings.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
 			return;
 
 		Vulture::Shader htShader;
-		if (!htShader.Init({ m_DrawInfo.HitShaderPath, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
+		if (!htShader.Init({ pathTracingSettings->Settings.HitShaderPath, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
 			return;
 
 		Vulture::Shader msShader;
-		if (!msShader.Init({ m_DrawInfo.MissShaderPath, VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
+		if (!msShader.Init({ pathTracingSettings->Settings.MissShaderPath, VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
 			return;
 
 		info.RayGenShaders.push_back(&rgShader);
@@ -626,18 +672,6 @@ void PathTracer::UpdateDescriptorSetsData()
 	m_GlobalSetBuffer.Flush();
 }
 
-static float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
-{
-	float Hx2 = H.x * H.x;
-	float Hy2 = H.y * H.y;
-	float Hz2 = H.z * H.z;
-
-	float ax2 = ax * ax;
-	float ay2 = ay * ay;
-
-	return 1.0f / M_PI * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
-}
-
 float Lambda(glm::vec3 V, float ax, float ay)
 {
 	float Vx2 = V.x * V.x;
@@ -666,11 +700,11 @@ glm::vec3 GGXSampleAnisotopic(glm::vec3 Ve, float ax, float ay, float u1, float 
 	glm::vec3 T2 = glm::cross(Vh, T1);
 
 	float r = glm::sqrt(u1);
-	float phi = 2.0 * M_PI * u2;
+	float phi = 2.0f * glm::pi<float>() * u2;
 	float t1 = r * glm::cos(phi);
 	float t2 = r * glm::sin(phi);
-	float s = 0.5 * (1.0 + Vh.z);
-	t2 = (1.0 - s) * glm::sqrt(1.0 - t1 * t1) + s * t2;
+	float s = 0.5f * (1.0f + Vh.z);
+	t2 = (1.0f - s) * glm::sqrt(1.0f - t1 * t1) + s * t2;
 
 	glm::vec3 Nh = t1 * T1 + t2 * T2 + glm::sqrt(glm::max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
 
@@ -683,7 +717,7 @@ float BRDF(glm::vec3 V, float ax, float ay)
 {
 	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
 
-	glm::vec3 L = reflect(-V, H);
+	glm::vec3 L = glm::reflect(-V, H);
 
 	if (L.z < 0.0f)
 		return false;
@@ -710,44 +744,104 @@ float BRDF(glm::vec3 V, float ax, float ay)
 	return GL;
 }
 
+static float AccumulateBRDF(float roughness, float viewCosine, float anisotropy)
+{
+	float ax, ay;
+	if (anisotropy >= 0)
+	{
+		const float aspect = glm::sqrt(1.0f - glm::sqrt(anisotropy) * 0.9f);
+		ax = glm::max(0.001f, roughness / aspect);
+		ay = glm::max(0.001f, roughness * aspect);
+	}
+	else
+	{
+		const float aspect = glm::sqrt(1.0f - glm::sqrt(glm::abs(anisotropy)) * 0.9f);
+		ax = glm::max(0.001f, roughness * aspect);
+		ay = glm::max(0.001f, roughness / aspect);
+	}
+
+	int sampleCount = 100'000;
+	float totalEnergy = 0.0f;
+
+	for (int i = 0; i < sampleCount; i++)
+	{
+		// Generate random view dir
+		float xyMagnitudeSquared = 1.0f - viewCosine * viewCosine;
+		float phiV = glm::linearRand(0.0f, glm::two_pi<float>());
+		float x = glm::sqrt(xyMagnitudeSquared) * glm::cos(phiV);
+		float y = glm::sqrt(xyMagnitudeSquared) * glm::sin(phiV);
+
+		// leave z as viewCosine
+		float z = viewCosine;
+
+		glm::vec3 V(x, y, z);
+		V = glm::normalize(V);
+
+		float brdf = BRDF(V, ax, ay);
+
+		totalEnergy += brdf;
+	}
+
+	return totalEnergy / sampleCount;
+}
+
 void PathTracer::BuildEnergyLookupTable()
 {
-	m_EnergyLookupTable.clear();
+	m_ReflectionEnergyLookupTable.clear();
+
+	m_ReflectionEnergyLookupTable.resize(32);
+
+	//std::vector<std::future<float>> futures;
+	//for (int a = 0; a < 32; a++)
+	//{
+	//	for (int r = 0; r < 32; r++)
+	//	{
+	//		for (int v = 0; v < 32; v++)
+	//		{
+	//			float roughness = (float(r) + 1.0f) / 32.0f;
+	//			float viewCosine = glm::max((float(v) + 1.0f) / 32.0f, 1e-7f);
+	//			float anisotropy = ((float(a) + 1.0f) / 32.0f) * 2.0f - 1.0f;
+	//
+	//			futures.push_back(std::async(std::launch::async, AccumulateBRDF, roughness, viewCosine, anisotropy));
+	//		}
+	//	}
+	//}
+	//
+	//for (int a = 0; a < 32; a++)
+	//{
+	//	for (int r = 0; r < 32; r++)
+	//	{
+	//		for (int v = 0; v < 32; v++)
+	//		{
+	//			int index = v + 32 * r + 32 * 32 * a;
+	//			futures[index].wait();
+	//			float totalEnergy = futures[index].get();
+	//
+	//			if (totalEnergy >= 0)
+	//				totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
+	//
+	//			m_ReflectionEnergyLookupTable[a].push_back(totalEnergy);
+	//		}
+	//	}
+	//}
+
+	//// Cache the result since it's literally the same every time
+	//std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
+	//VL_CORE_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+	//
+	//for (int i = 0; i < 32; i++)
+	//{
+	//	ostream.write((char*)m_ReflectionEnergyLookupTable[i].data(), 32 * 32 * 4);
+	//}
+
+	// Just read the cached table as recalculating it every time is quite slow even with multi threading
+	std::ifstream istream("assets/lookupTables/ReflectionLookup", std::ios_base::binary);
+	VL_CORE_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
 	for (int i = 0; i < 32; i++)
 	{
-		for (int j = 0; j < 32; j++)
-		{
-			float roughness = float(i) / 32.0f;
-			float viewCosine = glm::clamp(float(j) / 32.0f, 1e-7f, 1.0f - 1e-7f);
+		m_ReflectionEnergyLookupTable[i].resize(32 * 32);
 
-			int sampleCount = 10'000;
-			float totalEnergy = 0.0f;
-
-			for (int i = 0; i < sampleCount; i++)
-			{
-				// Generate random view dir
-				float xyMagnitudeSquared = 1.0f - viewCosine * viewCosine;
-				float phiV = glm::linearRand(0.0f, glm::two_pi<float>());
-				float x = glm::sqrt(xyMagnitudeSquared) * glm::cos(phiV);
-				float y = glm::sqrt(xyMagnitudeSquared) * glm::sin(phiV);
-
-				// leave z as viewCosine
-				float z = viewCosine;
-
-				glm::vec3 V(x, y, z);
-				V = glm::normalize(V);
-
-				float brdf = BRDF(V, roughness, roughness);
-
-				totalEnergy += brdf;
-			}
-
-			totalEnergy /= float(sampleCount);
-			if (totalEnergy >= 0)
-				totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
-
-			m_EnergyLookupTable.push_back(totalEnergy);
-		}
+		istream.read((char*)m_ReflectionEnergyLookupTable[i].data(), 32 * 32 * 4);
 	}
 }

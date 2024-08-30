@@ -181,7 +181,7 @@ float GetLuminance(vec3 color)
 vec3 OffsetRay(in vec3 p, in vec3 n)
 {
     // Smallest epsilon that can be added without losing precision is 1.19209e-07, but we play safe
-    const float epsilon = 1e-3;  // Safe epsilon
+    const float epsilon = 1.0f / 65536.0f;  // Safe epsilon
     
     float magnitude = length(p);
     float offset = epsilon * magnitude;

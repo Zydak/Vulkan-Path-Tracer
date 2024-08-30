@@ -101,17 +101,23 @@ void Application::Init()
 	REGISTER_CLASS_IN_SERIALIZER(OrthographicCameraComponent);
 	REGISTER_CLASS_IN_SERIALIZER(SkyboxComponent);
 	REGISTER_CLASS_IN_SERIALIZER(CameraScript);
+	REGISTER_CLASS_IN_SERIALIZER(PathTracingSettingsComponent);
+	REGISTER_CLASS_IN_SERIALIZER(EditorSettingsComponent);
 
 	Vulture::AssetHandle sceneHandle = Vulture::AssetManager::LoadSceneAsset<
 		PerspectiveCameraComponent,
 		OrthographicCameraComponent,
 		SkyboxComponent,
 		CameraScript,
+		PathTracingSettingsComponent,
+		EditorSettingsComponent,
 		Vulture::ScriptComponent,
 		Vulture::MeshComponent,
 		Vulture::MaterialComponent,
 		Vulture::NameComponent,
-		Vulture::TransformComponent
+		Vulture::TransformComponent,
+		Vulture::TonemapperSettingsComponent,
+		Vulture::BloomSettingsComponent
 	>("assets/scenes/CornellBox.ptscene");
 
 	sceneHandle.WaitToLoad();
