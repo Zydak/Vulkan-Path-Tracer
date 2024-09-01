@@ -206,8 +206,6 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
             return false;
     
         data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
-    
-        data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 
         // Lookup table for energy compensation
         float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
