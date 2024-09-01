@@ -133,7 +133,7 @@ void main()
     }
     finalHitValue /= float(samplesAccumulated);
 
-    if (!(isnan(finalHitValue).x || isnan(finalHitValue).y || isnan(finalHitValue).y))
+    if (!isinf(finalHitValue.x) && !isinf(finalHitValue.y) && !isinf(finalHitValue.z) && !isnan(finalHitValue.x) && !isnan(finalHitValue.y) && !isnan(finalHitValue.z))
     {
         if (pcRay.Frame > 0)
         {

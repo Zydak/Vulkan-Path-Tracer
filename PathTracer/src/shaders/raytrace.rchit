@@ -3,20 +3,29 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_scalar_block_layout : enable
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_ray_query : enable
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 
-layout(set = 0, binding = 9) uniform sampler2DArray uEnergyLookupTexture;
+layout(set = 0, binding = 9) uniform sampler2DArray uReflectionEnergyLookupTexture;
+layout(set = 0, binding = 10) uniform sampler2DArray uRefractionEnergyLookupTextureEtaGreaterThan1;
+layout(set = 0, binding = 11) uniform sampler2DArray uRefractionEnergyLookupTextureEtaLessThan1;
 
 #include "raycommon.glsl"
+
+layout(push_constant) uniform _PushConstantRay { PushConstantRay push; };
+
+layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
+{
+    EnvAccel[] uAccels;
+};
+
 #include "BSDF.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
 hitAttributeEXT vec2 attribs;
-
-layout(push_constant) uniform _PushConstantRay { PushConstantRay push; };
 
 layout(buffer_reference, scalar) buffer Vertices { Vertex v[]; };
 layout(buffer_reference, scalar) buffer Indices { int i[]; };
@@ -29,11 +38,6 @@ layout(set = 0, binding = 5) uniform sampler2D uNormalTextures[];
 layout(set = 0, binding = 6) uniform sampler2D uRoghnessTextures[];
 layout(set = 0, binding = 7) uniform sampler2D uMetallnessTextures[];
 layout(set = 1, binding = 1) uniform sampler2D uEnvMap;
-
-layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
-{
-    EnvAccel[] uAccels;
-};
 
 vec3 GetViewReflectedNormal(vec3 N, vec3 V)
 {
@@ -68,11 +72,14 @@ void main()
     vec2 texCoord = v0.TexCoord.xy * barycentrics.x + v1.TexCoord.xy * barycentrics.y + v2.TexCoord.xy * barycentrics.z;
 
     const vec3 pos      = v0.Position.xyz * barycentrics.x + v1.Position.xyz * barycentrics.y + v2.Position.xyz * barycentrics.z;
-    const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));  // Transforming the position to world space
+    const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
      
     // Computing the normal at hit position
     const vec3 nrm      = v0.Normal.xyz * barycentrics.x + v1.Normal.xyz * barycentrics.y + v2.Normal.xyz * barycentrics.z;
-    vec3 worldNrm = normalize(vec3(nrm * gl_ObjectToWorldEXT));  // Transforming the normal to world space
+
+    // Note that for normals gl_WorldToObjectEXT is used instead of gl_ObjectToWorldEXT. That's because normals have to 
+    // be transformed using inverse of the transpose
+    vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT)); 
 
     const vec3 V = -gl_WorldRayDirectionEXT;
 
@@ -92,13 +99,13 @@ void main()
     vec3 normalMapVal = texture(uNormalTextures[gl_InstanceCustomIndexEXT], texCoord).xyz;
     normalMapVal = normalMapVal * 2.0f - 1.0f;
     
-    //normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
-    //surface.Normal = normalize(normalMapVal);
+    normalMapVal = TangentToWorld(surface.Tangent, surface.Bitangent, worldNrm, normalMapVal);
+    surface.Normal = normalize(normalMapVal);
 
-    //if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
-    //{
-    //    surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
-    //}
+    if (dot(surface.Normal, -gl_WorldRayDirectionEXT) < 0.0f)
+    {
+        surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
+    }
 
     // -------------------------------------------
     // Calculate Material Properties
@@ -145,6 +152,7 @@ void main()
     // -------------------------------------------
     // Hit
     // -------------------------------------------
+    payload.HitValue = material.EmissiveColor.xyz;
 
     BSDFSampleData sampleData;
     sampleData.View = -gl_WorldRayDirectionEXT;
@@ -165,7 +173,6 @@ void main()
 
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
     payload.RayOrigin = OffsetRay(worldPos, offsetDir);
-    payload.HitValue = material.EmissiveColor.xyz;
 
     //payload.Weight = vec3(0.0f);
     //payload.HitValue = (surface.Normal + 1.0f) * 0.5f;

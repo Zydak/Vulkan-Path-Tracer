@@ -427,6 +427,8 @@ void Editor::ImGuiRenderingToFileSettings()
 
 	ImGui::Separator();
 
+	ImGuiPostProcessingSettings();
+
 	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
 	PathTracingSettingsComponent* pathTracingSettings = nullptr;
 	for (auto& entity : viewPathTracing)
@@ -434,6 +436,7 @@ void Editor::ImGuiRenderingToFileSettings()
 		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
 	}
+	VL_CORE_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
 
 	ImGui::Text("%d / %d samples accumulated", m_PathTracer.GetSamplesAccumulated(), pathTracingSettings->Settings.TotalSamplesPerPixel);
 

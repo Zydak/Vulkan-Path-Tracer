@@ -161,5 +161,9 @@ private:
 
 	// Lookup Table
 	std::vector<std::vector<float>> m_ReflectionEnergyLookupTable;
-	Vulture::Image m_LookupTexture;
+	std::vector<std::vector<float>> m_RefractionEtaLessThan1EnergyLookupTable;
+	std::vector<std::vector<float>> m_RefractionEtaGreaterThan1EnergyLookupTable;
+	Vulture::Image m_ReflectionLookupTexture;
+	Vulture::Image m_RefractionLookupTextureEtaLessThan1;
+	Vulture::Image m_RefractionLookupTextureEtaGreaterThan1;
 };

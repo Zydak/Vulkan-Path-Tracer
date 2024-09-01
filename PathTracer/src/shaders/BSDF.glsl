@@ -20,6 +20,13 @@ struct BSDFEvaluateData
     vec3  BSDF;         // [out] BSDF
 };
 
+float kernel[3][3] = float[3][3]
+(
+    float[3](1, 2, 1),
+    float[3](2, 4, 2),
+    float[3](1, 2, 1)
+);
+
 vec3 Fresnel(float LdotH, vec3 cspec)
 {
     return cspec + (1.0f - cspec) * pow(1.0f - LdotH, 5.0f);
@@ -64,16 +71,16 @@ vec3 EvalDiffuse(in Material mat, vec3 L, out float pdf)
     //
     // So we're only left with Fr = Albedo.
 
-    //pdf = L.z * M_1_OVER_PI;
-    //vec3 bsdf = M_1_OVER_PI * mat.Color.xyz * L.z;
+    pdf = L.z * M_1_OVER_PI;
+    vec3 bsdf = M_1_OVER_PI * mat.Color.xyz * L.z;
 
-    pdf = 1.0f;
-    vec3 bsdf = mat.Color.xyz;
+    //pdf = 1.0f;
+    //vec3 bsdf = mat.Color.xyz;
 
     return bsdf;
 }
 
-vec3 EvalMetal(in Material mat, vec3 L, vec3 V, vec3 H, out float pdf)
+vec3 EvalReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float pdf)
 {
     // BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
     // 
@@ -93,67 +100,18 @@ vec3 EvalMetal(in Material mat, vec3 L, vec3 V, vec3 H, out float pdf)
     float LdotH = max(0.0f, dot(L, H));
     float VdotH = max(0.0f, dot(V, H));
 
-    float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-    vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(VdotH));
-
-    float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
-    float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
-    float G = GV * GL;
-
-    pdf = 1.0f;
-    vec3 bsdf = F * GL;
-
-    //pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
-    //vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
-
-    // Lookup table for energy compensation
-    float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
-    float energyCompensation = texture(uEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-
-    //bsdf = vec3(energyCompensation) * bsdf + bsdf; // No fresnel
-    bsdf = (1.0f + F * vec3(energyCompensation)) * bsdf; // Fresnel
-
-    return bsdf;
-}
-
-vec3 EvalDielectricReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float pdf)
-{
-    // BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
-    // 
-    // PDF is VNDF * jacobian of reflect()
-    // PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
-    //
-    // Fr = BRDF / PDF
-    //
-    // If we expand it we get
-    // 
-    //      D * F * GV * GL * 4.0f * NdotV * NdotL * VdotH
-    // Fr = ----------------------------------------------
-    //          4.0f * NdotL * VdotH * NdotV * GV * D
-    //
-    // almost everything cancels out and we're only left with F * GL. Noice.
-
-    float LdotH = max(0.0f, dot(L, H));
-    float VdotH = max(0.0f, dot(V, H));
-
+    //float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
     float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
 
     float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
     float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
     float G = GV * GL;
 
-    pdf = 1.0f;
-    vec3 bsdf = F * GL;
+    //pdf = 1.0f;
+    //vec3 bsdf = F * GL;
 
-    //pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
-    //vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
-
-    // Lookup table for energy compensation
-    float layer = floor(((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f);
-    float energyCompensation = texture(uEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-
-    //data.BSDF += vec3(energyCompensation) * bsdf + bsdf; // No fresnel
-    bsdf = (1.0f + F * vec3(energyCompensation)) * bsdf; // Fresnel
+    pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
+    vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
 
     return bsdf;
 }
@@ -164,24 +122,18 @@ vec3 EvalDielectricRefraction(in Material mat, in Surface surface, vec3 L, vec3 
     float LdotH = abs(dot(L, H));
     
     float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-    float G1 = GGXSmithAnisotropic(V, mat.ax, mat.ay);
+    float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
     float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
-    float G2 = G1 * GL;
+    float G = GV * GL;
 
     float denominator = (LdotH + mat.eta * VdotH);
     float denominator2 = denominator * denominator;
     float eta2 = mat.eta * mat.eta;
 
-    float jacobian = (eta2 * abs(LdotH)) / denominator2;
+    float jacobian = (eta2 * LdotH) / denominator2;
 
-    pdf = (G1 * VdotH * D / V.z) * jacobian;
-    vec3 bsdf = (mat.Color.xyz * (1.0f - F) * D * G2 * eta2 / denominator2) * (abs(VdotH) * abs(LdotH) / (abs(L.z) * abs(V.z)));
-
-    //vec3 Ft = mat.Color.xyz * (1.0f - F) * G;
-    //
-    //pdf = (LdotH) / (abs(L.z));
-    //
-    //vec3 bsdf = Ft * abs(L.z) / (V.z);
+    pdf = (GV * VdotH * D / V.z) * jacobian;
+    vec3 bsdf = (mat.Color.xyz * (1.0f - F) * D * G * eta2 / denominator2) * (VdotH * LdotH / abs(V.z));
 
     return bsdf;
 }
@@ -232,24 +184,43 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         if (data.RayDir.z < 0.0f)
             return false;
 
-        data.BSDF = EvalMetal(mat, data.RayDir, V, H, data.PDF);
+        vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
+        data.BSDF = EvalReflection(mat, data.RayDir, V, H, F, data.PDF);
+
+        // Lookup table for energy compensation
+        float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
+        float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
+
+        data.BSDF = (1.0f + F * vec3(energyCompensation)) * data.BSDF; // Fresnel
     
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
     else if (r1 < dielectricCDF)
     {
+        // Dielectric
+
         vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
         data.RayDir = normalize(reflect(-V, H));
 
         if (data.RayDir.z < 0.0f)
             return false;
     
-        data.BSDF = EvalDielectricReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
+        data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
     
+        data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
+
+        // Lookup table for energy compensation
+        float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
+        float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
+
+        data.BSDF = (1.0f + vec3(1.0f) * vec3(energyCompensation)) * data.BSDF; // Fresnel
+
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
     else if (r1 < glassCDF)
     {
+        // Glass
+
         vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
         float F = DielectricFresnel(abs(dot(V, H)), mat.eta);
 
@@ -259,20 +230,45 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         {
             // Reflect
             data.RayDir = normalize(reflect(-V, H));
-
+        
             if (data.RayDir.z < 0.0f)
                 return false;
+        
+            data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF) / data.PDF;
+            data.PDF = 1.0f;
 
-            data.BSDF = EvalDielectricReflection(mat, data.RayDir, V, H, vec3(F), data.PDF);
+            // Lookup table for energy compensation
+            float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
+            float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
+            data.BSDF = (1.0f + vec3(energyCompensation)) * data.BSDF;
         }
         else
         {
+            // Refract
+
             data.RayDir = normalize(refract(-V, H, mat.eta));
 
             if (data.RayDir.z > 0.0f)
                 return false;
 
-            data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, F, data.PDF);
+            data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, 0.0f, data.PDF) / data.PDF;
+            data.PDF = 1.0f;
+
+            // Lookup table for energy compensation
+            float layer = (mat.Ior - 1.0f) * 32.0f;
+
+            if (mat.eta > 1.0f)
+            {
+                float energyComp = texture(uRefractionEnergyLookupTextureEtaGreaterThan1, vec3(V.z, mat.Roughness, layer)).r;
+
+                data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
+            }
+            else
+            {
+                float energyComp = texture(uRefractionEnergyLookupTextureEtaLessThan1, vec3(V.z, mat.Roughness, layer)).r;
+
+                data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
+            }
         }
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
@@ -293,13 +289,18 @@ void EvaluateBSDF(inout BSDFEvaluateData data, in Material mat, in Surface surfa
     float VdotH = max(dot(V, H), 0.0f);
     float LdotH = max(dot(L, H), 0.0f);
 
-    float diffuseProbability = 1.0f - mat.Metallic;
-    float metallicProbability = mat.Metallic;
+    float F0 = (1.0f - mat.eta) / (1.0f + mat.eta);
+    F0 *= F0;
 
-    float inverseTotalProbability = 1.0f / (diffuseProbability + metallicProbability);
+    float diffuseProbability = (1.0f - mat.Metallic) * (1.0f - mat.Transparency);
+    float metallicProbability = mat.Metallic;
+    float dieletricProbability = (1.0f - mat.Metallic) * F0 * (1.0f - mat.Transparency);
+
+    float inverseTotalProbability = 1.0f / (diffuseProbability + metallicProbability + dieletricProbability);
 
     diffuseProbability *= inverseTotalProbability;
     metallicProbability *= inverseTotalProbability;
+    dieletricProbability *= inverseTotalProbability;
 
     data.PDF = 0.0f;
     data.BSDF = vec3(0.0f);
@@ -309,14 +310,22 @@ void EvaluateBSDF(inout BSDFEvaluateData data, in Material mat, in Surface surfa
     
         float pdf;
         data.BSDF += EvalDiffuse(mat, L, pdf) * diffuseProbability;
-        data.PDF += pdf* diffuseProbability;
+        data.PDF += pdf * diffuseProbability;
     }
     {
         // Metallic
     
         float pdf;
-        data.BSDF += EvalMetal(mat, L, V, H, pdf) * metallicProbability;
+        vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(VdotH));
+        data.BSDF += EvalReflection(mat, L, V, H, F, pdf) * metallicProbability;
         data.PDF += pdf * metallicProbability;
+    }
+    {
+        // Dielectric
+    
+        float pdf;
+        data.BSDF += EvalReflection(mat, L, V, H, vec3(1.0f), pdf) * dieletricProbability;
+        data.PDF += pdf * dieletricProbability;
     }
 }
 
