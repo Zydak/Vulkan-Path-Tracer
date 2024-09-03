@@ -104,10 +104,10 @@ void main()
             hitValue += payload.HitValue * curWeight;
             curWeight *= payload.Weight;
 
-            float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 1.0f);
-            if(Rnd(payload.Seed) >= p)
-                break;  // paths with low throughput that won't contribute
-            curWeight /= p;
+            //float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 1.0f);
+            //if(Rnd(payload.Seed) >= p)
+            //    break;  // paths with low throughput that won't contribute
+            //curWeight /= p;
         }
 
         // Eliminate caustics

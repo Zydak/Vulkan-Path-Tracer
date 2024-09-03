@@ -750,7 +750,7 @@ float BRDF(glm::vec3 V, float F, float ax, float ay)
 	glm::vec3 L = glm::reflect(-V, H);
 
 	if (L.z < 0.0f)
-		return false;
+		return 0.0f;
 
 	// BRDF = D * F * GV * GL / (4.0f * NdotV)
 	// 

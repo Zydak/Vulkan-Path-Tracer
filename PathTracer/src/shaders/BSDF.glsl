@@ -20,16 +20,11 @@ struct BSDFEvaluateData
     vec3  BSDF;         // [out] BSDF
 };
 
-float kernel[3][3] = float[3][3]
-(
-    float[3](1, 2, 1),
-    float[3](2, 4, 2),
-    float[3](1, 2, 1)
-);
-
-vec3 Fresnel(float LdotH, vec3 cspec)
+float SchlickWeight(float VdotH)
 {
-    return cspec + (1.0f - cspec) * pow(1.0f - LdotH, 5.0f);
+    float m = clamp(1.0 - VdotH, 0.0, 1.0);
+    float m2 = m * m;
+    return m2 * m2 * m;
 }
 
 float DielectricFresnel(float VdotH, float eta)
@@ -49,103 +44,12 @@ float DielectricFresnel(float VdotH, float eta)
     return 0.5f * (rs * rs + rp * rp);
 }
 
-float SchlickWeight(float VdotH)
-{
-    float m = clamp(1.0 - VdotH, 0.0, 1.0);
-    float m2 = m * m;
-    return m2 * m2 * m;
-}
-
-vec3 EvalDiffuse(in Material mat, vec3 L, out float pdf)
-{
-    // BRDF = Albedo / M_PI * NdotL
-    // PDF = NdotL / M_PI
-    // 
-    // Fr = BRDF / PDF
-    // 
-    // If we expand it we get
-    // 
-    //      Albedo * NdotL * M_PI
-    // Fr = ---------------------
-    //          M_PI * NdotL
-    //
-    // So we're only left with Fr = Albedo.
-
-    pdf = L.z * M_1_OVER_PI;
-    vec3 bsdf = M_1_OVER_PI * mat.Color.xyz * L.z;
-
-    //pdf = 1.0f;
-    //vec3 bsdf = mat.Color.xyz;
-
-    return bsdf;
-}
-
-vec3 EvalReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float pdf)
-{
-    // BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
-    // 
-    // PDF is VNDF / jacobian of reflect()
-    // PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
-    //
-    // Fr = BRDF / PDF
-    //
-    // If we expand it we get
-    // 
-    //      D * F * GV * GL * 4.0f * NdotV * NdotL * VdotH
-    // Fr = ----------------------------------------------
-    //          4.0f * NdotL * VdotH * NdotV * GV * D
-    //
-    // almost everything cancels out and we're only left with F * GL. Noice.
-
-    float LdotH = max(0.0f, dot(L, H));
-    float VdotH = max(0.0f, dot(V, H));
-
-    //float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-    float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-
-    float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
-    float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
-    float G = GV * GL;
-
-    //pdf = 1.0f;
-    //vec3 bsdf = F * GL;
-
-    pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
-    vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
-
-    return bsdf;
-}
-
-vec3 EvalDielectricRefraction(in Material mat, in Surface surface, vec3 L, vec3 V, vec3 H, float F, out float pdf)
-{
-    float VdotH = abs(dot(V, H));
-    float LdotH = abs(dot(L, H));
-    
-    float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
-    float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
-    float GL = GGXSmithAnisotropic(L, mat.ax, mat.ay);
-    float G = GV * GL;
-
-    float denominator = (LdotH + mat.eta * VdotH);
-    float denominator2 = denominator * denominator;
-    float eta2 = mat.eta * mat.eta;
-
-    float jacobian = (eta2 * LdotH) / denominator2;
-
-    pdf = (GV * VdotH * D / V.z) * jacobian;
-    vec3 bsdf = (mat.Color.xyz * (1.0f - F) * D * G * eta2 / denominator2) * (VdotH * LdotH / abs(V.z));
-
-    return bsdf;
-}
-
 bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface)
 {
     vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View);
 
     float F0 = (1.0f - mat.eta) / (1.0f + mat.eta);
     F0 *= F0;
-
-    float schlickWt = SchlickWeight(V.z);
 
     float diffuseProbability = (1.0f - mat.Metallic) * (1.0f - mat.Transparency);
     float metallicProbability = mat.Metallic;
@@ -165,14 +69,15 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     float glassCDF = dielectricCDF + glassProbability;
 
     float r1 = Rnd(seed);
-
+    
+    data.PDF = 1.0f;
     if (r1 < diffuseCDF)
     {
         // Diffuse
     
         data.RayDir = CosineSamplingHemisphere(seed, surface.Normal);
-        vec3 L = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
-        data.BSDF = EvalDiffuse(mat, L, data.PDF);
+
+        data.BSDF = mat.Color.xyz;
     }
     else if (r1 < metallicCDF)
     {
@@ -181,17 +86,23 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
         data.RayDir = normalize(reflect(-V, H));
 
+        vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
+
+        for (int i = 0; i < 500; i++)
+        {
+            if (data.RayDir.z > 0.0f)
+                break;
+
+            vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
+            data.RayDir = normalize(reflect(-V, H));
+
+            F *= mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
+        }
+
         if (data.RayDir.z < 0.0f)
             return false;
 
-        vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
-        data.BSDF = EvalReflection(mat, data.RayDir, V, H, F, data.PDF);
-
-        // Lookup table for energy compensation
-        float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
-        float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-
-        data.BSDF = (1.0f + F * vec3(energyCompensation)) * data.BSDF; // Fresnel
+        data.BSDF = F;
     
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
@@ -202,16 +113,23 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
         data.RayDir = normalize(reflect(-V, H));
 
+        vec3 Color = mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
+
+        for (int i = 0; i < 500; i++)
+        {
+            if (data.RayDir.z > 0.0f)
+                break;
+
+            vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
+            data.RayDir = normalize(reflect(-V, H));
+
+            Color *= mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
+        }
+
         if (data.RayDir.z < 0.0f)
             return false;
-    
-        data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
 
-        // Lookup table for energy compensation
-        float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
-        float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-
-        data.BSDF = (1.0f + vec3(1.0f) * vec3(energyCompensation)) * data.BSDF; // Fresnel
+        data.BSDF = Color;
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
@@ -228,17 +146,24 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         {
             // Reflect
             data.RayDir = normalize(reflect(-V, H));
-        
+
+            vec3 Color = mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
+
+            for (int i = 0; i < 500; i++)
+            {
+                if (data.RayDir.z > 0.0f)
+                    break;
+
+                vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
+                data.RayDir = normalize(reflect(-V, H));
+
+                Color *= mix(vec3(1.0f), mat.Color.xyz, mat.SpecularTint);
+            }
+
             if (data.RayDir.z < 0.0f)
                 return false;
-        
-            data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF) / data.PDF;
-            data.PDF = 1.0f;
 
-            // Lookup table for energy compensation
-            float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
-            float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-            data.BSDF = (1.0f + vec3(energyCompensation)) * data.BSDF;
+            data.BSDF = Color;
         }
         else
         {
@@ -246,85 +171,29 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
             data.RayDir = normalize(refract(-V, H, mat.eta));
 
+            vec3 Color = mat.Color.xyz;
+
+            for (int i = 0; i < 500; i++)
+            {
+                if (data.RayDir.z < 0.0f)
+                    break;
+
+                vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
+                data.RayDir = normalize(reflect(-V, H));
+
+                Color *= mat.Color.xyz;
+            }
+
             if (data.RayDir.z > 0.0f)
                 return false;
 
-            data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, 0.0f, data.PDF) / data.PDF;
-            data.PDF = 1.0f;
-
-            // Lookup table for energy compensation
-            float layer = (mat.Ior - 1.0f) * 32.0f;
-
-            if (mat.eta > 1.0f)
-            {
-                float energyComp = texture(uRefractionEnergyLookupTextureEtaGreaterThan1, vec3(V.z, mat.Roughness, layer)).r;
-
-                data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
-            }
-            else
-            {
-                float energyComp = texture(uRefractionEnergyLookupTextureEtaLessThan1, vec3(V.z, mat.Roughness, layer)).r;
-
-                data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
-            }
+            data.BSDF = Color;
         }
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
 
     return true;
-}
-
-void EvaluateBSDF(inout BSDFEvaluateData data, in Material mat, in Surface surface)
-{
-    vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View);
-    vec3 L = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
-    vec3 H = normalize(V + L);
-
-    float NdotH = max(H.z, 0.0f);
-    float NdotV = max(V.z, 0.0f);
-    float NdotL = max(L.z, 0.0f);
-    float VdotH = max(dot(V, H), 0.0f);
-    float LdotH = max(dot(L, H), 0.0f);
-
-    float F0 = (1.0f - mat.eta) / (1.0f + mat.eta);
-    F0 *= F0;
-
-    float diffuseProbability = (1.0f - mat.Metallic) * (1.0f - mat.Transparency);
-    float metallicProbability = mat.Metallic;
-    float dieletricProbability = (1.0f - mat.Metallic) * F0 * (1.0f - mat.Transparency);
-
-    float inverseTotalProbability = 1.0f / (diffuseProbability + metallicProbability + dieletricProbability);
-
-    diffuseProbability *= inverseTotalProbability;
-    metallicProbability *= inverseTotalProbability;
-    dieletricProbability *= inverseTotalProbability;
-
-    data.PDF = 0.0f;
-    data.BSDF = vec3(0.0f);
-
-    {
-        // Diffuse
-    
-        float pdf;
-        data.BSDF += EvalDiffuse(mat, L, pdf) * diffuseProbability;
-        data.PDF += pdf * diffuseProbability;
-    }
-    {
-        // Metallic
-    
-        float pdf;
-        vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(VdotH));
-        data.BSDF += EvalReflection(mat, L, V, H, F, pdf) * metallicProbability;
-        data.PDF += pdf * metallicProbability;
-    }
-    {
-        // Dielectric
-    
-        float pdf;
-        data.BSDF += EvalReflection(mat, L, V, H, vec3(1.0f), pdf) * dieletricProbability;
-        data.PDF += pdf * dieletricProbability;
-    }
 }
 
 #endif
