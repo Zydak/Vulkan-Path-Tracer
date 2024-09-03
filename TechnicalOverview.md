@@ -335,11 +335,13 @@ f_r(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{F(\mathbf{i}, \mathbf{m}) G(\mat
 $$
 
 and $f_t$ term as:
+
 $$
 f_i(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{|\mathbf{i} \cdot \mathbf{m}| |\mathbf{o} \cdot \mathbf{m}| \, \eta_o^2 (1 - F(\mathbf{i}, \mathbf{m})) G(\mathbf{i}, \mathbf{o}, \mathbf{m}) D(\mathbf{m})}{|\mathbf{i} \cdot \mathbf{n}| |\mathbf{o} \cdot \mathbf{n}| \left(\eta_i (\mathbf{o} \cdot \mathbf{m}) + \eta_o (\mathbf{i} \cdot \mathbf{m})\right)^2}
 $$
 
 so our $f_s$ is:
+
 $$
 f_s(\mathbf{i}, \mathbf{o}, \mathbf{m}) = f_r(\mathbf{i}, \mathbf{o}, \mathbf{m}) + f_t(\mathbf{i}, \mathbf{o}, \mathbf{m})
 $$
@@ -351,18 +353,23 @@ f_s(\mathbf{i}, \mathbf{o}, \mathbf{m}) = \frac{f_r(\mathbf{i}, \mathbf{o}, \mat
 $$
 
 Where according to the [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf) PDF is equal to the VNDF ([Distribution of Visible Normals](https://inria.hal.science/hal-00996995v2/document)) weighted by the Jacobian of the operator (reflect of refract). So for reflection it's:
+
 $$
 PDF_r = \frac{G_1(\mathbf{i}, \mathbf{m}) \cdot D \cdot |\mathbf{i} \cdot \mathbf{m}|}{4 \cdot |\mathbf{i} \cdot \mathbf{m}| \cdot |\mathbf{i} \cdot \mathbf{n}|}
 $$
+
 And for refractions it's:
+
 $$
 PDF_t = \frac{G_1(\mathbf{i}, \mathbf{m}) \cdot |\mathbf{i} \cdot \mathbf{m}| \cdot D \cdot \eta_o^2 \cdot |\mathbf{o} \cdot \mathbf{m}|}{|\mathbf{i} \cdot \mathbf{n}| \cdot (\eta_i |\mathbf{o} \cdot \mathbf{m}| + \eta_o |\mathbf{i} \cdot \mathbf{m}|)^2}
 $$
 
 So we end up with this pretty big equations for both reflection and refraction. For reflection we're actually quite lucky because almost every term just cancel out (note that $|\mathbf{o} \cdot \mathbf{n}|$ cancels out with the cosine term in the rendering equation and not directly with the PDF) and we're left only with:
+
 $$
 \frac{f_r(\mathbf{i}, \mathbf{o}, \mathbf{m})}{PDF_r} = F(\mathbf{i}, \mathbf{m}) \cdot G_1(\mathbf{o}, \mathbf{m})
 $$
+
 For refraction we're not so lucky, some elements will cancel out but we still have to evaluate most of the equation. And I have no intention of typing all of that into LaTeX because my fingers would fall off.
 
 Unfortunately, this approach of calculating the BSDF instead just multiplying the ray weight by the surface color has one really big problem. It's not energy conserving, which means it destroys the energy. What I mean by that is when you shoot ray into completely white surface, it shouldn't absorb any light (that's the definition of white color, it does not absorb anything, all channels are maxed out so $1 \cdot 1 = 1$). But that's not the case here. We'll look into why in a second, but first lets explain how do we even measure that.
@@ -675,6 +682,7 @@ Dielectric reflection lobe which acts like another surface on top of the diffuse
 $$
 f_r(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{F(\mathbf{i}, \mathbf{m}) G(\mathbf{i}, \mathbf{o}, \mathbf{m}) D(\mathbf{h}_r)}{4 |\mathbf{i} \cdot \mathbf{n}| |\mathbf{o} \cdot \mathbf{n}|}
 $$
+
 $$
 PDF_r = \frac{G_1(\mathbf{i}, \mathbf{m}) \cdot D \cdot |\mathbf{i} \cdot \mathbf{m}|}{4 \cdot |\mathbf{i} \cdot \mathbf{m}| \cdot |\mathbf{i} \cdot \mathbf{n}|}
 $$
