@@ -73,15 +73,19 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![IOR](./Gallery/materialShowcase/ior.png)
 
 # List Of Features
-- Energy Conserving BSDF
+- Energy Conserving BSDF (For more info refer to [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md)).
+<p align="center">
+  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
+  <img src="./Gallery/Graphics/Original.png" alt="Original" />
+</p>
+
+
 - Complex Materials
-  - Diffuse, Metallic and Roughness Textures
-  - Transparent materials with IOR
-  - Emissive Objects
 - Editor
   - Loading your own scenes in .gltf .fbx and .obj format
   - Editing scene materials in runtime
 - Exporting renders into .PNG files
+- Exporting and loading scenes.
 - Shader hot reloading and caching
 - HDR Environment Maps
 - Post Processing
@@ -96,24 +100,28 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
   - Color Filter
   - Chromatic Aberration
   - 6 Tonemappers (Filmic, Hill Aces, Narkowicz Aces, Exposure Mapping, Uncharted 2, Reinchard Extended)
-  - Ink Effect: Detects Edges, turns everything to black and white, applies blue noise and adds paper texture.
-  - Posterize Effect: Quantizes Colors, Applies Dithering and adds ability to replace color pallet with your own colors or colors generated in OKLAB color space
 - Anti Aliasing
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
 - Camera controller made using quaternions
 
-# Credits
+# References
+
+## Papers Used
+- [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf)
+- [Microfacet Models for Refraction through Rough Surfaces](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf)
+- [Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals](https://inria.hal.science/hal-00996995v2/document)
+- [A Reflectance Model For Computer Graphics](https://dl.acm.org/doi/pdf/10.1145/357290.357293)
+- [Turquin](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf)
+- (Not implemented, just mentioned!) [Multiple-Scattering Microfacet BSDFs with the Smith Model](https://eheitzresearch.wordpress.com/240-2/)
+
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
-- https://pbrt.org/scenes-v3 - Glass
 - https://pbrt.org/scenes-v3 - Small Dragon
 - https://pbrt.org/scenes-v3 - Coffee Cup
 - https://www.blender.org/download/demo-files/ - Monster
 - https://polyhaven.com/hdris - Env Maps
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
-- https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
-- https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/Sponza/glTF - Sponza 2
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://github.com/knightcrawler25/GLSL-PathTracer Teapots
