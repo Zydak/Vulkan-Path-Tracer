@@ -301,7 +301,7 @@ $$
   <img src="./Gallery/Graphics/ShadowingAndMasking.png" alt="ShadowingAndMasking"/>
 </p>
 
-There also is 1 more term denoted as $F(i, m)$, it's fresnel term. I won't go into detail about it here because it's quite a complex topic, but it essentially describes the ratio of reflection to refraction. In real world when you look straight at the surface the reflection is weaker (not always), the amount of this reflection is called **base reflectivity**. But when looking at the surface from a grazing angle the reflection becomes stronger.
+There also is 1 more term denoted as $F(i, m)$, it's fresnel term. I won't go into detail about it here because it's quite a complex topic, but it essentially describes the ratio of reflection to refraction. In real world when you look straight at the surface the reflection is weaker (not always), the amount of this reflection is called **base reflectivity**, it's denoted as $F_0$. But when looking at the surface from a grazing angle the reflection becomes stronger.
 
 <p align="center">
   <img src="./Gallery/Graphics/Fresnel.png" alt="Water"/>
@@ -337,7 +337,7 @@ $$
 and $f_t$ term as:
 
 $$
-f_i(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{|\mathbf{i} \cdot \mathbf{m}| |\mathbf{o} \cdot \mathbf{m}| \, \eta_o^2 (1 - F(\mathbf{i}, \mathbf{m})) G(\mathbf{i}, \mathbf{o}, \mathbf{m}) D(\mathbf{m})}{|\mathbf{i} \cdot \mathbf{n}| |\mathbf{o} \cdot \mathbf{n}| \left(\eta_i (\mathbf{o} \cdot \mathbf{m}) + \eta_o (\mathbf{i} \cdot \mathbf{m})\right)^2}
+f_t(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{|\mathbf{i} \cdot \mathbf{m}| |\mathbf{o} \cdot \mathbf{m}| \eta_o^2 (1 - F(\mathbf{i}, \mathbf{m})) G(\mathbf{i}, \mathbf{o}, \mathbf{m}) D(\mathbf{m})}{|\mathbf{i} \cdot \mathbf{n}| |\mathbf{o} \cdot \mathbf{n}| \left(\eta_i (\mathbf{o} \cdot \mathbf{m}) + \eta_o (\mathbf{i} \cdot \mathbf{m})\right)^2}
 $$
 
 so our $f_s$ is:
@@ -364,13 +364,17 @@ $$
 PDF_t = \frac{G_1(\mathbf{i}, \mathbf{m}) \cdot |\mathbf{i} \cdot \mathbf{m}| \cdot D \cdot \eta_o^2 \cdot |\mathbf{o} \cdot \mathbf{m}|}{|\mathbf{i} \cdot \mathbf{n}| \cdot (\eta_i |\mathbf{o} \cdot \mathbf{m}| + \eta_o |\mathbf{i} \cdot \mathbf{m}|)^2}
 $$
 
-So we end up with this pretty big equations for both reflection and refraction. For reflection we're actually quite lucky because almost every term just cancel out (note that $|\mathbf{o} \cdot \mathbf{n}|$ cancels out with the cosine term in the rendering equation and not directly with the PDF) and we're left only with:
+So we end up with this pretty big equations for both reflection and refraction. Byt we're actually quite lucky because almost every term just cancel out (note that $|\mathbf{o} \cdot \mathbf{n}|$ cancels out with the cosine attenuation term in the rendering equation and not directly with the PDF) and we're left only with:
 
 $$
 \frac{f_r(\mathbf{i}, \mathbf{o}, \mathbf{m})}{PDF_r} = F(\mathbf{i}, \mathbf{m}) \cdot G_1(\mathbf{o}, \mathbf{m})
 $$
 
-For refraction we're not so lucky, some elements will cancel out but we still have to evaluate most of the equation. And I have no intention of typing all of that into LaTeX because my fingers would fall off.
+And for refraction
+
+$$
+\frac{f_t(\mathbf{i}, \mathbf{o}, \mathbf{m})}{PDF_t} = \eta_o^2 (1 - F(\mathbf{i}, \mathbf{m})) G_1(\mathbf{o}, \mathbf{m})
+$$
 
 Unfortunately, this approach of calculating the BSDF instead just multiplying the ray weight by the surface color has one really big problem. It's not energy conserving, which means it destroys the energy. What I mean by that is when you shoot ray into completely white surface, it shouldn't absorb any light (that's the definition of white color, it does not absorb anything, all channels are maxed out so $1 \cdot 1 = 1$). But that's not the case here. We'll look into why in a second, but first lets explain how do we even measure that.
 
@@ -457,7 +461,7 @@ You can clearly see that something is wrong. On the image on the left the BSDF i
 
 ### BSDF Evaluation
 
-So back to the BSDF problem, as I said earlier, it does *not* conserve energy. 
+So back to the BSDF problem, as I said earlier, it does *not* conserve energy. The BSDF with DFG terms is not always equal to $\frac{1}{\pi}$ for white surface so the equation won't always equal 1.
 
 <p align="center">
   <img src="./Gallery/Graphics/GGXFurnace.png" alt="GGXFurnace" width="500" height="500" />
@@ -655,7 +659,7 @@ Note that I did implement the distribution approach **and** the rejection sampli
 
 So now that I explained how is energy working, let's talk about the implementation. It's actually really simple. I start by computing the probabilities of each lobe (if you're interested in how is that done just look into the code), I compute a random number and stochastically choose which lobe to sample. When it comes to lobes there are 4 of them:
 
-Diffuse lobe which is acting like a rough surface that isn't affected by fresnel. It is most often combined with dielectric reflection lobe which I'll about in a second. To compute it I'm using so called Lambertian Diffuse, which is basically saying that the lobe is stronger when the $\cos(\theta_o)$ is bigger. It's the best match for object since that's how the surfaces act in real world so it's more [realistic](https://en.wikipedia.org/wiki/Lambertian_reflectance). It is evaluated like so:
+Diffuse lobe which is acting like a rough surface that isn't affected by fresnel. It is most often combined with dielectric reflection lobe which I'll talk about in a second. To compute it I'm using so called Lambertian Diffuse, which is basically saying that the lobe is stronger when the $\cos(\theta_o)$ is bigger. It's the best match for object since that's how the surfaces act in real world so it's more [realistic](https://en.wikipedia.org/wiki/Lambertian_reflectance). It is evaluated like so:
 
 $$
 f_r(\mathbf{i}, \mathbf{o}, \mathbf{m}) = \text{color} * |\mathbf{o} \cdot \mathbf{m}| \cdot \frac{1}{\pi}
@@ -751,7 +755,7 @@ And that pretty much concludes the overview of path tracing. I went through ever
 So for further reading:
 * Read the code.
 * For more info on the Vulkan raytracing pipeline, see [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR) or [raytracing gems II](https://developer.nvidia.com/ray-tracing-gems-ii) chapter 16.
-* For more information on BSDF and various other techniques like Russian Roulette, see the [pbrt book](https://pbr-book.org/4ed/contents).
+* For more information on BSDF and various other techniques like Russian Roulette, see the [pbrt book](https://pbr-book.org/4ed/contents) and read all of the papers that were mentioned.
 * For more info on the Optix denoiser see nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
 
 # Architecture

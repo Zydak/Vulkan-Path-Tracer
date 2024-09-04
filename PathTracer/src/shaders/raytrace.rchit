@@ -147,6 +147,9 @@ void main()
     material.Color *= texture(uAlbedoTextures[gl_InstanceCustomIndexEXT], texCoord);
 #endif
 
+    material.Roughness *= texture(uRoghnessTextures[gl_InstanceCustomIndexEXT], texCoord).r;
+    material.Metallic *= texture(uMetallnessTextures[gl_InstanceCustomIndexEXT], texCoord).r;
+
     material.eta = dot(gl_WorldRayDirectionEXT, surface.GeoNormal) < 0.0 ? (1.0 / material.Ior) : material.Ior;
     
     // -------------------------------------------

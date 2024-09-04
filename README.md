@@ -41,10 +41,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![Monster](./Gallery/MonsterRough.png)
 --------
-![MonsterInk](./Gallery/MonsterInk.png)
---------
-![MonsterPosterize](./Gallery/MonsterPosterize.png)
---------
 
 ## Material Showcase
 
@@ -53,6 +49,12 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 
 - Roughness factor on metallic surface ranging from 0 to 1.
 ![metalRoughness](./Gallery/materialShowcase/metalRoughness.png)
+
+- Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to -1.
+![Anisotropy-](./Gallery/materialShowcase/Anisotropy-.png)
+
+- Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to 1.
+![Anisotropy+](./Gallery/materialShowcase/Anisotropy+.png)
 
 - Specular Strength factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
 ![specular](./Gallery/materialShowcase/specular.png)
@@ -67,13 +69,13 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![glass](./Gallery/materialShowcase/glass.png)
 
 - Roughness factor on glass surface ranging from 0 to 1.
-![glassRougness](./Gallery/materialShowcase/glassRougness.png)
+![glassRoughness](./Gallery/materialShowcase/glassRoughness.png)
 
 - Index of refraction (IOR) factor on glass surface ranging from 1 to 2. Determines how much the path of light is bent during refraction.
 ![IOR](./Gallery/materialShowcase/ior.png)
 
 # List Of Features
-- Energy Conserving BSDF (For more info refer to [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md)).
+- Energy Conserving BSDF.
 <p align="center">
   <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
   <img src="./Gallery/Graphics/Original.png" alt="Original" />
