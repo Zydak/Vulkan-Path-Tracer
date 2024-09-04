@@ -30,7 +30,6 @@ The main goal for this project was to create energy conserving and preserving of
     - [Conclusion](#conclusion)
   - [Denoising](#denoising)
   - [Conclusion](#conclusion-1)
-- [Architecture](#architecture)
 - [Benchmark](#benchmark)
   - [Specs](#specs)
   - [Performance](#performance)
@@ -290,7 +289,7 @@ Real world surfaces are rarely perfectly smooth. Instead, they have microscopic 
   <img src="./Gallery/Graphics/Microfacet.png" alt="Microfacet"/>
 </p>
 
-But the microsurface is just too small to be fully simulated, instead the model assumes that it can be modeled at runtime with 2 statistical functions, distribution function $D(m)$ and shadowing-masking function $G(i, o, m)$. $D(m)$ describes the statistical distribution of the microfacet normals $m$ over the microsurface e.g what's the probability of the microfacet being oriented in the direction $m$. $G(i, o, m)$ determines what portion of the microsurface is visible from both directions $i$ and $o$ due to shadowing and masking.
+But the microsurface is just too small to be fully simulated, instead the model assumes that it can be modeled at runtime with 2 statistical functions, distribution function $D(m)$ and shadowing-masking function $G(i, o, m)$. $D(m)$ describes the statistical distribution of the microfacet normals $m$ over the microsurfac i.e. what's the probability of the microfacet being oriented in the direction $m$. $G(i, o, m)$ determines what portion of the microsurface is visible from both directions $i$ and $o$ due to shadowing and masking.
 
 $G(i, o, m)$ is derived as
 $$
@@ -472,7 +471,7 @@ Fully metallic sphere with roughness 1.
 
 That's because of 2 things:
 
-1. When surface is rough, it's completely possible for the microfacet to be oriented in such a way that the light bounces *into* the object from it. And there's not really much we can do about it besides discarding the sample. So literally destroying the light. That's because if we try to do anything (e.g. change the direction with rejection sampling), we'll no longer match the distribution of normals, so we'll introduce bias (more on that [here](https://chat.stackexchange.com/rooms/154146/discussion-between-enigmatisms-and-tom-clabault)).
+1. When surface is rough, it's completely possible for the microfacet to be oriented in such a way that the light bounces *into* the object from it. And there's not really much we can do about it besides discarding the sample. So literally destroying the light. That's because if we try to do anything (i.e. change the direction with rejection sampling), we'll no longer match the distribution of normals, so we'll introduce bias (more on that [here](https://chat.stackexchange.com/rooms/154146/discussion-between-enigmatisms-and-tom-clabault)).
 
 2. Shadowing-masking term is also destroying energy. It tells us when the microfacet is covered by other microfacets from our point of view, and if it is, we don't really do anything. We just multiply the result by the portion of the microfacet that's visible. So we're also destroying energy.
 
@@ -489,7 +488,7 @@ These 2 problems can be solved by accounting for something called **Multiple Sur
   <img src="./Gallery/Graphics/MultipleScattering.png" alt="MultipleScattering" />
 </p>
 
-But doing multiple scattering has a huge downside - It's really hard and really slow. If you want to look into details you can read [Multiple-Scattering Microfacet BSDFs with the Smith Model](https://eheitzresearch.wordpress.com/240-2/) by Eric Heitz. But this method is usually only used for validation purposes because of it's performance. According to [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) which I'll talk about in a second, Heitz's method is from 7 to 15 times slower than doing single scattering! This makes it pretty much impractical even for offline rendering, it's just not worth it. It's also not possible to evaluate it non-stochastically, so it can only be used in offline path tracers. There are more papers on this topic but each of them has some other major problem. Like [Position-free Multiple-bounce Computations for Smith Microfacet BSDFs](https://wangningbei.github.io/2022/MBBRDF.html), It's still not conserving 100% of the energy and is not reciprocal and does not have closed form solution, e.g. it can't be evaluated non-stochastically. Or [Multiple-bounce Smith Microfacet BRDFs using the Invariance Principle](https://wangningbei.github.io/2023/GMBBRDF.html), it can't evaluate refractions. All of the other papers that you can easily find on the topic have some other major downsides. Most often being just slow and limiting.
+But doing multiple scattering has a huge downside - It's really hard and really slow. If you want to look into details you can read [Multiple-Scattering Microfacet BSDFs with the Smith Model](https://eheitzresearch.wordpress.com/240-2/) by Eric Heitz. But this method is usually only used for validation purposes because of it's performance. According to [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) which I'll talk about in a second, Heitz's method is from 7 to 15 times slower than doing single scattering! This makes it pretty much impractical even for offline rendering, it's just not worth it. It's also not possible to evaluate it non-stochastically, so it can only be used in offline path tracers. There are more papers on this topic but each of them has some other major problem. Like [Position-free Multiple-bounce Computations for Smith Microfacet BSDFs](https://wangningbei.github.io/2022/MBBRDF.html), It's still not conserving 100% of the energy and is not reciprocal and does not have closed form solution, i.e. it can't be evaluated non-stochastically. Or [Multiple-bounce Smith Microfacet BRDFs using the Invariance Principle](https://wangningbei.github.io/2023/GMBBRDF.html), it can't evaluate refractions. All of the other papers that you can easily find on the topic have some other major downsides. Most often being just slow and limiting.
 
 So instead a lot of people figured out that energy loss is something that can be approximated by just precomputing it and putting it into lookup tables (LUTs). This process is described in previously mentioned [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) by Emmanuel Turquin or [Revisiting Physically Based Shading at Imageworks](https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf) slides by Christopher Kulla & Alejandro Conty. The biggest advantages of it are
 
@@ -568,7 +567,7 @@ But the biggest problem for conductors is **Anisotropy** which I talked about ea
 Image shows a furnace test done on material with roughness 1 and anisotropy 1.
 </p>
 
-What we could do is extend the table to more dimensions, so instead of doing it only for viewing angle and roughness we could use the third dimension of the texture for Anisotropy. But it's not really possible, that's because the highlights are getting stretched based on the viewing direction (not the angle) of the camera (e.g. we won't get the same result when we're standing in front of the object as if we're standing right to it). So even if we average the samples over the hemisphere like we did before it won't be enough. Making a table that accounts for direction would be really complex and it would have to be *really* big. So it's just not practical. But, we can just ignore the direction aspect and accumulate over the entire hemisphere. And if we try just that, we can actually get most of the energy back.
+What we could do is extend the table to more dimensions, so instead of doing it only for viewing angle and roughness we could use the third dimension of the texture for Anisotropy. But it's not really possible, that's because the highlights are getting stretched based on the viewing direction (not the angle) of the camera (i.e. we won't get the same result when we're standing in front of the object as if we're standing right to it). So even if we average the samples over the hemisphere like we did before it won't be enough. Making a table that accounts for direction would be really complex and it would have to be *really* big. So it's just not practical. But, we can just ignore the direction aspect and accumulate over the entire hemisphere. And if we try just that, we can actually get most of the energy back.
 
 <p align="center">
   <img src="./Gallery/Graphics/AnisotropyCompensation.png" alt="AnisotropyCompensation" width="500" height="500" />
@@ -681,7 +680,7 @@ with $\mathbf{m}$ being just the surface normal in this case, we're not using mi
 
 And the direction of diffuse is just a cosine distribution, so it's more likely so sample where the $\cos(\theta_o)$ is bigger.
 
-Dielectric reflection lobe which acts like another surface on top of the diffuse lobe. It is responsible for specular reflections, it does not tint the color and is evaluated with microfacets so roughness changes it's look. And it doesn't matter what method you're using (e.g. distributions or rejection sampling). If you're using distributions then I already described how to evaluate that:
+Dielectric reflection lobe which acts like another surface on top of the diffuse lobe. It is responsible for specular reflections, it does not tint the color and is evaluated with microfacets so roughness changes it's look. And it doesn't matter what method you're using (i.e. distributions or rejection sampling). If you're using distributions then I already described how to evaluate that:
 
 $$
 f_r(\mathbf{i}, \mathbf{o}, \mathbf{n}) = \frac{F(\mathbf{i}, \mathbf{m}) G(\mathbf{i}, \mathbf{o}, \mathbf{m}) D(\mathbf{h}_r)}{4 |\mathbf{i} \cdot \mathbf{n}| |\mathbf{o} \cdot \mathbf{n}|}
@@ -757,12 +756,6 @@ So for further reading:
 * For more info on the Vulkan raytracing pipeline, see [vk_raytracing_tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR) or [raytracing gems II](https://developer.nvidia.com/ray-tracing-gems-ii) chapter 16.
 * For more information on BSDF and various other techniques like Russian Roulette, see the [pbrt book](https://pbr-book.org/4ed/contents) and read all of the papers that were mentioned.
 * For more info on the Optix denoiser see nvidia [vk_denoise sample](https://github.com/nvpro-samples/vk_denoise). That's what I based my denoiser implementation on.
-
-# Architecture
-
-In this section I'll discuss code related architectural decisions that I made and what's most important - why I made them. We'll also touch on the code structure.
-
-TODO
 
 # Benchmark
 
