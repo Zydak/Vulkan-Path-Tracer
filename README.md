@@ -1,10 +1,11 @@
 # Vulkan-Path-Tracer
 
-Vulkan Path Tracer is a simple offline path tracing made from scratch in Vulkan using my framework [Vulture](https://github.com/Zydak/Vulture). For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses a simple energy conserving BSDF (more on that in [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md)) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be easily saved as .png images. It also features a lot of post processing effects like bloom, tonemapping, and many more.
+Physically based path tracer made from scratch in Vulkan using my framework [Vulture](https://github.com/Zydak/Vulture). For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses a simple energy conserving BSDF (more on that in [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md)) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be easily saved as .png images. It also features a lot of post processing effects like bloom, tonemapping, and many more. It also uses Optix Denoiser for denoising.
 
 For more info on the project visit [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md).
 
 # Running
+## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0-alpha/PathTracer.zip) from Releases.
 - Unzip and run `PathTracer/PathTracer/PathTracer.exe`.
@@ -56,7 +57,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to 1.
 ![Anisotropy+](./Gallery/materialShowcase/Anisotropy+.png)
 
-- Specular Strength factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
+- Index of refraction (IOR) factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
 ![specular](./Gallery/materialShowcase/specular.png)
 
 - Roughness factor on dielectric surface ranging from 0 to 1.
@@ -68,10 +69,10 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Transparency factor ranging from 0 to 1. Determines whether the material is able to refract light rays or not.
 ![glass](./Gallery/materialShowcase/glass.png)
 
-- Roughness factor on glass surface ranging from 0 to 1.
+- Roughness factor on transparent surface ranging from 0 to 1.
 ![glassRoughness](./Gallery/materialShowcase/glassRoughness.png)
 
-- Index of refraction (IOR) factor on glass surface ranging from 1 to 2. Determines how much the path of light is bent during refraction.
+- Index of refraction (IOR) factor on transparent surface ranging from 1 to 2. Determines how much the path of light is bent during refraction.
 ![IOR](./Gallery/materialShowcase/ior.png)
 
 # List Of Features
@@ -80,7 +81,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
   <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
   <img src="./Gallery/Graphics/Original.png" alt="Original" />
 </p>
-
 
 - Complex Materials
 - Textures and Normal Maps
@@ -103,7 +103,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
   - Chromatic Aberration
   - 6 Tonemappers (Filmic, Hill Aces, Narkowicz Aces, Exposure Mapping, Uncharted 2, Reinchard Extended)
 - Anti Aliasing
-- Saving And loading scenes
+- Saving and loading scenes
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
 - Camera controller made using quaternions
@@ -126,5 +126,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - https://polyhaven.com/a/ship_pinnace - Ship
 - https://benedikt-bitterli.me/resources/ - Dragon
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
-- https://github.com/knightcrawler25/GLSL-PathTracer Teapots
+- https://renderman.pixar.com/official-swatch - RenderMan teapot
+- https://www.cgbookcase.com/ - Textures for teapots
 - https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
+- https://benedikt-bitterli.me/resources/ - Material Test Ball
