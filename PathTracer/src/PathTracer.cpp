@@ -47,6 +47,19 @@ void PathTracer::Init(VkExtent2D size)
 	}
 
 	Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
+
+	// TEST
+	VolumeComponent testComp;
+	testComp.AABB.A = glm::vec3(-40.0f, -1.0f, -1.0f);
+	testComp.AABB.B = glm::vec3(1.0f, 1.0f, 1.0f);
+
+	Vulture::Buffer::CreateInfo bufferInfo{};
+	bufferInfo.InstanceSize = 100 * sizeof(VolumeComponent);
+	bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	bufferInfo.UsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	m_VolumesBuffer.Init(bufferInfo);
+
+	m_VolumesBuffer.WriteToBuffer(&testComp, sizeof(VolumeComponent));
 }
 
 void PathTracer::Resize(VkExtent2D newSize)
@@ -549,8 +562,9 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin9{ 9, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin10{ 10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin11{ 11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin12{ 12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 
-		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11 }, &Vulture::Renderer::GetLinearSampler());
+		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12 }, &Vulture::Renderer::GetLinearSampler());
 
 		VkAccelerationStructureKHR tlas = m_AS.GetTlas().Accel;
 		VkWriteDescriptorSetAccelerationStructureKHR asInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
@@ -620,6 +634,8 @@ void PathTracer::CreateRayTracingDescriptorSets()
 				m_RefractionLookupTextureEtaLessThan1.GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
+
+		m_RayTracingDescriptorSet.AddBuffer(12, m_VolumesBuffer.DescriptorInfo());
 
 		m_RayTracingDescriptorSet.Build();
 	}

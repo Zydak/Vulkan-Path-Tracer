@@ -1018,8 +1018,6 @@ void Editor::ImGuiFileRenderSettings()
 	if (ImGui::Button("Render To File"))
 	{
 		m_RenderToFile = true;
-		m_PathTracer.ResetFrameAccumulation();
-		m_Time = 0.0f;
 	}
 
 	ImGui::Separator();
@@ -1066,7 +1064,6 @@ void Editor::ImGuiSerializationSettings()
 				PerspectiveCameraComponent,
 				OrthographicCameraComponent,
 				SkyboxComponent,
-				CameraScript,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
 				Vulture::ScriptComponent,
@@ -1089,7 +1086,6 @@ void Editor::ImGuiSerializationSettings()
 				PerspectiveCameraComponent,
 				OrthographicCameraComponent,
 				SkyboxComponent,
-				CameraScript,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
 				Vulture::ScriptComponent,
@@ -1182,7 +1178,6 @@ void Editor::UpdateModel()
 			PerspectiveCameraComponent,
 			OrthographicCameraComponent,
 			SkyboxComponent,
-			CameraScript,
 			PathTracingSettingsComponent,
 			EditorSettingsComponent,
 			Vulture::ScriptComponent,

@@ -5,7 +5,7 @@
 
 #include "Vulture.h"
 
-class PerspectiveCameraComponent : public Vulture::SerializeBaseClass
+class PerspectiveCameraComponent
 {
 public:
 	Vulture::PerspectiveCamera Camera{};
@@ -19,12 +19,12 @@ public:
 		MainCamera = std::move(other.MainCamera);
 	}
 
-	std::vector<char> Serialize() override
+	std::vector<char> Serialize()
 	{
 		return Vulture::Bytes::ToBytes(this, sizeof(PerspectiveCameraComponent));
 	}
 
-	void Deserialize(const std::vector<char>& bytes) override
+	void Deserialize(const std::vector<char>& bytes)
 	{
 		PerspectiveCameraComponent comp = Vulture::Bytes::FromBytes<PerspectiveCameraComponent>(bytes);
 		memcpy(&Camera, &comp.Camera, sizeof(Vulture::PerspectiveCamera));
@@ -65,7 +65,7 @@ public:
 	}
 };
 
-class OrthographicCameraComponent : public Vulture::SerializeBaseClass
+class OrthographicCameraComponent
 {
 public:
 	Vulture::OrthographicCamera Camera{};
@@ -79,12 +79,12 @@ public:
 		MainCamera = std::move(other.MainCamera);
 	}
 
-	std::vector<char> Serialize() override
+	std::vector<char> Serialize()
 	{
 		return Vulture::Bytes::ToBytes(this, sizeof(OrthographicCameraComponent));
 	}
 
-	void Deserialize(const std::vector<char>& bytes) override
+	void Deserialize(const std::vector<char>& bytes)
 	{
 		OrthographicCameraComponent comp = Vulture::Bytes::FromBytes<OrthographicCameraComponent>(bytes);
 		memcpy(&Camera, &comp.Camera, sizeof(Vulture::OrthographicCamera));
@@ -125,7 +125,7 @@ public:
 	}
 };
 
-class SkyboxComponent : public virtual Vulture::SerializeBaseClass
+class SkyboxComponent 
 {
 public:
 	SkyboxComponent() = default;
@@ -139,7 +139,7 @@ public:
 		ImageHandle = std::move(other.ImageHandle);
 	}
 
-	std::vector<char> Serialize() override
+	std::vector<char> Serialize()
 	{
 		std::vector<char> vec;
 		std::string path = ImageHandle.GetAsset()->GetPath();
@@ -153,7 +153,7 @@ public:
 		return vec;
 	}
 
-	void Deserialize(const std::vector<char>& bytes) override
+	void Deserialize(const std::vector<char>& bytes)
 	{
 		std::string path;
 
@@ -168,7 +168,7 @@ public:
 	Vulture::AssetHandle ImageHandle;
 };
 
-class PathTracingSettingsComponent : public virtual Vulture::SerializeBaseClass
+class PathTracingSettingsComponent 
 {
 public:
 	PathTracingSettingsComponent() = default;
@@ -178,7 +178,7 @@ public:
 	PathTracingSettingsComponent& operator=(const PathTracingSettingsComponent& other) { Settings = other.Settings; return *this; };
 	PathTracingSettingsComponent& operator=(PathTracingSettingsComponent&& other) noexcept { Settings = std::move(other.Settings); return *this; };
 
-	std::vector<char> Serialize() override
+	std::vector<char> Serialize()
 	{
 		std::vector<char> vec;
 
@@ -207,7 +207,7 @@ public:
 		return vec;
 	}
 
-	void Deserialize(const std::vector<char>& bytes) override
+	void Deserialize(const std::vector<char>& bytes)
 	{
 		memcpy(&Settings, bytes.data(), sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3);
 		int currentPos = sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3;
@@ -256,7 +256,7 @@ public:
 	PathTracer::DrawInfo Settings{};
 };
 
-class EditorSettingsComponent : public virtual Vulture::SerializeBaseClass
+class EditorSettingsComponent 
 {
 public:
 	EditorSettingsComponent() = default;
@@ -283,4 +283,75 @@ public:
 	}
 
 	VkOffset2D ImageSize = { 900, 900 }; // Using VkOffset2D so that components are ints and not uints for ImGui
+};
+
+class AABB
+{
+public:
+	bool IsInside(glm::vec3 point)
+	{
+		if (
+			(A.x <= point.x && B.x >= point.x) &&
+			(A.y <= point.y && B.y >= point.y) &&
+			(A.z <= point.z && B.z >= point.z)
+			)
+		{
+			return true;
+		}
+		return false;
+	}
+
+	glm::vec3 A;
+	glm::vec3 B;
+};
+
+class VolumeComponent 
+{
+public:
+	VolumeComponent() = default;
+	~VolumeComponent() = default;
+
+	VolumeComponent(VolumeComponent&& other) noexcept 
+	{ 
+		AABB = std::move(other.AABB); 
+		ScatteringCoefficient = std::move(other.ScatteringCoefficient);
+		AbsorptionCoefficient = std::move(other.AbsorptionCoefficient);
+		Color = std::move(other.Color);
+		G = std::move(other.G);
+	};
+
+	VolumeComponent(const VolumeComponent& other) 
+	{ 
+		AABB = other.AABB; 
+		ScatteringCoefficient = other.ScatteringCoefficient;
+		AbsorptionCoefficient = other.AbsorptionCoefficient;
+		Color = other.Color;
+		G = other.G;
+	};
+
+	VolumeComponent& operator=(const VolumeComponent& other) 
+	{ 
+		AABB = other.AABB;
+		ScatteringCoefficient = other.ScatteringCoefficient;
+		AbsorptionCoefficient = other.AbsorptionCoefficient;
+		Color = other.Color;
+		G = other.G;
+		return *this; 
+	};
+
+	VolumeComponent& operator=(VolumeComponent&& other) noexcept 
+	{ 
+		AABB = std::move(other.AABB);
+		ScatteringCoefficient = std::move(other.ScatteringCoefficient);
+		AbsorptionCoefficient = std::move(other.AbsorptionCoefficient);
+		Color = std::move(other.Color);
+		G = std::move(other.G);
+		return *this; 
+	};
+	
+	AABB AABB;
+	glm::vec3 Color;
+	float ScatteringCoefficient;
+	float AbsorptionCoefficient;
+	float G;
 };

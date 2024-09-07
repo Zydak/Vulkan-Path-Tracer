@@ -745,7 +745,7 @@ After the rasterized images are ready, we wait for the Vulkan frame rendering to
 </p>
 
 <p align="center"> 
-Left image shows the path tracing result with 15k samples per pixel, a lot of noise is clearly visible. The right image shows the denoised version of the left image. All the noise is gone. As you can see, Optix does a really good job of removing all the noise.
+Left image shows the path tracing result with 15k samples per pixel, a lot of noise is clearly visible. The right image shows the denoised version of the left image. All the noise is gone.
 </p>
 
 ## Conclusion

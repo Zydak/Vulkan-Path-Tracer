@@ -8,7 +8,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/compatibility.hpp"
 
-class CameraScript : public Vulture::ScriptInterface, public Vulture::SerializeBaseClass
+class CameraScript : public Vulture::ScriptInterface
 {
 public:
 	CameraScript() {}

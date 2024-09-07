@@ -108,6 +108,87 @@ struct Surface
     vec3 NormalNoTex;
 };
 
+struct AABB
+{
+    vec3 Min;
+    vec3 Max;
+};
+
+void IntersectRayAABB(vec3 rayOrigin, vec3 rayDirection, AABB aabb, out vec3 hitPointNear, out vec3 hitPointFar) 
+{
+    vec3 tMin = (aabb.Min - rayOrigin) / rayDirection;
+    vec3 tMax = (aabb.Max - rayOrigin) / rayDirection;
+
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+
+    float tNear = max(max(t1.x, t1.y), t1.z);
+    float tFar = min(min(t2.x, t2.y), t2.z);
+
+    if (tNear > tFar || tFar < 0.0f) {
+        // No intersection
+        hitPointNear = vec3(-1.0f);
+        hitPointFar = vec3(-1.0f);
+        return;
+    }
+
+    // Ray intersects AABB
+    hitPointNear = rayOrigin + rayDirection * tNear;
+    hitPointFar = rayOrigin + rayDirection * tFar;
+}
+
+bool IsInsideAABB(vec3 point, AABB aabb)
+{
+    if (
+        (aabb.Min.x <= point.x && aabb.Max.x >= point.x) &&
+        (aabb.Min.y <= point.y && aabb.Max.y >= point.y) &&
+        (aabb.Min.z <= point.z && aabb.Max.z >= point.z)
+        )
+    {
+        return true;
+    }
+    return false;
+}
+
+struct Volume
+{
+    AABB Aabb;
+    vec3 Color;
+    float ScatteringCoefficient;
+    float AbsorptionCoefficient;
+    float G;
+};
+
+vec3 SampleHenyeyGreenstein(float g, vec3 incidentDir, vec2 rand) 
+{
+    // Compute the cos(theta) based on the Henyey-Greenstein phase function
+    float cosTheta;
+    if (abs(g) < 1e-5) {
+        cosTheta = 2.0 * rand.x - 1.0f; // Isotropic scattering for g = 0
+    }
+    else {
+        float sqrTerm = (1.0 - g * g) / (1.0 - g + 2.0 * g * rand.x);
+        cosTheta = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
+    }
+
+    // Compute the azimuthal angle
+    float phi = 2.0 * 3.14159265359 * rand.y;
+
+    // Spherical to Cartesian conversion
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    vec3 newDir = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+    // Align newDir with the incident direction
+    vec3 up = vec3(0.0, 0.0, 1.0);
+    vec3 tangent = normalize(cross(up, incidentDir));
+    vec3 bitangent = cross(incidentDir, tangent);
+
+    // Build the new direction in world space
+    vec3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
+
+    return scatteredDir;
+}
+
 struct EnvAccel
 {
     uint Alias;

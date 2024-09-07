@@ -38,6 +38,7 @@ layout(set = 0, binding = 5) uniform sampler2D uNormalTextures[];
 layout(set = 0, binding = 6) uniform sampler2D uRoghnessTextures[];
 layout(set = 0, binding = 7) uniform sampler2D uMetallnessTextures[];
 layout(set = 1, binding = 1) uniform sampler2D uEnvMap;
+layout(set = 0, binding = 12, scalar) buffer Volumes { AABB uVolumes[]; };
 
 vec3 GetViewReflectedNormal(vec3 N, vec3 V)
 {

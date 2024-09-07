@@ -140,6 +140,7 @@ private:
 	Vulture::Buffer m_RayTracingMaterialsBuffer;
 	Vulture::Buffer m_RayTracingMeshesBuffer;
 	Vulture::Buffer m_RayTracingDoFBuffer;
+	Vulture::Buffer m_VolumesBuffer;
 
 	// Descriptors
 	Vulture::DescriptorSet m_RayTracingDescriptorSet;
