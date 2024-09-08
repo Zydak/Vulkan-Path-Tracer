@@ -235,10 +235,10 @@ void main()
         seed = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + payload.Seed;
         payload.Seed = PCG(seed);
 
-        if (payload.MissedAllGeometry)
-		{
-			break;
-		}
+        //if (payload.MissedAllGeometry)
+		//{
+		//	break;
+		//}
 
     }
     finalHitValue /= float(samplesAccumulated);
