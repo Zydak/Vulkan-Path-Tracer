@@ -102,6 +102,7 @@ void Application::Init()
 	REGISTER_CLASS_IN_SERIALIZER(CameraScript);
 	REGISTER_CLASS_IN_SERIALIZER(PathTracingSettingsComponent);
 	REGISTER_CLASS_IN_SERIALIZER(EditorSettingsComponent);
+	REGISTER_CLASS_IN_SERIALIZER(VolumeComponent);
 
 	Vulture::AssetHandle sceneHandle = Vulture::AssetManager::LoadSceneAsset<
 		PerspectiveCameraComponent,
@@ -109,6 +110,7 @@ void Application::Init()
 		SkyboxComponent,
 		PathTracingSettingsComponent,
 		EditorSettingsComponent,
+		VolumeComponent,
 		Vulture::ScriptComponent,
 		Vulture::MeshComponent,
 		Vulture::MaterialComponent,

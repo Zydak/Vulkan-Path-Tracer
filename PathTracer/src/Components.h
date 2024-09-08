@@ -348,10 +348,26 @@ public:
 		G = std::move(other.G);
 		return *this; 
 	};
+
+	std::vector<char> Serialize()
+	{
+		std::vector<char> bytes;
+
+		bytes.resize(sizeof(VolumeComponent));
+
+		memcpy(bytes.data(), this, sizeof(VolumeComponent));
+
+		return bytes;
+	}
+
+	void Deserialize(const std::vector<char>& bytes)
+	{
+		memcpy(this, bytes.data(), sizeof(VolumeComponent));
+	}
 	
-	AABB AABB;
-	glm::vec3 Color;
-	float ScatteringCoefficient;
-	float AbsorptionCoefficient;
-	float G;
+	AABB AABB = { glm::vec3{-1.0f}, glm::vec3{1.0f} };
+	glm::vec3 Color = glm::vec3(1.0f);
+	float ScatteringCoefficient = 10.0f;
+	float AbsorptionCoefficient = 10.0f;
+	float G = 0.0f;
 };

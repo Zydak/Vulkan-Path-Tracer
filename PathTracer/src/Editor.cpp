@@ -762,6 +762,90 @@ void Editor::ImGuiSceneEditor()
 			m_Time = 0.0f;
 		}
 	}
+
+	ImGui::SeparatorText("Volumes");
+
+	std::vector<std::string> volumeNames;
+	std::vector<const char*> volumeNamesCStr;
+	std::vector<VolumeComponent> volumes;
+	std::vector<VolumeComponent*> volumePtrs;
+	std::vector<entt::entity> volumeEntities;
+
+	int volumesCount = 0;
+	auto volumesView = (*m_CurrentScene)->GetRegistry().view<VolumeComponent>();
+	for (auto& entity : volumesView)
+	{
+		volumeNames.push_back("Volume" + std::to_string(volumesCount));
+
+		auto& volumeComp = (*m_CurrentScene)->GetRegistry().get<VolumeComponent>(entity);
+		volumePtrs.push_back(&volumeComp);
+		volumes.push_back(volumeComp);
+		volumeEntities.push_back(entity);
+		
+		volumesCount++;
+	}
+
+	for (int i = 0; i < volumesCount; i++)
+	{
+		volumeNamesCStr.push_back(volumeNames[i].c_str());
+	}
+
+	static int currentVolume = 0;
+	if (volumesCount > 0)
+	{
+		ImGui::ListBox("Volumes", &currentVolume, volumeNamesCStr.data(), (int)volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
+
+		bool volumeValuesChanged = false;
+		if (ImGui::SliderFloat("G Anisotropy", &volumes[currentVolume].G, -0.9f, 0.9f)) { volumeValuesChanged = true; };
+		if (ImGui::SliderFloat("Scattering Coefficient", &volumes[currentVolume].ScatteringCoefficient, 0.0f, 0.1f)) { volumeValuesChanged = true; };
+		if (ImGui::SliderFloat("Absorption Coefficient", &volumes[currentVolume].AbsorptionCoefficient, 0.0f, 0.1f)) { volumeValuesChanged = true; };
+		if (ImGui::ColorEdit3("Color", (float*)&volumes[currentVolume].Color)) { volumeValuesChanged = true; };
+		if (ImGui::SliderFloat3("AABB min", (float*)&volumes[currentVolume].AABB.A, 0.0f, 100.0f)) { volumeValuesChanged = true; };
+		if (ImGui::SliderFloat3("AABB max", (float*)&volumes[currentVolume].AABB.B, 0.0f, 100.0f)) { volumeValuesChanged = true; };
+
+		if (volumeValuesChanged)
+		{
+			*volumePtrs[currentVolume] = volumes[currentVolume];
+
+			m_PathTracer.GetVolumesBuffer()->WriteToBuffer(
+				volumes.data(),
+				sizeof(VolumeComponent) * volumesCount
+			);
+
+			m_PathTracer.ResetFrameAccumulation();
+			m_Time = 0.0f;
+		}
+	}
+
+	if (ImGui::Button("Add Volume"))
+	{
+		Vulture::Entity entity = (*m_CurrentScene)->CreateEntity();
+		auto& newComp = entity.AddComponent<VolumeComponent>();
+		volumes.push_back(newComp);
+		volumesCount++;
+
+		m_PathTracer.GetVolumesBuffer()->WriteToBuffer(
+			volumes.data(),
+			sizeof(VolumeComponent) * volumesCount
+		);
+
+		m_PathTracer.ResetFrameAccumulation();
+		m_Time = 0.0f;
+	}
+
+	if (volumesCount)
+	{
+		if (ImGui::Button("Remove Volume"))
+		{
+			(*m_CurrentScene)->GetRegistry().destroy(volumeEntities[currentVolume]);
+			currentVolume = 0;
+
+			m_PathTracer.ResetFrameAccumulation();
+			m_Time = 0.0f;
+		}
+	}
+
+	ImGui::Separator();
 }
 
 void Editor::ImGuiEnvMapSettings()
@@ -1066,6 +1150,7 @@ void Editor::ImGuiSerializationSettings()
 				SkyboxComponent,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
+				VolumeComponent,
 				Vulture::ScriptComponent,
 				Vulture::MeshComponent,
 				Vulture::MaterialComponent,
@@ -1088,6 +1173,7 @@ void Editor::ImGuiSerializationSettings()
 				SkyboxComponent,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
+				VolumeComponent,
 				Vulture::ScriptComponent,
 				Vulture::MeshComponent,
 				Vulture::MaterialComponent,
@@ -1180,6 +1266,7 @@ void Editor::UpdateModel()
 			SkyboxComponent,
 			PathTracingSettingsComponent,
 			EditorSettingsComponent,
+			VolumeComponent,
 			Vulture::ScriptComponent,
 			Vulture::MeshComponent,
 			Vulture::MaterialComponent,

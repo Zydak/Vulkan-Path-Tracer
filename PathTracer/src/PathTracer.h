@@ -23,6 +23,7 @@ struct PushConstantRay
 	float DoFStrength = 0.0f;
 	float AliasingJitter = 0.0f;
 	float SuppressCausticsLuminance = 0.0f;
+	int VolumesCount = 0;
 };
 
 struct PushConstantGBuffer
@@ -71,6 +72,7 @@ public:
 	void RecreateRayTracingPipeline();
 
 	inline Vulture::Buffer* GetMaterialsBuffer() { return &m_RayTracingMaterialsBuffer; };
+	inline Vulture::Buffer* GetVolumesBuffer() { return &m_VolumesBuffer; };
 
 	inline uint64_t GetSamplesAccumulated() { return m_CurrentSamplesPerPixel; };
 	inline uint64_t GetFrame() { return m_PushContantRayTrace.GetDataPtr()->frame; };

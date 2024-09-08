@@ -48,18 +48,11 @@ void PathTracer::Init(VkExtent2D size)
 
 	Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
 
-	// TEST
-	VolumeComponent testComp;
-	testComp.AABB.A = glm::vec3(-40.0f, -1.0f, -1.0f);
-	testComp.AABB.B = glm::vec3(1.0f, 1.0f, 1.0f);
-
 	Vulture::Buffer::CreateInfo bufferInfo{};
 	bufferInfo.InstanceSize = 100 * sizeof(VolumeComponent);
 	bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	bufferInfo.UsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	m_VolumesBuffer.Init(bufferInfo);
-
-	m_VolumesBuffer.WriteToBuffer(&testComp, sizeof(VolumeComponent));
 }
 
 void PathTracer::Resize(VkExtent2D newSize)
@@ -132,6 +125,19 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 	CreateRayTracingDescriptorSets();
 
 	UpdateDescriptorSetsData();
+
+	// Write volumes data
+
+	int volumesCount = 0;
+	auto volumesView = m_CurrentSceneRendered->GetRegistry().view<VolumeComponent>();
+	for (auto& entity : volumesView)
+	{
+		auto& volumeComp = m_CurrentSceneRendered->GetRegistry().get<VolumeComponent>(entity);
+		m_VolumesBuffer.WriteToBuffer(&volumeComp, sizeof(VolumeComponent), volumesCount * sizeof(VolumeComponent));
+		volumesCount++;
+		
+		VL_CHECK(volumesCount < 100, "Can't have more than 100 volumes!");
+	}
 }
 
 bool PathTracer::Render()
@@ -158,6 +164,13 @@ bool PathTracer::Render()
 		m_PathTracingImage.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
 	}
 
+	int volumesCount = 0;
+	auto view = m_CurrentSceneRendered->GetRegistry().view<VolumeComponent>();
+	for (auto& entity : view)
+	{
+		volumesCount++;
+	}
+
 	// Set Push data
 	auto data = m_PushContantRayTrace.GetDataPtr();
 	data->maxDepth = pathTracingSettings->Settings.RayDepth;
@@ -168,6 +181,7 @@ bool PathTracer::Render()
 	data->SamplesPerFrame = pathTracingSettings->Settings.SamplesPerFrame;
 	data->EnvAzimuth = glm::radians(pathTracingSettings->Settings.EnvAzimuth);
 	data->EnvAltitude = glm::radians(pathTracingSettings->Settings.EnvAltitude);
+	data->VolumesCount = volumesCount;
 
 	// Draw Albedo, Roughness, Metallness, Normal into GBuffer
 	DrawGBuffer();

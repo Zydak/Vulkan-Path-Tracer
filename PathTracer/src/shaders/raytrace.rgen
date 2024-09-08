@@ -89,29 +89,15 @@ void main()
 
         for(; payload.Depth < pcRay.MaxDepth; payload.Depth++)
         {
-            Volume volume = uVolumes[0];
-            AABB aabb = volume.Aabb;
-            aabb.Min = vec3(-300.0f);
-            aabb.Max = vec3(300.0f);
-            vec3 hitPosNear;
-            vec3 hitPosFar;
-            IntersectRayAABB(payload.RayOrigin, payload.RayDirection, aabb, hitPosNear, hitPosFar);
-            
-            bool isInside = IsInsideAABB(payload.RayOrigin, aabb);
-            if (isInside)
-                hitPosNear = payload.RayOrigin;
-            float volumeWidth = length(hitPosFar - hitPosNear);
-
-            float volumeNear = -1.0f;
-            float volumeFar = -1.0f;
-            if (hitPosNear != vec3(-1.0f))
-            {
-                volumeNear = length(hitPosNear - payload.RayOrigin);
-            }
-            if (hitPosFar != vec3(-1.0f))
-            {
-                volumeFar = length(hitPosFar - payload.RayOrigin);
-            }
+            float closestScatterDistanceFromCamera = FLT_MAX;
+            float closestScatterDistance = 0.0;
+            float finalVolumeNear = 0.0f;
+            float finalVolumeFar = 0.0f;
+            float finalPathLengthThroughVolume = 0.0f;
+            float finalScatteringCoefficient = 0.0f;
+            float finalAbsorptionCoefficient = 0.0f;
+            vec3 finalColor = vec3(0.0f);
+            float finalG = 0.0f;
 
             // Check at what distance the closest geometry is
             float closestGeometry = -1.0f;
@@ -120,58 +106,90 @@ void main()
 		    rayQueryProceedEXT(query);
 		    if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		    {
-		    	closestGeometry = rayQueryGetIntersectionTEXT(query, true);
+		        closestGeometry = rayQueryGetIntersectionTEXT(query, true);
 		    }
 
-            bool GeometryIsTheBoundary = false;
-            float pathLengthThroughVolume = 0.0f;
-            if (volumeNear != -1.0f && closestGeometry != -1.0f)
+            for (int i = 0; i < pcRay.VolumesCount; i++)
             {
-                // Geometry is in front of the volume
-                if (volumeNear > closestGeometry)
-                {
-                    pathLengthThroughVolume = 0.0f;
-                }
+                Volume volume = uVolumes[i];
+                vec3 hitPosNear;
+                vec3 hitPosFar;
+                IntersectRayAABB(payload.RayOrigin, payload.RayDirection, volume.Aabb, hitPosNear, hitPosFar);
             
-                // Geometry is splitting the volume
-                else if (volumeFar > closestGeometry)
+                bool isInside = IsInsideAABB(payload.RayOrigin, volume.Aabb);
+                if (isInside)
+                    hitPosNear = payload.RayOrigin;
+                float volumeWidth = length(hitPosFar - hitPosNear);
+
+                float volumeNear = -1.0f;
+                float volumeFar = -1.0f;
+                if (hitPosNear != vec3(-1.0f))
                 {
-                    pathLengthThroughVolume = closestGeometry - volumeNear;
-                    GeometryIsTheBoundary = true;
+                    volumeNear = length(hitPosNear - payload.RayOrigin);
                 }
+                if (hitPosFar != vec3(-1.0f))
+                {
+                    volumeFar = length(hitPosFar - payload.RayOrigin);
+                }
+
+                bool GeometryIsTheBoundary = false;
+                float pathLengthThroughVolume = 0.0f;
+                if (volumeNear != -1.0f && closestGeometry != -1.0f)
+                {
+                    // Geometry is in front of the volume
+                    if (volumeNear > closestGeometry)
+                    {
+                        pathLengthThroughVolume = 0.0f;
+                    }
+            
+                    // Geometry is splitting the volume
+                    else if (volumeFar > closestGeometry)
+                    {
+                        pathLengthThroughVolume = closestGeometry - volumeNear;
+                        GeometryIsTheBoundary = true;
+                    }
                 
-                // Volume is in front of the geometry
-                else if (volumeFar < closestGeometry)
+                    // Volume is in front of the geometry
+                    else if (volumeFar < closestGeometry)
+                    {
+                        pathLengthThroughVolume = volumeWidth;
+                    }
+                }
+                else if (closestGeometry == -1.0f && volumeNear != -1.0f) // Volume in front of the geometry since there is no geometry
                 {
                     pathLengthThroughVolume = volumeWidth;
                 }
+
+                float sigmaT = volume.ScatteringCoefficient + volume.AbsorptionCoefficient;
+
+                float scatterDistance = -log(Rnd(seed)) / sigmaT;
+                float scatterDistanceFromCamera = (volumeNear + scatterDistance);
+
+                if (scatterDistanceFromCamera < closestScatterDistanceFromCamera && pathLengthThroughVolume > 0.0f && pathLengthThroughVolume > scatterDistance)
+                {
+                    finalVolumeNear = volumeNear;
+                    finalVolumeFar = volumeFar;
+                    finalPathLengthThroughVolume = pathLengthThroughVolume;
+                    finalScatteringCoefficient = volume.ScatteringCoefficient;
+                    finalAbsorptionCoefficient = volume.AbsorptionCoefficient;
+                    finalColor = volume.Color;
+                    finalG = volume.G;
+
+                    closestScatterDistance = scatterDistance;
+                    closestScatterDistanceFromCamera = scatterDistanceFromCamera;
+                }
             }
-            else if (closestGeometry == -1.0f && volumeNear != -1.0f) // Volume in front of the geometry since there is no geometry
-            {
-                pathLengthThroughVolume = volumeWidth;
-            }
 
-            volume.ScatteringCoefficient = 0.05f;
-            volume.AbsorptionCoefficient = 0.005f;
-            volume.Color = vec3(1.0f);
-
-            float sigmaT = volume.ScatteringCoefficient + volume.AbsorptionCoefficient;
-
-            float scatterDistance = -log(Rnd(seed)) / sigmaT;
-            
             // Scatter inside a volume
-            if (pathLengthThroughVolume > scatterDistance)
+            if (finalPathLengthThroughVolume > closestScatterDistance)
             {
-                curWeight *= vec3(volume.ScatteringCoefficient / sigmaT) * volume.Color;
+                float sigmaT = finalScatteringCoefficient + finalAbsorptionCoefficient;
 
-                vec3 newDir = SampleHenyeyGreenstein(0.3f, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
+                curWeight *= vec3(finalScatteringCoefficient / sigmaT) * finalColor;
 
-                payload.RayOrigin = payload.RayOrigin + ((volumeNear + scatterDistance) * payload.RayDirection);
+                vec3 newDir = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
 
-                // If geometry is really thin the new ray origin might end up inside it, but we don't know what geometry we've hit
-                // So we don't have the normal to offset it :/
-                //if (GeometryIsTheBoundary)
-                //    payload.RayOrigin = payload.RayOrigin + (0.1f * vec3(0.0f, -1.0f, 0.0f));
+                payload.RayOrigin = payload.RayOrigin + ((finalVolumeNear + closestScatterDistance) * payload.RayDirection);
 
                 payload.RayDirection = newDir;
             }

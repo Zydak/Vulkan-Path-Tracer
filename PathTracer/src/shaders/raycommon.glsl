@@ -50,6 +50,7 @@ struct PushConstantRay
     float DoFStrenght;
     float AliasingJitter;
     float CausticsLuminance;
+    int VolumesCount;
 };
 
 struct Vertex
