@@ -24,23 +24,21 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![CornellBox](./Gallery/CornellBox.png)
 --------
+![Fog](./Gallery/Fog.png)
+--------
 ![Mustang0](./Gallery/Mustang0.png)
 ![Mustang1](./Gallery/Mustang1.png)
 --------
+![Monster](./Gallery/MonsterRough.png)
+--------
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
---------
-![BlackDragon](./Gallery/BlackDragon.png)
 --------
 ![Dogs](./Gallery/Dogs.png)
 --------
 ![Caustics](./Gallery/Caustics.png)
 --------
-![Coffee](./Gallery/Coffee.png)
---------
 ![Sponza](./Gallery/Sponza.png)
---------
-![Monster](./Gallery/MonsterRough.png)
 --------
 
 ## Material Showcase
