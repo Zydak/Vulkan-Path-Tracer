@@ -71,6 +71,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     float r1 = Rnd(seed);
     
     data.PDF = 1.0f;
+    bool reflection = true;
     if (r1 < diffuseCDF)
     {
         // Diffuse
@@ -142,6 +143,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
         float r2 = Rnd(seed);
 
+        bool reflection = false;
         if (r2 < F)
         {
             // Reflect
@@ -164,6 +166,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
                 return false;
 
             data.BSDF = Color;
+            reflection = true;
         }
         else
         {
@@ -188,10 +191,15 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
                 return false;
 
             data.BSDF = Color;
+
+            reflection = false;
         }
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }
+
+    if (reflection && dot(surface.Normal, data.RayDir) < 0.0f)
+        return false;
 
     return true;
 }

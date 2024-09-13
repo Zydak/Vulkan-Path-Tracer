@@ -29,6 +29,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![Mustang0](./Gallery/Mustang0.png)
 ![Mustang1](./Gallery/Mustang1.png)
 --------
+![Sponza1](./Gallery/Sponza1.png)
+--------
 ![Monster](./Gallery/MonsterRough.png)
 --------
 ![TeapotMarble](./Gallery/TeapotMarble.png)

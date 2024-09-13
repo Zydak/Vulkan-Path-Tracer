@@ -132,7 +132,6 @@ void main()
                     volumeFar = length(hitPosFar - payload.RayOrigin);
                 }
 
-                bool GeometryIsTheBoundary = false;
                 float pathLengthThroughVolume = 0.0f;
                 if (volumeNear != -1.0f && closestGeometry != -1.0f)
                 {
@@ -146,7 +145,6 @@ void main()
                     else if (volumeFar > closestGeometry)
                     {
                         pathLengthThroughVolume = closestGeometry - volumeNear;
-                        GeometryIsTheBoundary = true;
                     }
                 
                     // Volume is in front of the geometry
@@ -242,20 +240,6 @@ void main()
 
     }
     finalHitValue /= float(samplesAccumulated);
-
-    //AABB aabb = uVolumes[0];
-    ////aabb.Min = vec3(0.0f, 0.0f, 0.0f);
-    ////aabb.Max = vec3(1.0f, 1.0f, 1.0f);
-    //vec3 hitPos = IntersectRayAABB(origin.xyz, direction, aabb);
-    //bool isInside = IsInsideAABB(origin.xyz, aabb);
-    //if (hitPos != vec3(0.0f))
-    //{
-    //    finalHitValue = vec3(1.0f);
-    //}
-    //else
-    //{
-    //    finalHitValue = vec3(0.0f);
-    //}
 
     if (!isinf(finalHitValue.x) && !isinf(finalHitValue.y) && !isinf(finalHitValue.z) && !isnan(finalHitValue.x) && !isnan(finalHitValue.y) && !isnan(finalHitValue.z))
     {

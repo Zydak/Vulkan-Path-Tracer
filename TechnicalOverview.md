@@ -27,6 +27,7 @@ The main goal for this project was to create energy conserving and preserving of
       - [Energy Compensation For Conductors](#energy-compensation-for-conductors)
       - [Energy Compensation For Dielectrics](#energy-compensation-for-dielectrics)
       - [Code](#code)
+    - [Participating Media](#participating-media)
     - [Conclusion](#conclusion)
   - [Denoising](#denoising)
   - [Conclusion](#conclusion-1)
@@ -718,9 +719,231 @@ And these 4 simple lobes can create pretty much any material you can encounter i
 
 You can see all of the parameters tweaked in the [Material Showcase](https://github.com/Zydak/Vulkan-Path-Tracer/tree/main#material-showcase) section in the main readme.
 
+### Participating Media 
+
+There's one more thing to talk about when it comes to shading and it's volumes (or participating media). Volumes are different than normal surfaces, they aren't a hard matter but particles floating in the air (smoke or fog). The difference is that unlike with hard matter, the photon (ray) can actually go through the volume instead of being reflected (or refracted) right away. It no only can go through the volume, but it can also be scattered inside it. The probability of a photon colliding with the particle is determined by extinction coefficient denoted as $\sigma(x)$, which speaking precisely, is the probability density of collision per unit distance traveled inside the volume.
+
+<p align="center">
+  <img src="./Gallery/Graphics/Fog.jpg" alt="Fog" />
+</p>
+<p align="center">
+Image of the forest in fog, the bigger the distance to the object, the bigger the probability that the photon will hit the particle in the air and scatter. And this causes objects at far distances to become less visible.
+</p>
+
+The homogenous (uniform) volumes are usually described by **absorption coefficient** denoted as $\sigma_a(x)$. It determines the amount of light that is absorbed by the volume (usually it's transferred into heat). **scattering coefficient** denoted as $\sigma_s(x)$. It determines the amount of light that gets scattered (i.e. that hits a particle and changes direction). And **Phase Function** that determines the new photon direction after the scattering occurs. There's also one more coefficient, called **extinction coefficient** and it's denoted as $\sigma_t = \sigma_a + \sigma_s$. It describes the amount of light that is either scattered or absorbed, so it's just a sum of previous coefficients.
+
+The amount of light that is being absorbed or scattered in a volume is described by **Beer-Lambert** law.
+
+$$
+T(x) = e^{-\sigma_t \cdot x}
+$$
+
+So we can just calculate the overall path through the volume and apply the above formula right? Well... not really, because it won't account for indirect lighting, the approach that I described is usually considered in rasterizers, but we're in a path tracer. So what we can and want to do is actually a random walk in a surface, this way we're not only accounting for the energy lost inside the volume but can also alter the path of light, just like in real world! This way we'll account for indirect lighting (i.e. what happens if ray changes its initial direction and hit's different light?). But how do we do that? Well, we can actually use the **Beer-Lambert** formula as our PDF for the scattering. In other words, the $T(x)$ is the probability of the photon hitting the particle in a volume. It's an exponential function so it actually decreases as the x value grows, we can think of it being the probability that we will scatter for the values greater than x. For x = 0 it's 1, so we have a 100% change that we will scatter farther, and let's say that for x = 0.5 we get 0.5, so we have a 50% chance of scattering farther along the way than after traveling for 0.5 meters. It's weird but it works. 
+
+But how exactly do we calculate the $x$? In short, if we have the PDF we can use inverse transform sampling to be able to get random values with given distribution. And luckily we already have the PDF. So after doing just that we can compute our $x$ with the following formula:
+
+$$
+x = -\frac{\ln(\xi)}{\sigma_t}
+$$
+
+We have the distance at which we hit the particle, so now to decide whether to scatter or absorb we compute the probabilities of each event like so:
+
+$$
+p_s = \frac{\sigma_s}{\sigma_t}
+$$
+
+$$
+p_a = \frac{\sigma_a}{\sigma_t}
+$$
+
+Then we can just decide whether to scatter or absorb by randomly choosing one of the probabilities.
+
+If we choose to scatter, we need to know the direction in which to scatter. The new direction is determined by the **Phase function**, there are lots of different ones like Rayleigh or Mie but the most commonly used is **Henyey-Greenstein** because it's really easy to sample and pretty quick to compute compared to the other ones. The phase functions are in fact just PDFs, the probability of ray going in the given direction, but just like before we can use inverse transform sampling to sample the distribution.
+
+The **Henyey-Greenstein** is defined like so:
+
+$$
+p(\theta) = \frac{1}{4\pi} \frac{1 - g^2}{1 + (g^2 - 2g\cos{\theta})^{3/2}}
+$$
+
+with $\theta$ being the angle between the incident direction and the scattered direction. And the $g$ term, it's called **Assymetry factor**, it's describing the volume anisotropy, so how likely the light is to scatter in forward or backward direction. It ranges from $-1 \leq g \leq 1$, where -1 means the rays will always scatter perfectly backwards, 0 means the ray will be scattered equally over the sphere, and 1 means the direction won't change.
+
+After doing inverse transform sampling we get
+
+$$
+\cos{\theta} = \frac{1}{2g} \left[1 + g^2 - (\frac{1 - g^2}{1 - g + 2g\xi})^2\right]
+$$
+
+Of course a single angle is not enough to create direction but we can easily generate random dir with this angle using spherical coordinates like so:
+
+$$
+\phi = 2\pi\xi
+$$
+
+$$
+\sin{\theta} = \sqrt{1 - \cos{\theta}^2}
+$$
+
+$$
+o_x = \sin{\theta} \cdot \cos{\phi}
+$$
+
+$$
+o_y = \sin{\theta} \cdot \sin{\phi}
+$$
+
+$$
+o_z = \cos{\theta}
+$$
+
+Then the only thing left to do to get a direction is rotating it along the incident ray direction like so:
+
+$$
+o_x\prime = o_x * T
+$$
+
+$$
+o_y\prime = o_y * B
+$$
+
+$$
+o_z\prime = o_z * N
+$$
+
+where
+* $T$ is the tangent of incident direction.
+* $B$ is the bitangent of incident direction.
+* $N$ is the incident direction.
+
+With that we're almost done, to actually scatter something we need only one more thing, which is the total path length through the volume that ray can travel. Then we can check if $x$ (our scatter distance) is greater than the total path length, if it is, we don't scatter since the scatter point is outside of volume. But how do we get that total path length?
+
+First we need to check if we're intersecting with the volume, the problem is that we can't really use the vulkan ray tracing pipeline, and that's because it doesn't allow you to check whether you're inside the object or not. And this case is really important, imagine a scene (including camera) that's covered in a fog, so there is only 1 intersection point with the volume. In that case you have to be able to check whether the camera is inside the fog to determine total path length and just say that the nearest intersection is at the camera position. But vulkan rt pipeline only allows you to check what the ray is intersecting with. I mean technically there is a way, you could just query all of the intersections along the path instead just the closest one, and check what volume you're intersecting from the inside, but doing that would be a little bit complicated and slow because there are a lot of edge cases with complex geometry, and I do not really care about complex-meshes volumes anyway, maybe I'll add it some day. So the approach that I went with is just uploading a buffer of AABB colliders and checking ray intersections against that. Which is just way faster and simpler than using ray queries on triangles.
+
+So the final algorithm would look something like this:
+
+```
+// Query closest geometry
+float closestGeometry = ...
+
+float finalScatterDistance = floatMax;
+for (int i = 0; i < volumeCount; i++)
+{
+    float scatterDistance = GetScatterDistance(volume);
+
+    float distNear;
+    float distFar;
+    DeduceHitPoints(volume, ray, distNear, distFar);
+
+    if (isInsideTheVolume(ray))
+        distNear = 0.0f;
+
+    float pathLengthThroughVolume = distFar - distNear;
+
+    // Geometry is in front of the volume so there is no way to collide with volume
+    if (distNear > closestGeometry)
+        pathLengthThroughVolume = 0.0f;
+
+    // Geometry is splitting the volume
+    else if (distFar > closestGeometry)
+        pathLengthThroughVolume = closestGeometry - distFar;
+
+    // Loop through all volumes and check which ones scatters closest to the camera
+    float scatterDistanceFromCamera = distNear + scatterDistance;
+    if (pathLengthThroughVolume > scatterDistance && scatterDistanceFromCamera < finalScatterDistance)
+      finalScatterDistance = scatterDistanceFromCamera;
+}
+
+if (finalScatterDistance != floatMax)
+    // volume collision
+else
+    // Don't scatter, evaluate the surface BSDF if there's anything on the way
+```
+
+So now we can check whether the photon collides with the volume particles or not, but how is this collision evaluated exactly? First we have to decide whether to scatter or absorb the photon. That's done with previously computed probabilities $p_s$ and $p_a$.
+
+```
+if (random < pa)
+{
+    // Absorb
+    break; // Break the ray traversal
+}
+else if (random < pa + ps)
+{
+    // Scatter
+    origin = origin + ((distNear + scatterDistance) * currentDir);
+    rayColor *= volumeColor;
+
+    currentDir = SampleHenyeyGreenstein(...); // Change the direction and trace further
+}
+```
+
+And we're done, we can actually see the results:
+
+<p align="center">
+  <img src="./Gallery/Graphics/Volume.png" alt="Volume" width="500" height="500" />
+</p>
+
+Now to speed things up a by a bit we can handle absorption a little bit differently. Instead of breaking the ray traversal through the scene we can just modify the rayColor with the inverted probability of absorption, so for low absorption we'll have 1 (no modification) and for high absorption we'll have 0 (absorb everything). we can either to that with 
+
+$$
+1 - \frac{\sigma_a}{\sigma_t}
+$$ 
+
+or just 
+
+$$
+\frac{\sigma_s}{\sigma_t}
+$$
+since it's just inverted absorption probability.
+
+```
+rayColor *= vec3(scatteringCoefficient / sigmaT) * volumeColor;
+```
+
+From a mathematical point of view it's literally the same thing, previously we just absorbed the color by ending the ray path, and now we're absorbing it through decreasing the ray energy (color). So theoretically after an infinite amount of samples the result will be exactly the same (of course we don't need that many). And it's way faster from the computer perspective because there's way less branching for the GPU and well, we're just tracing more paths overall so there's less variance. It is around 2-2.5x faster, but it depends on the volume settings of course.
+
+<p align="center">
+  <img src="./Gallery/Graphics/BreakLoop.png" alt="Volume" width="500" height="500" />
+  <img src="./Gallery/Graphics/ModifyColor.png" alt="ModifyColor" width="500" height="500" />
+</p>
+<p align="center">
+Left image shows breaking the loop approach while the left one is showing modifying the ray color. Both look identical.
+</p>
+
+And if we're modifying the albedo anyway, we can actually just get rid of the absorption coefficient $\sigma_a$ altogether, we can model the absorption purely using volume color which is preferable because well, as a rule of thumb, the less parameters there are the easier and more intuitive the work is for the artists. So now we can model our volume with only 3 parameters - Color, scattering coefficient, and anisotropy for phase function.
+
+Here are some other settings for the volume like no absorption which makes it look like a cloud:
+<p align="center">
+  <img src="./Gallery/Graphics/NoAbsorption.png" alt="NoAbsorption" width="500" height="500" />
+</p>
+
+Or really high scattering coefficient which makes the object look more like a solid matter with sub-surface scattering:
+
+<p align="center">
+  <img src="./Gallery/Graphics/HighScatter.png" alt="HighScatter" width="500" height="500" />
+</p>
+
+You can also make the scattering coefficient really low and the volume really big, it will look like a fog, which I think is pretty much the only use case for homogenous volumes that are just AABBs (Maybe I'll look into heterogenous volumes next?). Then you can place a light in the scene and actually see the so called god-rays of the lights. Although doing that will create insane amounts of noise with naive path tracing, since now literally every ray can hit the light no matter it's initial direction. Ray paths are really twisted which leads to a lot of variance:
+
+<p align="center">
+  <img src="./Gallery/Graphics/NoisyFog.png" alt="NoisyFog" width="500" height="500" />
+</p>
+
+It is always possible to just path trace it till it looks good, but it will take a long time to do so. Here's the undenoised version of the image you can find in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery), there's a car with lights on in a fog, it actually took 1 million samples **per pixel** to make it look even half decent. I had to path trace it for almost 2 hours! But it's definitely worth to see how beautifully the light is scattering in the fog, and the denoiser does a pretty good job at denoising it anyway. That said I still had to keep the exposure pretty small so that the worse looking parts just weren't visible.
+
+<p align="center">
+  <img src="./Gallery/Graphics/FogCarUndenoised.png" alt="FogCarUndenoised" />
+</p>
+
+As a fun fact, because in the algorithm described above we're looping over all volumes and choosing the closest scatter distance, the volumes can blend together:
+
+<p align="center">
+  <img src="./Gallery/Graphics/VolumeBlend.png" alt="VolumeBlend" width="500" height="500" />
+</p>
+
 ### Conclusion
 
-Well, this section was quite long, but hopefully now you can understand how and why the BSDF in my path tracer works the way it works! I really recommend reading all of the papers that I referenced to understand the topic better. Especially [Turquin](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) and [Heitz](https://eheitzresearch.wordpress.com/240-2/) to understand the multiple scattering and [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf) and [Refraction through Rough Surfaces](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf) to understand the GGX distribution.
+Well, this section was quite long, but hopefully now you can understand how and why the BSDF in my path tracer works the way it works! I really recommend reading all of the papers that I referenced to understand the topic better. Especially [Turquin](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) and [Heitz](https://eheitzresearch.wordpress.com/240-2/) to understand the multiple scattering and [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf), [Refraction through Rough Surfaces](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf) to understand the GGX distribution, and finally [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/index.html) if you're interested in participating media.
 
 ## Denoising
 

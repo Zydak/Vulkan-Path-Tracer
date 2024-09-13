@@ -6,6 +6,8 @@
 #include "CameraScript.h"
 #include "Components.h"
 
+#include "glm/glm/gtx/matrix_decompose.hpp"
+
 Application::Application(Vulture::ApplicationInfo appInfo)
 	: Vulture::Application(appInfo)
 {

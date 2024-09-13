@@ -160,36 +160,6 @@ struct Volume
     float G;
 };
 
-vec3 SampleHenyeyGreenstein(float g, vec3 incidentDir, vec2 rand) 
-{
-    // Compute the cos(theta) based on the Henyey-Greenstein phase function
-    float cosTheta;
-    if (abs(g) < 1e-5) {
-        cosTheta = 2.0 * rand.x - 1.0f; // Isotropic scattering for g = 0
-    }
-    else {
-        float sqrTerm = (1.0 - g * g) / (1.0 - g + 2.0 * g * rand.x);
-        cosTheta = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
-    }
-
-    // Compute the azimuthal angle
-    float phi = 2.0 * 3.14159265359 * rand.y;
-
-    // Spherical to Cartesian conversion
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-    vec3 newDir = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-
-    // Align newDir with the incident direction
-    vec3 up = vec3(0.0, 0.0, 1.0);
-    vec3 tangent = normalize(cross(up, incidentDir));
-    vec3 bitangent = cross(incidentDir, tangent);
-
-    // Build the new direction in world space
-    vec3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
-
-    return scatteredDir;
-}
-
 struct EnvAccel
 {
     uint Alias;
@@ -296,12 +266,37 @@ bool IsNan(vec3 vec)
 
 vec3 TangentToWorld(vec3 T, vec3 B, vec3 N, vec3 V)
 {
-    return V.x * T + V.y * B + V.z * N;
+    return normalize(V.x * T + V.y * B + V.z * N);
 }
 
 vec3 WorldToTangent(vec3 T, vec3 B, vec3 N, vec3 V)
 {
-    return vec3(dot(V, T), dot(V, B), dot(V, N));
+    return normalize(vec3(dot(V, T), dot(V, B), dot(V, N)));
+}
+
+vec3 SampleHenyeyGreenstein(float g, vec3 incidentDir, vec2 rand)
+{
+    float cosTheta;
+    if (abs(g) < 1e-5) {
+        cosTheta = 2.0 * rand.x - 1.0f;
+    }
+    else {
+        float sqrTerm = (1.0 - g * g) / (1.0 - g + 2.0 * g * rand.x);
+        cosTheta = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
+    }
+
+    float phi = 2.0 * M_PI * rand.y;
+
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    vec3 newDir = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+    vec3 tangent;
+    vec3 bitangent;
+    CalculateTangents(incidentDir, tangent, bitangent);
+
+    vec3 scatteredDir = TangentToWorld(tangent, bitangent, incidentDir, newDir);
+
+    return scatteredDir;
 }
 
 #else

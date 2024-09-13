@@ -447,8 +447,6 @@ void Editor::ImGuiRenderingToFileSettings()
 		if (ImGui::Button("Cancel"))
 		{
 			m_RenderToFile = false;
-			m_PathTracer.ResetFrameAccumulation();
-			m_Time = 0.0f;
 		}
 	}
 	else

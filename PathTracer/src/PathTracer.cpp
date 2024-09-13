@@ -281,7 +281,7 @@ void PathTracer::DrawGBuffer()
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
 
 	m_DrawGBuffer = false;
-	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
+	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>();
 	std::vector<VkClearValue> clearColors;
 	clearColors.reserve(5);
 	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -411,9 +411,11 @@ void PathTracer::CreateRayTracingPipeline()
 	PathTracingSettingsComponent* pathTracingSettings = nullptr;
 	for (auto& entity : viewPathTracing)
 	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VL_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
 	}
+
+	VL_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
 
 	ResetFrameAccumulation();
 	{
@@ -577,15 +579,24 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin10{ 10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin11{ 11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin12{ 12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin13{ 13, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 
-		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12 }, &Vulture::Renderer::GetLinearSampler());
+		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12, bin13 }, &Vulture::Renderer::GetLinearSampler());
 
-		VkAccelerationStructureKHR tlas = m_AS.GetTlas().Accel;
-		VkWriteDescriptorSetAccelerationStructureKHR asInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
-		asInfo.accelerationStructureCount = 1;
-		asInfo.pAccelerationStructures = &tlas;
+		VkAccelerationStructureKHR geometryTlas = m_GeometryAS.GetTlas().Accel;
+		VkAccelerationStructureKHR volumeTlas = m_VolumesAS.GetTlas().Accel;
 
-		m_RayTracingDescriptorSet.AddAccelerationStructure(0, asInfo);
+		VkWriteDescriptorSetAccelerationStructureKHR geometryAsInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+		geometryAsInfo.accelerationStructureCount = 1;
+		geometryAsInfo.pAccelerationStructures = &geometryTlas;
+
+		VkWriteDescriptorSetAccelerationStructureKHR volumeAsInfo{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+		volumeAsInfo.accelerationStructureCount = 1;
+		volumeAsInfo.pAccelerationStructures = &volumeTlas;
+
+		m_RayTracingDescriptorSet.AddAccelerationStructure(0, geometryAsInfo);
+		m_RayTracingDescriptorSet.AddAccelerationStructure(13, volumeAsInfo);
+
 		m_RayTracingDescriptorSet.AddImageSampler(1, { Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
 		m_RayTracingDescriptorSet.AddBuffer(2, m_RayTracingMeshesBuffer.DescriptorInfo());
 		m_RayTracingDescriptorSet.AddBuffer(3, m_RayTracingMaterialsBuffer.DescriptorInfo());
@@ -694,7 +705,8 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 void PathTracer::CreateAccelerationStructure()
 {
-	Vulture::AccelerationStructure::CreateInfo info{};
+	Vulture::AccelerationStructure::CreateInfo infoGeometry{};
+	Vulture::AccelerationStructure::CreateInfo infoVolumes{};
 
 	m_DrawGBuffer = false;
 	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
@@ -706,12 +718,26 @@ void PathTracer::CreateAccelerationStructure()
 		instance.transform = TransformComp.Transform.GetKhrMat();
 
 		Vulture::Mesh* mesh = meshComp.AssetHandle.GetMesh();
-
 		instance.mesh = mesh;
-		info.Instances.push_back(instance);
+
+		if (m_CurrentSceneRendered->GetRegistry().try_get<Vulture::MaterialComponent>(entity))
+		{
+			infoGeometry.Instances.push_back(instance);
+		}
+		else if (m_CurrentSceneRendered->GetRegistry().try_get<VolumeComponent>(entity))
+		{
+			infoVolumes.Instances.push_back(instance);
+		}
+		else
+		{
+			VL_ASSERT(false, "Mesh has neither material or volume component! You have to add one!");
+		}
 	}
 
-	m_AS.Init(info);
+	if (!infoGeometry.Instances.empty())
+		m_GeometryAS.Init(infoGeometry);
+	if (!infoVolumes.Instances.empty())
+		m_VolumesAS.Init(infoVolumes);
 }
 
 void PathTracer::UpdateDescriptorSetsData()

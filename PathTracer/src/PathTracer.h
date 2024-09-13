@@ -123,7 +123,8 @@ public:
 	};
 
 private:
-	Vulture::AccelerationStructure m_AS;
+	Vulture::AccelerationStructure m_GeometryAS;
+	Vulture::AccelerationStructure m_VolumesAS;
 	Vulture::Scene* m_CurrentSceneRendered;
 	uint64_t m_CurrentSamplesPerPixel = 0;
 

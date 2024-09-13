@@ -84,13 +84,18 @@ vec3 RandomSphereVec(inout uint seed)
 {
     // Spherical Coordinates
 
-    float theta = 2.0f * M_PI * Rnd(seed);
-    float phi = acos(2.0f * Rnd(seed) - 1.0f);
+    float u1 = Rnd(seed);
+    float u2 = Rnd(seed);
+
+    float theta = 2.0f * M_PI * u1;
+
+    float z = 1.0f - 2.0f * u2;
+    float r = sqrt(1.0f - z * z);
 
     vec3 dir;
-    dir.x = sin(phi) * cos(theta);
-    dir.y = sin(phi) * sin(theta);
-    dir.z = cos(phi);
+    dir.x = r * cos(theta);
+    dir.y = r * sin(theta);
+    dir.z = z;
 
     return dir;
 }
