@@ -20,6 +20,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Open generated solution in Visual Studio.
 
 # Gallery
+![OceanAjax](./Gallery/OceanAjax.png)
+--------
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
 --------
 ![CornellBox](./Gallery/CornellBox.png)
@@ -119,6 +121,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 
 ## Models
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
+- https://github.com/mmacklin/tinsel - Ajax
 - https://pbrt.org/scenes-v3 - Small Dragon
 - https://pbrt.org/scenes-v3 - Coffee Cup
 - https://www.blender.org/download/demo-files/ - Monster
