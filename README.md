@@ -22,8 +22,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 # Gallery
 ![OceanAjax](./Gallery/OceanAjax.png)
 --------
-![TranslucentDragon](./Gallery/TranslucentDragon.png)
---------
 ![CornellBox](./Gallery/CornellBox.png)
 --------
 ![Fog](./Gallery/Fog.png)
@@ -31,7 +29,11 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![Mustang0](./Gallery/Mustang0.png)
 ![Mustang1](./Gallery/Mustang1.png)
 --------
+![TranslucentDragon](./Gallery/TranslucentDragon.png)
+--------
 ![Sponza1](./Gallery/Sponza1.png)
+--------
+![Volume](./Gallery/NonUniform.png)
 --------
 ![Monster](./Gallery/MonsterRough.png)
 --------
@@ -85,6 +87,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 </p>
 
 - Complex Materials
+- Volumetric Scattering using delta tracking
 - Textures and Normal Maps
 - Editor
   - Loading your own scenes in .gltf .fbx and .obj format
