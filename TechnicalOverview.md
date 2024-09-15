@@ -1,6 +1,6 @@
 # Overview
 
-The main goal for this project was to create energy conserving and preserving offline path tracer with complex materials. I think that the goal has been achieved pretty well. There are 8 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Specular Tint, Transparency and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
+The main goal for this project was to create energy conserving and preserving offline path tracer with complex materials. I think that the goal has been achieved pretty well. There are 10 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Specular Tint, Transparency, Medium Density, Medium Color and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
 
 # Table Of Contents
 
@@ -28,6 +28,9 @@ The main goal for this project was to create energy conserving and preserving of
       - [Energy Compensation For Dielectrics](#energy-compensation-for-dielectrics)
       - [Code](#code)
     - [Participating Media](#participating-media)
+      - [Homogenous (uniform) Volumes](#homogenous-uniform-volumes)
+      - [Heterogenous (non-uniform) Volumes](#heterogenous-non-uniform-volumes)
+    - [Glass as a volume](#glass-as-a-volume)
     - [Conclusion](#conclusion)
   - [Denoising](#denoising)
   - [Conclusion](#conclusion-1)
@@ -170,17 +173,17 @@ Left image was rendered with Depth of Field effect on, you can clearly see how f
 
 ##### Russian Roulette
 
-We compute each ray color (throughput) like following:
+Each ray color (throughput) is computed like following:
 
 $$F = \prod_{i=0}^{N} F_i$$
 
 where $F$ is the integrand (light contribution of the ray), $F_i$ is contribution of each bounce, and $N$ is the number of ray bounces.
 
-Because the ray accumulation is a monte carlo simulation, to have a completely unbiased and mathematically correct result of the sample we should bounce the ray through the scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases due to color absorption) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how do we choose this limit? If it's too small we're biasing the result so much that it's no longer visually appealing, if it's too large we're wasting time on computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
+Because the ray accumulation is a monte carlo simulation, to have a completely unbiased and mathematically correct result of the sample, ray should be bounced around a scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases due to color absorption) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how is this limit chosen? If it's too small result is biased so much that it's no longer visually appealing, if it's too large, it's a waste of time computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
 
-At each ray-surface intersection, we set a probability $p$ it can be chosen in any manner, I set it based on the minimum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p}$ to account for the termination of other paths. Here's a mathematical formulation of this:
+At each ray-surface intersection, probability $p$ is set it can be chosen in any manner, I set it based on the minimum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p}$ to account for the termination of other paths. Here's a mathematical formulation of this:
 
-When applying Russian Roulette, after each bounce we compute new integrand:
+When applying Russian Roulette, after each bounce new integrand is computed:
 
 $$ F\prime = \begin{cases} 
 0 & \text{with probability } (1 - p) \\
@@ -189,15 +192,15 @@ $$ F\prime = \begin{cases}
 
 And then just set the old integrand $F$ to newly computed one $F\prime$.
 
-So We can see that as long as we divide the $F$ by $p$ the expected value remains mathematically unbiased:
+So as you can see that as long as $F$ is divided by $p$ the expected value remains mathematically unbiased:
 
 $$ E[F\prime] = \left(1 - p\right) \cdot 0 + p \cdot \frac{E[F]}{p} = E[F] $$
 
-Of course if we choose to sample with probability $(1 - p)$ which means we set the $F\prime$ to 0, we can stop bouncing the ray any further, it's throughput is 0. And every other bounce, no matter it's throughput, will also be zero since anything times 0 is 0.
+Of course if we choose to sample with probability $(1 - p)$ which means the $F\prime$ equals 0, we can stop bouncing the ray any further, it's throughput is 0. And every other bounce, no matter it's throughput, will also be zero since anything times 0 is 0.
 
-And because we're terminating only paths with low throughput we're not introducing too much variance and keeping the convergence rate relatively similar to the original one. This way the result is not only mathematically correct, but we're also saving a lot of computation time by not evaluating low throughput paths. 
+And because only paths with low throughput get terminated, only small amount variance is introduced and the convergence rate stays relatively similar to the original one. This way the result is not only mathematically correct, but a lot of computation time is saved by not evaluating low throughput paths. 
 
-By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweighs small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. We'd only trace 1% of the camera rays and then multiply them by a 100. From a mathematical point of view, the image is still correct, theoretically it will eventually converge on the right result. But visually it's horrible. If the termination probability is 99% for each bounce then the probability that we reach 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (I'd say it's optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be mostly dark, you'll be lucky to get 3 or even 2 bounces most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
+By applying russian roulette we're in fact **always** introducing more variance, but if probability $p$ is chosen correctly we're gaining efficiency which outweighs small variance that it introduces. But if for some reason the probability $p$ is chosen poorly, like a constant of 0.01. Only 1% of the camera rays are traced and then multiplied by a 100. From a mathematical point of view, the image is still correct, theoretically it will eventually converge on the right result. But visually it's horrible. If the termination probability is 99% for each bounce then the probability that ray reaches 20 bounces is $0.01^{20} = (10^{-2})^{20} = 10^{-40}$. So the probability of reaching 20 bounces (I'd say it's optimal for "visually correct" image) is equal $0.0000000000000000000000000000000000000001$! That's why the image will be mostly dark, you'll be lucky to get 3 or even 2 bounces most of the time, which is nowhere near the needed amount. So terminate your rays wisely.
 
 In terms of code it's really simple:
 ```
@@ -228,24 +231,22 @@ Middle image was rendered with roulette with correctly picked probability (141s 
 right image was rendered with roulette using constant probability 0.01 (42s for 200k samples per pixel on 1000x1000 image)
 </p>
 
-So in general, this method reduces computation by terminating a lot of paths that don't really contribute anything while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, what I mean by that is because I'm choosing to terminate my rays based on the color so you could say "luminance", if materials aren't absorbing any light (they are white) the roulette won't give us any performance increase, we don't terminate rays if they are bright, and their brightness depends on the materials colors. So the darker the scene the more performance you get, more on that in the [Benchmark](#benchmark) section.
+So in general, this method reduces computation by terminating a lot of paths that don't really contribute anything while keeping the rendering unbiased. It gives you a nice performance boost based on the scene settings, what I mean by that is because I'm choosing to terminate my rays based on the color so you could say "luminance", if materials aren't absorbing any light (they are white) the roulette won't give us any performance increase, rays aren't terminated if they are bright, and their brightness depends on the materials colors. So the darker the scene the more performance you get, more on that in the [Benchmark](#benchmark) section.
 
 ##### Caustics Suppression
 
-Caustics Suppression is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm, when we pick environment map with a few very bright spots the variance goes through the roof. And unfortunately there's not much we can do about that, so the only solution is to limit the luminance of the rays that hit those very bright spots.
-
-If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big (at least for my denoiser).
+Caustics Suppression is a method used to limit the luminance of the sampled ray. Because of lack of complex light transport algorithm, if the scene contains environment map with a few very bright spots the variance goes through the roof. If I pick a 2k env map that has 3 pixels that are really bright and I just path trace with my naive approach it will be a disaster, I would probably have to run this for several days to bring down the noise to a level where I can denoise it. Otherwise the variance is just too big (at least for my denoiser).
 
 <p align="center">
   <img src="./Gallery/materialShowcase/Caustics.png" alt="Caustics" width="500" height="500" />
   <img src="./Gallery/materialShowcase/CausticsDenoised.png" alt="Caustics denoised" width="500" height="500" />
 </p>
-
 <p align="center"> 
 The left image shows cornell box lit by a very bright env map, the image has 200k samples per pixel. Right image shows an attempt at denoising it.
 </p>
 
-So the only real solution to this problem (except for using better light transport algorithm) is just limiting the luminance of the environment map to limit variance.
+
+There are 2 things we can do about that. One is to implement importance sampling, and the other one is to just limit the environment map brightness. I chose to do the second approach.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="700" height="700" />
@@ -255,7 +256,7 @@ So the only real solution to this problem (except for using better light transpo
 Image Shows the same image as above (200k samples per pixel) but this time max luminance of the env map is limited to 500.
 </p>
 
-As you can see the image is way darker, but that's logical if we're literally limiting brightness.
+As you can see the image is way darker, but that's logical if the brightness is limited.
 
 And that concludes the Ray Generation Shader! Full code of the shader can be found in [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rgen).
 
@@ -730,6 +731,8 @@ There's one more thing to talk about when it comes to shading and it's volumes (
 Image of the forest in fog, the bigger the distance to the object, the bigger the probability that the photon will hit the particle in the air and scatter. And this causes objects at far distances to become less visible.
 </p>
 
+#### Homogenous (uniform) Volumes
+
 The homogenous (uniform) volumes are usually described by **absorption coefficient** denoted as $\sigma_a(x)$. It determines the amount of light that is absorbed by the volume (usually it's transferred into heat). **scattering coefficient** denoted as $\sigma_s(x)$. It determines the amount of light that gets scattered (i.e. that hits a particle and changes direction). And **Phase Function** that determines the new photon direction after the scattering occurs. There's also one more coefficient, called **extinction coefficient** and it's denoted as $\sigma_t = \sigma_a + \sigma_s$. It describes the amount of light that is either scattered or absorbed, so it's just a sum of previous coefficients.
 
 The amount of light that is being absorbed or scattered in a volume is described by **Beer-Lambert** law.
@@ -873,7 +876,8 @@ else if (random < pa + ps)
     origin = origin + ((distNear + scatterDistance) * currentDir);
     rayColor *= volumeColor;
 
-    currentDir = SampleHenyeyGreenstein(...); // Change the direction and trace further
+    // Change the direction and trace further
+    currentDir = SampleHenyeyGreenstein(...);
 }
 ```
 
@@ -894,6 +898,7 @@ or just
 $$
 \frac{\sigma_s}{\sigma_t}
 $$
+
 since it's just inverted absorption probability.
 
 ```
@@ -923,7 +928,7 @@ Or really high scattering coefficient which makes the object look more like a so
   <img src="./Gallery/Graphics/HighScatter.png" alt="HighScatter" width="500" height="500" />
 </p>
 
-You can also make the scattering coefficient really low and the volume really big, it will look like a fog, which I think is pretty much the only use case for homogenous volumes that are just AABBs (Maybe I'll look into heterogenous volumes next?). Then you can place a light in the scene and actually see the so called god-rays of the lights. Although doing that will create insane amounts of noise with naive path tracing, since now literally every ray can hit the light no matter it's initial direction. Ray paths are really twisted which leads to a lot of variance:
+You can also make the scattering coefficient really low and the volume really big, it will look like a fog, which I think is pretty much the only use case for homogenous volumes that are just AABBs. Then you can place a light in the scene and actually see the so called god-rays of the lights. Although doing that will create insane amounts of noise with naive path tracing, since now literally every ray can hit the light no matter it's initial direction. Ray paths are really twisted which leads to a lot of variance:
 
 <p align="center">
   <img src="./Gallery/Graphics/NoisyFog.png" alt="NoisyFog" width="500" height="500" />
@@ -935,11 +940,105 @@ It is always possible to just path trace it till it looks good, but it will take
   <img src="./Gallery/Graphics/FogCarUndenoised.png" alt="FogCarUndenoised" />
 </p>
 
-As a fun fact, because in the algorithm described above we're looping over all volumes and choosing the closest scatter distance, the volumes can blend together:
+Also as a fun fact, because in the algorithm described above we're looping over all volumes and choosing the closest scatter distance, the volumes can naturally blend together:
 
 <p align="center">
   <img src="./Gallery/Graphics/VolumeBlend.png" alt="VolumeBlend" width="500" height="500" />
 </p>
+
+#### Heterogenous (non-uniform) Volumes
+
+In contrast to homogenous volumes, heterogenous volumes are not uniform everywhere, their density varies for every position. To sample something like this we have to make one change to the previous algorithm, and that is to resample the volume properties after traveling through it for certain distance. We could just resample after some fixed distance, like 0.1 meters, but that would be awfully slow, especially if the volume is mostly empty. So what I'll do is use a method called **delta tracking**. With delta tracking the empty parts of the volume get filled with imaginary particles that don't do anything (don't absorb or change direction), but if photon hits them, volume properties get resampled.
+
+To model these **null collisions** there's need for another coefficient, null coefficient denoted as $\sigma_n$. It's best if it's chosen in a way that the entire volume is homogenous so $\sigma = \sigma_s(x) + \sigma_n(x)$ is true for every position $x$ inside the volume. In other words, if there is a place in volume where $\sigma_s$ is high, then $\sigma_n$ should be low, and if $\sigma_s$ is low, $\sigma_n$ should be high. It doesn't have to be that way tho, $\sigma_n$ can be set to a constant, but if it's too low then the volume will look very bad, and if it's too high it's a waste of performance, since the volume will be resampled really often for no reason. So it's best to leave it homogenous ($\sigma = \sigma_s(x) + \sigma_n(x)$ for every position $x$).
+
+So first, to make a non-uniform volume we need some data of where exactly the density varies. In other words, which parts are denser than the others. For simplicity sake I just used 3D perlin noise, so for each intersection with a volume a new $\sigma_s$ and $\sigma_n$ is computed using the ray world position like so:
+
+```
+// Noise functions come from this awesome repo: https://github.com/stegu/webgl-noise
+
+// Get the noise value using intersection world position
+float noise = cnoise(origin + (distNear * currentDir));
+noise = clamp(noise, 0.0f, 1.0f);
+
+scatteringCoefficient = noise * scatteringCoefficient;
+float nullCoefficient = (1.0f - noise) * scatteringCoefficient;
+```
+
+And the probability of a null collision is computed in the same way as previous probabilities so:
+
+$$
+p_n = \frac{\sigma_n}{\sigma_t}
+$$
+
+The rest of the code stays identical, then if we hit a particle we do:
+
+```
+if (pn > random)
+{
+    // Null Collision
+
+    // Update the new origin but leave the direction unchanged
+    origin = origin + ((distNear + scatterDistance) * currentDir);
+    continue;
+}
+else
+{
+    // Scatter
+    origin = origin + ((distNear + scatterDistance) * currentDir);
+    rayColor *= volumeColor;
+
+    // Change the direction and trace further
+    currentDir = SampleHenyeyGreenstein(...);
+}
+```
+
+And that's it, with these simple changes we can start tracing.
+
+<p align="center">
+  <img src="./Gallery/Graphics/NonUniformDense.png" alt="NonUniformDense" width="500" height="500" />
+  <img src="./Gallery/NonUniform.png" alt="NonUniform" width="500" height="500" />
+</p>
+
+<p align="center">
+Images show non-uniform participating media, the left image shows the same volume as the right one but with lower density.
+</p>
+
+Path tracing non-uniform volumes is of course way slower since there are a lot more collisions, if we have a single area with high density the entire volume has to be filled with null particles to match that density. Because of that we're wasting a lot of time on null collisions in empty areas. But as the [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/index.html) mentions, we can mitigate that by splitting the volume into sub-regions and treat them like they are different volumes, this way the $\sigma_n$ can be way lower in areas with low density. Since now if one region has high density, it doesn't mean we have to fill all other regions with null particles to match that density, we treat them as completely separate objects resulting in less null collisions.
+
+<p align="center">
+  <img src="./Gallery/Graphics/Null Collisions mitigation.png" alt="Null Collisions mitigation" />
+</p>
+<p align="center">
+Visualization of splitting one volume into subregions and tracing rays through it.
+</p>
+
+But I haven't implemented it here since I don't have any data on the CPU, as I mentioned before for the sake of simplicity I'm computing the density value on the fly when colliding with a particle. But I'm pretty sure the technique described above is exactly what OpenVDB format is doing so maybe I'll try to implement it some day.
+
+### Glass as a volume
+
+To more faithfully represent glass we can try shading it as if it was volume in which the light can scatter. To do that we can use two different approaches. One is to simulate the entire random walk inside the glass object with light scattering into different directions and being absorbed, just like we did with normal volumes. Or just use the **Beer-Lambert** law on distance traveled when refracting the ray. I went for the second approach because it's super easy to implement and is way faster than simulating a random walk. And it also looks really good so I don't think there's really a need for the random walk in the first place.
+
+Literally all we have to in code is to to change how refraction is evaluated on hit from `BSDF = Color;` to `BSDF = vec3(1.0f)'`, and add this code snippet to both reflection and refraction:
+
+```
+vec3 beerLaw = exp(-(1.0f - mat.Color.xyz) * mediumDensity * hitDistance);
+
+if (hitFromTheInside)
+    BSDF *= beerLaw;
+```
+
+The difference is huge, and it doesn't cost any performance.
+
+<p align="center">
+  <img src="./Gallery/Graphics/GlassOld.png" alt="GlassOld" width="500" height="500" />
+  <img src="./Gallery/OceanAjax.png" alt="OceanAjax" width="500" height="500" />
+</p>
+<p align="center">
+Left render evaluated refractions with BSDF = Color. Right render evaluated them using Beer-Lambert law.
+</p>
+
+Using this method also requires a new parameter medium density, which is well, density of a medium, glass in this case. We could also keep the surface attenuation from the medium attenuation a separate thing, so on surface hit it still gets attenuated `BSDF = Color;`, which is also fine and gives you more artistic freedom. But then another parameter called medium color has to be introduced.
 
 ### Conclusion
 

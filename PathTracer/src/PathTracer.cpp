@@ -532,7 +532,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 {
 	{
 		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000; // TODO: dynamic amount of meshes
+		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 5000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMeshesBuffer.Init(bufferInfo);
@@ -540,7 +540,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 	{
 		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 50000; // TODO: dynamic amount of meshes
+		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 5000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMaterialsBuffer.Init(bufferInfo);

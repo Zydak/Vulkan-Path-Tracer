@@ -90,14 +90,10 @@ void main()
         for(; payload.Depth < pcRay.MaxDepth; payload.Depth++)
         {
             float closestScatterDistanceFromCamera = FLT_MAX;
-            float closestScatterDistance = 0.0;
-            float finalVolumeNear = 0.0f;
-            float finalVolumeFar = 0.0f;
-            float finalPathLengthThroughVolume = 0.0f;
-            float finalScatteringCoefficient = 0.0f;
-            float finalAbsorptionCoefficient = 0.0f;
             vec3 finalColor = vec3(0.0f);
             float finalG = 0.0f;
+            float finalNullCollision = 0.0f;
+            float finalSigmaT = 0.0f;
 
             // Check at what distance the closest geometry is
             float closestGeometry = -1.0f;
@@ -158,36 +154,44 @@ void main()
                     pathLengthThroughVolume = volumeWidth;
                 }
 
-                float sigmaT = volume.ScatteringCoefficient + volume.AbsorptionCoefficient;
+                //float noise = cnoise(payload.RayOrigin + (volumeNear * payload.RayDirection));
+                //noise = clamp(noise, 0.0f, 1.0f);
+                //float sigmaT = noise * volume.ScatteringCoefficient;
+                //float nullCollision = (1.0f - noise) * volume.ScatteringCoefficient;
+
+                float sigmaT = volume.ScatteringCoefficient;
+
+                float nullCollision = 0.0f;
+                sigmaT += nullCollision;
 
                 float scatterDistance = -log(Rnd(seed)) / sigmaT;
                 float scatterDistanceFromCamera = (volumeNear + scatterDistance);
 
                 if (scatterDistanceFromCamera < closestScatterDistanceFromCamera && pathLengthThroughVolume > 0.0f && pathLengthThroughVolume > scatterDistance)
                 {
-                    finalVolumeNear = volumeNear;
-                    finalVolumeFar = volumeFar;
-                    finalPathLengthThroughVolume = pathLengthThroughVolume;
-                    finalScatteringCoefficient = volume.ScatteringCoefficient;
-                    finalAbsorptionCoefficient = volume.AbsorptionCoefficient;
+                    finalSigmaT = sigmaT;
                     finalColor = volume.Color;
                     finalG = volume.G;
+                    finalNullCollision = nullCollision;
 
-                    closestScatterDistance = scatterDistance;
                     closestScatterDistanceFromCamera = scatterDistanceFromCamera;
                 }
             }
 
             // Scatter inside a volume
-            if (finalPathLengthThroughVolume > closestScatterDistance)
+            if (closestScatterDistanceFromCamera < FLT_MAX)
             {
-                float sigmaT = finalScatteringCoefficient + finalAbsorptionCoefficient;
+                if (finalNullCollision / finalSigmaT > Rnd(seed))
+                {
+                    payload.RayOrigin = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
+                    continue;
+                }
 
-                curWeight *= vec3(finalScatteringCoefficient / sigmaT) * finalColor;
+                curWeight *= finalColor;
 
                 vec3 newDir = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
 
-                payload.RayOrigin = payload.RayOrigin + ((finalVolumeNear + closestScatterDistance) * payload.RayDirection);
+                payload.RayOrigin = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
 
                 payload.RayDirection = newDir;
             }

@@ -44,7 +44,7 @@ float DielectricFresnel(float VdotH, float eta)
     return 0.5f * (rs * rs + rp * rp);
 }
 
-bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface)
+bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface, in HitData hitData)
 {
     vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View);
 
@@ -69,6 +69,8 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     float glassCDF = dielectricCDF + glassProbability;
 
     float r1 = Rnd(seed);
+
+    bool hitFromTheInside = mat.eta > 1.0f;
     
     data.PDF = 1.0f;
     bool reflection = true;
@@ -143,7 +145,6 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
         float r2 = Rnd(seed);
 
-        bool reflection = false;
         if (r2 < F)
         {
             // Reflect
@@ -183,17 +184,20 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
                 vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
                 data.RayDir = normalize(reflect(-V, H));
-
-                Color *= mat.Color.xyz;
             }
 
             if (data.RayDir.z > 0.0f)
                 return false;
 
-            data.BSDF = Color;
+            data.BSDF = vec3(mat.Color.xyz);
 
             reflection = false;
         }
+
+        vec3 beerLaw = exp(-(1.0f - mat.MediumColor.xyz) * mat.MediumDensity * hitData.HitDistance);
+
+        if (hitFromTheInside)
+            data.BSDF *= beerLaw;
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }

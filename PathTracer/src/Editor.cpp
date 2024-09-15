@@ -733,6 +733,8 @@ void Editor::ImGuiSceneEditor()
 		ImGui::Separator();
 
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Medium Density", (float*)&materialProps->MediumDensity, 0.0f, 2.0f)) { valuesChanged = true; };
+		if (ImGui::ColorEdit3("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 3.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
@@ -796,7 +798,6 @@ void Editor::ImGuiSceneEditor()
 		bool volumeValuesChanged = false;
 		if (ImGui::SliderFloat("G Anisotropy", &volumes[currentVolume].G, -0.9f, 0.9f)) { volumeValuesChanged = true; };
 		if (ImGui::SliderFloat("Scattering Coefficient", &volumes[currentVolume].ScatteringCoefficient, 0.0f, 0.1f)) { volumeValuesChanged = true; };
-		if (ImGui::SliderFloat("Absorption Coefficient", &volumes[currentVolume].AbsorptionCoefficient, 0.0f, 0.1f)) { volumeValuesChanged = true; };
 		if (ImGui::ColorEdit3("Color", (float*)&volumes[currentVolume].Color)) { volumeValuesChanged = true; };
 		if (ImGui::SliderFloat3("AABB min", (float*)&volumes[currentVolume].AABB.A, 0.0f, 100.0f)) { volumeValuesChanged = true; };
 		if (ImGui::SliderFloat3("AABB max", (float*)&volumes[currentVolume].AABB.B, 0.0f, 100.0f)) { volumeValuesChanged = true; };

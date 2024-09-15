@@ -315,7 +315,6 @@ public:
 	{ 
 		AABB = std::move(other.AABB); 
 		ScatteringCoefficient = std::move(other.ScatteringCoefficient);
-		AbsorptionCoefficient = std::move(other.AbsorptionCoefficient);
 		Color = std::move(other.Color);
 		G = std::move(other.G);
 	};
@@ -324,7 +323,6 @@ public:
 	{ 
 		AABB = other.AABB; 
 		ScatteringCoefficient = other.ScatteringCoefficient;
-		AbsorptionCoefficient = other.AbsorptionCoefficient;
 		Color = other.Color;
 		G = other.G;
 	};
@@ -333,7 +331,6 @@ public:
 	{ 
 		AABB = other.AABB;
 		ScatteringCoefficient = other.ScatteringCoefficient;
-		AbsorptionCoefficient = other.AbsorptionCoefficient;
 		Color = other.Color;
 		G = other.G;
 		return *this; 
@@ -343,7 +340,6 @@ public:
 	{ 
 		AABB = std::move(other.AABB);
 		ScatteringCoefficient = std::move(other.ScatteringCoefficient);
-		AbsorptionCoefficient = std::move(other.AbsorptionCoefficient);
 		Color = std::move(other.Color);
 		G = std::move(other.G);
 		return *this; 
@@ -368,6 +364,5 @@ public:
 	AABB AABB = { glm::vec3{-1.0f}, glm::vec3{1.0f} };
 	glm::vec3 Color = glm::vec3(1.0f);
 	float ScatteringCoefficient = 10.0f;
-	float AbsorptionCoefficient = 10.0f;
 	float G = 0.0f;
 };

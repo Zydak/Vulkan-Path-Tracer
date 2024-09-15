@@ -119,6 +119,8 @@ void main()
     material.SpecularTint = loadedMaterial.SpecularTint;
     material.Ior = loadedMaterial.Ior;
     material.Transparency = loadedMaterial.Transparency;
+    material.MediumDensity = loadedMaterial.MediumDensity;
+    material.MediumColor = loadedMaterial.MediumColor;
     material.Anisotropy = loadedMaterial.Anisotropy;
 
     material.Ior = max(material.Ior, 1.0001f);
@@ -158,10 +160,13 @@ void main()
     // -------------------------------------------
     payload.HitValue = material.EmissiveColor.xyz;
 
+    HitData hitData;
+    hitData.HitDistance = length(payload.RayOrigin - worldPos);
+
     BSDFSampleData sampleData;
     sampleData.View = -gl_WorldRayDirectionEXT;
     
-    bool absorb = !SampleBSDF(payload.Seed, sampleData, material, surface);
+    bool absorb = !SampleBSDF(payload.Seed, sampleData, material, surface, hitData);
     
     if (absorb)
     {
