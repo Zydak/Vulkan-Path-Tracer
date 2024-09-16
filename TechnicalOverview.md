@@ -1017,12 +1017,12 @@ But I haven't implemented it here since I don't have any data on the CPU, as I m
 
 ### Glass as a volume
 
-To more faithfully represent glass we can try shading it as if it was volume in which the light can scatter. To do that we can use two different approaches. One is to simulate the entire random walk inside the glass object with light scattering into different directions and being absorbed, just like we did with normal volumes. Or just use the **Beer-Lambert** law on distance traveled when refracting the ray. I went for the second approach because it's super easy to implement and is way faster than simulating a random walk. And it also looks really good so I don't think there's really a need for the random walk in the first place.
+To more faithfully represent glass we can try shading it as if it was volume in which the light can scatter. To do that we can use two different approaches. One is to simulate the entire random walk inside the glass object with light scattering into different directions and being absorbed just like we did with normal volumes. Or just use the **Beer-Lambert** law on distance traveled when refracting the ray. I went for both second approaches, since simply applying the **Beer-Lamber** law is exactly the same as doing a random walk with anisotropy equal 1. If it's not equal 1 then I'm doing a random walk. That's because with random walk it takes 3-4 times longer to render the image, but that depends purely on the scene settings and medium density. The only advantage of random walk would be ability to set the anisotropy factor, and that's it. But as I said if anisotropy is 1 then it's the same as beer's law. I won't be talking about the random walk implementation here since it's literally the same as for the normal volumes, the only difference is that the closest geometry distance is now a triangle geometry and not AABB. If you're interested in that you can check the code [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rchit).
 
-Literally all we have to in code is to to change how refraction is evaluated on hit from `BSDF = Color;` to `BSDF = vec3(1.0f)'`, and add this code snippet to both reflection and refraction:
+And when it comes to the **Beer-Lambert** law, literally all we have to do in code is to to change how refraction is evaluated on hit from `BSDF = Color;` to `BSDF = vec3(1.0f)'`, and add this code snippet to both reflection and refraction on glass materials:
 
 ```
-vec3 beerLaw = exp(-(1.0f - mat.Color.xyz) * mediumDensity * hitDistance);
+vec3 beerLaw = exp(-(1.0f - Color) * mediumDensity * hitDistance);
 
 if (hitFromTheInside)
     BSDF *= beerLaw;
@@ -1038,7 +1038,7 @@ The difference is huge, and it doesn't cost any performance.
 Left render evaluated refractions with BSDF = Color. Right render evaluated them using Beer-Lambert law.
 </p>
 
-Using this method also requires a new parameter medium density, which is well, density of a medium, glass in this case. We could also keep the surface attenuation from the medium attenuation a separate thing, so on surface hit it still gets attenuated `BSDF = Color;`, which is also fine and gives you more artistic freedom. But then another parameter called medium color has to be introduced.
+Using this method also requires a new parameter medium density, which is well, density of a medium, glass in this case. We could also keep the surface attenuation as a separate thing, so on surface hit it still gets attenuated `BSDF = Color;`, which is also fine and gives you more artistic freedom. But then another parameter called medium color has to be introduced.
 
 ### Conclusion
 

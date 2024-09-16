@@ -21,9 +21,9 @@ layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
     EnvAccel[] uAccels;
 };
 
-#include "BSDF.glsl"
-
 layout(location = 0) rayPayloadInEXT hitPayload payload;
+
+#include "BSDF.glsl"
 
 hitAttributeEXT vec2 attribs;
 
@@ -163,6 +163,39 @@ void main()
     HitData hitData;
     hitData.HitDistance = length(payload.RayOrigin - worldPos);
 
+    payload.Weight = vec3(1.0f);
+
+    if (payload.InMedium)
+    {
+        float scatterDistance = -log(Rnd(payload.Seed)) / material.MediumDensity;
+        
+        if (scatterDistance < hitData.HitDistance)
+        {
+            payload.HitValue = vec3(0.0f);
+            float anisotropy = 1.0f;
+
+            // just use Beer's law directly since there is no need for a random walk if anisotropy == 1
+            if (anisotropy == 1.0f)
+                payload.Weight = exp(-(1.0f - material.MediumColor.rgb) * material.MediumDensity * hitData.HitDistance);
+            else
+            {
+                vec3 newDir = SampleHenyeyGreenstein(anisotropy, payload.RayDirection, vec2(Rnd(payload.Seed), Rnd(payload.Seed)));
+                payload.RayOrigin = payload.RayOrigin + (scatterDistance * payload.RayDirection);
+        
+                payload.RayDirection = newDir;
+        
+                payload.Weight = material.MediumColor.rgb;
+        
+                return;
+            }
+        }
+        else
+        {
+            if (payload.MediumID == gl_InstanceCustomIndexEXT)
+                payload.InMedium = false;
+        }
+    }
+
     BSDFSampleData sampleData;
     sampleData.View = -gl_WorldRayDirectionEXT;
     
@@ -175,7 +208,7 @@ void main()
     }
     else
     {
-        payload.Weight = sampleData.BSDF / sampleData.PDF;
+        payload.Weight *= sampleData.BSDF / sampleData.PDF;
     }
     
     payload.RayDirection = sampleData.RayDir;

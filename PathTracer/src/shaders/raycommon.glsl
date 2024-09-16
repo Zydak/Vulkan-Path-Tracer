@@ -27,6 +27,9 @@ struct hitPayload
     vec3 RayDirection;
     vec3 Weight;
     bool MissedAllGeometry;
+
+    bool InMedium;
+    uint MediumID;
 };
 
 struct GlobalUniforms

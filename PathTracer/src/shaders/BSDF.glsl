@@ -30,16 +30,16 @@ float SchlickWeight(float VdotH)
 float DielectricFresnel(float VdotH, float eta)
 {
     float cosThetaI = VdotH;
-    float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
+    float sinThetaTSq = (1.0f - (cosThetaI * cosThetaI)) * (eta * eta);
 
     // Total internal reflection
-    if (sinThetaTSq > 1.0)
+    if (sinThetaTSq >= 1.0)
         return 1.0;
 
-    float cosThetaT = sqrt(max(1.0 - sinThetaTSq, 0.0));
+    float cosThetaT = sqrt(max(1.0 - sinThetaTSq, 0.0001f));
 
-    float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
     float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
+    float rs = (cosThetaI - eta * cosThetaT) / (cosThetaI + eta * cosThetaT);
 
     return 0.5f * (rs * rs + rp * rp);
 }
@@ -143,9 +143,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
         vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
         float F = DielectricFresnel(abs(dot(V, H)), mat.eta);
 
-        float r2 = Rnd(seed);
-
-        if (r2 < F)
+        if (Rnd(seed) < F)
         {
             // Reflect
             data.RayDir = normalize(reflect(-V, H));
@@ -168,6 +166,12 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
             data.BSDF = Color;
             reflection = true;
+
+            if (hitFromTheInside)
+            {
+                payload.InMedium = true;
+                payload.MediumID = gl_InstanceCustomIndexEXT;
+            }
         }
         else
         {
@@ -192,12 +196,13 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
             data.BSDF = vec3(mat.Color.xyz);
 
             reflection = false;
+
+            if (!hitFromTheInside)
+            {
+                payload.InMedium = true;
+                payload.MediumID = gl_InstanceCustomIndexEXT;
+            }
         }
-
-        vec3 beerLaw = exp(-(1.0f - mat.MediumColor.xyz) * mat.MediumDensity * hitData.HitDistance);
-
-        if (hitFromTheInside)
-            data.BSDF *= beerLaw;
 
         data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
     }

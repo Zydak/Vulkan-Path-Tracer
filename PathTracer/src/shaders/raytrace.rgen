@@ -83,6 +83,7 @@ void main()
 
         payload.RayDirection = normalize(focalPoint - payload.RayOrigin);
         payload.Weight = vec3(0.0);
+        payload.InMedium = false;
 
         vec3 curWeight = vec3(1);
         vec3 hitValue  = vec3(0);
