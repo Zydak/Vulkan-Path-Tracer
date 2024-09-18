@@ -1,6 +1,3 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
-
 #include "PathTracer.h"
 #include "Components.h"
 #include <glm/gtc/random.hpp>
@@ -232,7 +229,7 @@ bool PathTracer::Render()
 
 	Vulture::Device::EndLabel(Vulture::Renderer::GetCurrentCommandBuffer());
 
-	if (pathTracingSettings->Settings.AutoDoF)
+	if (pathTracingSettings->Settings.AutoDoF && m_PushContantRayTrace.GetDataPtr()->frame > 1)
 	{
 		memcpy(&pathTracingSettings->Settings.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
 	}
@@ -837,7 +834,7 @@ float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
 	float ax2 = ax * ax;
 	float ay2 = ay * ay;
 
-	return 1.0f / M_PI * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
+	return 1.0f / float(M_PI) * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
 }
 
 float EvalDielectricRefraction(float ax, float ay, float eta, glm::vec3 L, glm::vec3 V, glm::vec3 H, float F)
@@ -868,10 +865,10 @@ float DielectricFresnel(float VdotH, float eta)
 	float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
 
 	// Total internal reflection
-	if (sinThetaTSq > 1.0)
-		return 1.0;
+	if (sinThetaTSq > 1.0f)
+		return 1.0f;
 
-	float cosThetaT = glm::sqrt(glm::max(1.0 - sinThetaTSq, 0.0));
+	float cosThetaT = glm::sqrt(glm::max(1.0f - sinThetaTSq, 0.0f));
 
 	float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
 	float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);

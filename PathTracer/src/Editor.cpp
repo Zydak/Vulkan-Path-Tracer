@@ -1,6 +1,3 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
-
 #include "pch.h"
 #include "Editor.h"
 
@@ -734,6 +731,7 @@ void Editor::ImGuiSceneEditor()
 
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Density", (float*)&materialProps->MediumDensity, 0.0f, 2.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Medium Anisotropy", (float*)&materialProps->MediumAnisotropy, -1.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::ColorEdit3("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 3.0f)) { valuesChanged = true; };
 		ImGui::Separator();
@@ -1211,6 +1209,7 @@ void Editor::Resize()
 
 void Editor::UpdateModel()
 {
+	Vulture::Device::WaitIdle();
 	Vulture::AssetHandle newAssetHandle;
 
 	// Unload current scene
@@ -1324,6 +1323,8 @@ void Editor::UpdateModel()
 
 void Editor::UpdateSkybox()
 {
+	Vulture::Device::WaitIdle();
+
 	Vulture::AssetHandle newAssetHandle;
 	auto view = (*m_CurrentScene)->GetRegistry().view<SkyboxComponent>();
 	for (auto& entity : view)

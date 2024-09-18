@@ -171,6 +171,10 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
             {
                 payload.InMedium = true;
                 payload.MediumID = gl_InstanceCustomIndexEXT;
+
+                payload.MediumColor = mat.MediumColor.rgb;
+                payload.MediumDensity = mat.MediumDensity;
+                payload.MediumAnisotropy = mat.MediumAnisotropy;
             }
         }
         else
@@ -201,6 +205,10 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
             {
                 payload.InMedium = true;
                 payload.MediumID = gl_InstanceCustomIndexEXT;
+
+                payload.MediumColor = mat.MediumColor.rgb;
+                payload.MediumDensity = mat.MediumDensity;
+                payload.MediumAnisotropy = mat.MediumAnisotropy;
             }
         }
 

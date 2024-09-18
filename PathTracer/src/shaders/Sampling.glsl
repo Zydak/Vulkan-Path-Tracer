@@ -66,7 +66,7 @@ vec3 GGXSampleAnisotopic(vec3 Ve, float ax, float ay, float u1, float u2)
 
 
 // -----------------------------------------------------------------------------------------------------------------
-// Hemishphere
+// Random Sampling
 //
 
 

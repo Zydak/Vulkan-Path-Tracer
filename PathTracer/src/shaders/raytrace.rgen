@@ -13,7 +13,7 @@ layout(location = 0) rayPayloadEXT hitPayload payload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = 1, rgba32f) uniform image2D image;
-layout(set = 0, binding = 8) buffer DOFUniform { float dof; };
+layout(set = 0, binding = 8) buffer DOFUniform { float uDof; };
 layout(set = 0, binding = 12, scalar) buffer Volumes { Volume uVolumes[]; };
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
@@ -52,8 +52,7 @@ void main()
 		rayQueryProceedEXT(query);
 		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		{
-            float prevDof = dof;
-			dof = rayQueryGetIntersectionTEXT(query, true);
+			uDof = rayQueryGetIntersectionTEXT(query, true);
 		}
     }
 
@@ -106,9 +105,12 @@ void main()
 		        closestGeometry = rayQueryGetIntersectionTEXT(query, true);
 		    }
 
+            // Iterate through all volumes
             for (int i = 0; i < pcRay.VolumesCount; i++)
             {
                 Volume volume = uVolumes[i];
+
+                // Check collision positions with volume
                 vec3 hitPosNear;
                 vec3 hitPosFar;
                 IntersectRayAABB(payload.RayOrigin, payload.RayDirection, volume.Aabb, hitPosNear, hitPosFar);
@@ -116,8 +118,10 @@ void main()
                 bool isInside = IsInsideAABB(payload.RayOrigin, volume.Aabb);
                 if (isInside)
                     hitPosNear = payload.RayOrigin;
+
                 float volumeWidth = length(hitPosFar - hitPosNear);
 
+                // Calculate distance from the camera to the volume intersections
                 float volumeNear = -1.0f;
                 float volumeFar = -1.0f;
                 if (hitPosNear != vec3(-1.0f))
@@ -129,6 +133,7 @@ void main()
                     volumeFar = length(hitPosFar - payload.RayOrigin);
                 }
 
+                // Calculate overall ray path length through the volume
                 float pathLengthThroughVolume = 0.0f;
                 if (volumeNear != -1.0f && closestGeometry != -1.0f)
                 {
@@ -155,6 +160,7 @@ void main()
                     pathLengthThroughVolume = volumeWidth;
                 }
 
+                // Heterogenous volumes:
                 //float noise = cnoise(payload.RayOrigin + (volumeNear * payload.RayDirection));
                 //noise = clamp(noise, 0.0f, 1.0f);
                 //float sigmaT = noise * volume.ScatteringCoefficient;
@@ -165,9 +171,12 @@ void main()
                 float nullCollision = 0.0f;
                 sigmaT += nullCollision;
 
+                // Calculate scattering distance
                 float scatterDistance = -log(Rnd(seed)) / sigmaT;
                 float scatterDistanceFromCamera = (volumeNear + scatterDistance);
 
+                // If we have multiple volumes we have to choose the closest scattering distance, so check if the new scattering distance
+                // is smaller than the previous ones, then save the values
                 if (scatterDistanceFromCamera < closestScatterDistanceFromCamera && pathLengthThroughVolume > 0.0f && pathLengthThroughVolume > scatterDistance)
                 {
                     finalSigmaT = sigmaT;
@@ -179,24 +188,24 @@ void main()
                 }
             }
 
-            // Scatter inside a volume
+            // If scattering occured scatter inside a volume
             if (closestScatterDistanceFromCamera < FLT_MAX)
             {
+                // Null collision (only for heterogenous volumes)
                 if (finalNullCollision / finalSigmaT > Rnd(seed))
                 {
                     payload.RayOrigin = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
                     continue;
                 }
 
+                // Absorption
                 curWeight *= finalColor;
 
-                vec3 newDir = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
-
+                // New values
                 payload.RayOrigin = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
-
-                payload.RayDirection = newDir;
+                payload.RayDirection = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
             }
-            // Scatter on surface
+            // scattering didn't occur, scatter on surface
             else
             {
                 traceRayEXT(
@@ -217,6 +226,7 @@ void main()
                 curWeight *= payload.Weight;
             }
 
+            // Russian roulette based on ray color
             float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 1.0f);
             if(Rnd(payload.Seed) >= p)
                 break;  // paths with low throughput that won't contribute
@@ -238,14 +248,10 @@ void main()
         seed = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + payload.Seed;
         payload.Seed = PCG(seed);
 
-        //if (payload.MissedAllGeometry)
-		//{
-		//	break;
-		//}
-
     }
     finalHitValue /= float(samplesAccumulated);
 
+    // don't save it if final hit value is nan or inf (they may happen on refraction due to fresnel not being a complex equation but a simplification)
     if (!isinf(finalHitValue.x) && !isinf(finalHitValue.y) && !isinf(finalHitValue.z) && !isnan(finalHitValue.x) && !isnan(finalHitValue.y) && !isnan(finalHitValue.z))
     {
         if (pcRay.Frame > 0)

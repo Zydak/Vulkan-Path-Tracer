@@ -30,6 +30,10 @@ struct hitPayload
 
     bool InMedium;
     uint MediumID;
+
+    vec3 MediumColor;
+    float MediumDensity;
+    float MediumAnisotropy;
 };
 
 struct GlobalUniforms
@@ -82,6 +86,7 @@ struct MaterialLoad
     float Ior;
     float Transparency;
     float MediumDensity;
+    float MediumAnisotropy;
 
     float Anisotropy;
 };
@@ -99,6 +104,7 @@ struct Material
     float Ior;
     float Transparency;
     float MediumDensity;
+    float MediumAnisotropy;
 
     float Anisotropy;
 

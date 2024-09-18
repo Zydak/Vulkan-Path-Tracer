@@ -122,6 +122,7 @@ void main()
     material.MediumDensity = loadedMaterial.MediumDensity;
     material.MediumColor = loadedMaterial.MediumColor;
     material.Anisotropy = loadedMaterial.Anisotropy;
+    material.MediumAnisotropy = loadedMaterial.MediumAnisotropy;
 
     material.Ior = max(material.Ior, 1.0001f);
     material.Roughness = max(material.Roughness, 0.0001f);
@@ -169,27 +170,29 @@ void main()
     {
         float scatterDistance = -log(Rnd(payload.Seed)) / material.MediumDensity;
         
+        // If the scattering occurs before hiting the geometry then scatter
         if (scatterDistance < hitData.HitDistance)
         {
             payload.HitValue = vec3(0.0f);
             float anisotropy = 1.0f;
 
             // just use Beer's law directly since there is no need for a random walk if anisotropy == 1
-            if (anisotropy == 1.0f)
-                payload.Weight = exp(-(1.0f - material.MediumColor.rgb) * material.MediumDensity * hitData.HitDistance);
+            // and random walk is incredibely slow
+            if (payload.MediumAnisotropy == 1.0f)
+                payload.Weight = exp(-(1.0f - payload.MediumColor.rgb) * payload.MediumDensity * hitData.HitDistance);
             else
             {
-                vec3 newDir = SampleHenyeyGreenstein(anisotropy, payload.RayDirection, vec2(Rnd(payload.Seed), Rnd(payload.Seed)));
+                // Do a random walk otherwise
                 payload.RayOrigin = payload.RayOrigin + (scatterDistance * payload.RayDirection);
         
-                payload.RayDirection = newDir;
+                payload.RayDirection = SampleHenyeyGreenstein(payload.MediumAnisotropy, payload.RayDirection, vec2(Rnd(payload.Seed), Rnd(payload.Seed)));
         
-                payload.Weight = material.MediumColor.rgb;
+                payload.Weight = payload.MediumColor.rgb;
         
                 return;
             }
         }
-        else
+        else // otherwise leave the medium and shade at surface
         {
             if (payload.MediumID == gl_InstanceCustomIndexEXT)
                 payload.InMedium = false;
@@ -204,7 +207,7 @@ void main()
     if (absorb)
     {
         payload.Weight = vec3(0.0f);
-        payload.Depth = DEPTH_INFINITE;
+        payload.Depth = DEPTH_INFINITE; // End the ray
     }
     else
     {
