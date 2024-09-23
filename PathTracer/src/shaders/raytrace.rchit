@@ -23,7 +23,7 @@ layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
 
 layout(location = 0) rayPayloadInEXT hitPayload payload;
 
-#include "BSDF.glsl"
+#include "BSDFExperimental.glsl"
 
 hitAttributeEXT vec2 attribs;
 
@@ -93,7 +93,7 @@ void main()
     surface.NormalNoTex = worldNrm;
 
     surface.Normal = worldNrm;
-    CalculateTangents(worldNrm, surface.Tangent, surface.Bitangent);
+    CalculateTangents(surface.Normal, surface.Tangent, surface.Bitangent);
 
     // Normal Maps
 
@@ -107,6 +107,13 @@ void main()
     {
         surface.Normal = GetViewReflectedNormal(surface.Normal, -gl_WorldRayDirectionEXT);
     }
+
+    CalculateTangents(surface.Normal, surface.Tangent, surface.Bitangent);
+
+    // Apply rotation to normals
+    float rotation = loadedMaterial.AnisotropyRotation / 360.0f * M_PI;
+    surface.Tangent = surface.Tangent * cos(rotation) + cross(surface.Normal, surface.Tangent) * sin(rotation) + surface.Normal * dot(surface.Normal, surface.Tangent) * (1.0f - cos(rotation));
+    surface.Bitangent = cross(surface.Tangent, surface.Normal);
 
     // -------------------------------------------
     // Calculate Material Properties
@@ -131,18 +138,9 @@ void main()
     material.EmissiveColor.rgb *= material.EmissiveColor.a;
 
     const float anisotropy = material.Anisotropy;
-    if (anisotropy >= 0)
-    {
-        const float aspect = sqrt(1.0 - sqrt(anisotropy) * 0.9);
-        material.ax = max(0.001, material.Roughness / aspect);
-        material.ay = max(0.001, material.Roughness * aspect);
-    }
-    else
-    {
-        const float aspect = sqrt(1.0 - sqrt(abs(anisotropy)) * 0.9);
-        material.ax = max(0.001, material.Roughness * aspect);
-        material.ay = max(0.001, material.Roughness / aspect);
-    }
+    const float aspect = sqrt(1.0 - sqrt(anisotropy) * 0.9);
+    material.ax = max(0.001, material.Roughness / aspect);
+    material.ay = max(0.001, material.Roughness * aspect);
 
 #ifdef FURNACE_TEST_MODE
     material.Color = vec4(1.0f);
@@ -212,6 +210,34 @@ void main()
     else
     {
         payload.Weight *= sampleData.BSDF / sampleData.PDF;
+    }
+    
+    vec3 dirToLight;
+    vec3 randVal = vec3(Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed));
+    vec4 envColor = SampleImportanceEnvMap(uEnvMap, randVal, dirToLight);
+    bool canHit = dot(dirToLight, surface.Normal) > 0.0f;
+    
+    if (canHit)
+    {
+        rayQueryEXT query;
+		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.00001f, dirToLight, 10000.0f);
+		rayQueryProceedEXT(query);
+		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
+		{
+			canHit = false;
+		}
+    
+        if (canHit)
+        {
+            float PDF = 0.0f;
+            vec3 BSDF = vec3(0.0f);
+            EvaluateBSDF(material, surface, dirToLight, -gl_WorldRayDirectionEXT, PDF, BSDF);
+    
+            const float misWeight = envColor.w / (envColor.w + PDF);
+            const vec3 w = (envColor.xyz / envColor.w) * misWeight;
+    
+            payload.HitValue += w * BSDF;
+        }
     }
     
     payload.RayDirection = sampleData.RayDir;

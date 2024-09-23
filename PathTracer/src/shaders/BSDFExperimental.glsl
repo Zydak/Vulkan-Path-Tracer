@@ -85,7 +85,6 @@ vec3 EvalReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float p
 	float LdotH = max(0.0f, dot(L, H));
 	float VdotH = max(0.0f, dot(V, H));
 
-	//float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
 	float D = GGXDistributionAnisotropic(H, mat.ax, mat.ay);
 
 	float GV = GGXSmithAnisotropic(V, mat.ax, mat.ay);
@@ -95,7 +94,7 @@ vec3 EvalReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float p
 	//pdf = 1.0f;
 	//vec3 bsdf = F * GL;
 
-	pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
+	pdf = (GV * D) / (4.0f * V.z);
 	vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
 
 	return bsdf;
@@ -123,7 +122,7 @@ vec3 EvalDielectricRefraction(in Material mat, in Surface surface, vec3 L, vec3 
 	return bsdf;
 }
 
-bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface)
+bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in Surface surface, in HitData hitData)
 {
 	vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View);
 
@@ -150,6 +149,8 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 	float glassCDF = dielectricCDF + glassProbability;
 
 	float r1 = Rnd(seed);
+
+	bool hitFromTheInside = mat.eta > 1.0f;
 
 	if (r1 < diffuseCDF)
 	{
@@ -223,6 +224,16 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 			float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
 			float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
 			data.BSDF = (1.0f + vec3(energyCompensation)) * data.BSDF;
+
+			if (hitFromTheInside)
+			{
+				payload.InMedium = true;
+				payload.MediumID = gl_InstanceCustomIndexEXT;
+
+				payload.MediumColor = mat.MediumColor.rgb;
+				payload.MediumDensity = mat.MediumDensity;
+				payload.MediumAnisotropy = mat.MediumAnisotropy;
+			}
 		}
 		else
 		{
@@ -251,12 +262,87 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
 				data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
 			}
+
+			if (!hitFromTheInside)
+			{
+				payload.InMedium = true;
+				payload.MediumID = gl_InstanceCustomIndexEXT;
+
+				payload.MediumColor = mat.MediumColor.rgb;
+				payload.MediumDensity = mat.MediumDensity;
+				payload.MediumAnisotropy = mat.MediumAnisotropy;
+			}
 		}
 
 		data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 	}
 
 	return true;
+}
+
+void EvaluateBSDF(in Material mat, in Surface surface, in vec3 Light, in vec3 View, out float PDF, out vec3 BSDF)
+{
+	vec3 L = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, Light);
+	vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, View);
+	vec3 H = normalize(L + V);
+
+	bool reflect = L.z >= 0.0f;
+
+	float F0 = (1.0f - mat.eta) / (1.0f + mat.eta);
+	F0 *= F0;
+
+	float schlickWt = SchlickWeight(V.z);
+
+	float diffuseProbability = (1.0f - mat.Metallic) * (1.0f - mat.Transparency);
+	float metallicProbability = mat.Metallic;
+	float dieletricProbability = (1.0f - mat.Metallic) * F0 * (1.0f - mat.Transparency);
+	float glassProbability = (1.0f - mat.Metallic) * mat.Transparency;
+
+	float inverseTotalProbability = 1.0f / (diffuseProbability + metallicProbability + dieletricProbability + glassProbability);
+
+	diffuseProbability *= inverseTotalProbability;
+	metallicProbability *= inverseTotalProbability;
+	dieletricProbability *= inverseTotalProbability;
+	glassProbability *= inverseTotalProbability;
+
+	BSDF = vec3(0.0f);
+	PDF = 0.0f;
+	
+	float tempPdf;
+	if (reflect)
+	{
+		// Diffuse
+		BSDF += EvalDiffuse(mat, L, tempPdf) * diffuseProbability;
+		PDF += tempPdf * diffuseProbability;
+
+		// Metallic
+		vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
+		vec3 metallicBSDF = EvalReflection(mat, L, V, H, F, tempPdf) * metallicProbability;
+
+		float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
+		float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
+
+		metallicBSDF = (1.0f + F * vec3(energyCompensation)) * metallicBSDF;
+
+		BSDF += metallicBSDF;
+		PDF += tempPdf * metallicProbability;
+
+		// Dielectric
+		vec3 dielectricReflection = EvalReflection(mat, L, V, H, vec3(1.0f), tempPdf);
+		dielectricReflection = (1.0f + F * vec3(energyCompensation)) * dielectricReflection;
+
+		BSDF += dielectricReflection * dieletricProbability;
+		PDF += tempPdf * dieletricProbability;
+
+		// Glass
+		BSDF += dielectricReflection * glassProbability;
+		PDF += tempPdf * glassProbability;
+	}
+	else
+	{
+		BSDF += EvalDielectricRefraction(mat, surface, L, V, H, 0.0f, tempPdf) * glassProbability;
+		PDF += tempPdf * glassProbability;
+	}
 }
 
 #endif

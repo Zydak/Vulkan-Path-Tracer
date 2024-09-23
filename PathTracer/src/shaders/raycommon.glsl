@@ -89,6 +89,7 @@ struct MaterialLoad
     float MediumAnisotropy;
 
     float Anisotropy;
+    float AnisotropyRotation;
 };
 
 struct Material
@@ -107,6 +108,7 @@ struct Material
     float MediumAnisotropy;
 
     float Anisotropy;
+    float AnisotropyRotation;
 
     float eta;
 
@@ -243,6 +245,11 @@ vec2 RandomPointInCircle(inout uint seed)
     float angle = Rnd(seed) * 2.0 * M_PI;
     vec2 pointOnCircle = vec2(cos(angle), sin(angle));
     return pointOnCircle * sqrt(Rnd(seed));
+}
+
+vec2 RandomPointInSquare(inout uint seed)
+{
+    return vec2(Rnd(seed) * 2.0 - 1.0f, Rnd(seed) * 2.0 - 1.0f);
 }
 
 float GetLuminance(vec3 color)

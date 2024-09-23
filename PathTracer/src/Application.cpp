@@ -117,7 +117,7 @@ void Application::Init()
 		Vulture::TransformComponent,
 		Vulture::TonemapperSettingsComponent,
 		Vulture::BloomSettingsComponent
-	>("assets/scenes/CornellBox.ptscene");
+	>("assets/scenes/OceanAjax.ptscene");
 
 	sceneHandle.WaitToLoad();
 

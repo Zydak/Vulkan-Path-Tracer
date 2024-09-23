@@ -49,7 +49,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     vec3 V = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.View);
 
     float F0 = (1.0f - mat.eta) / (1.0f + mat.eta);
-    F0 *= F0;
+    //F0 *= F0;
 
     float diffuseProbability = (1.0f - mat.Metallic) * (1.0f - mat.Transparency);
     float metallicProbability = mat.Metallic;

@@ -16,7 +16,7 @@ float GGXDistributionAnisotropic(vec3 H, float ax, float ay)
     float ax2 = ax * ax;
     float ay2 = ay * ay;
 
-    return 1.0f / M_PI * ax * ay * pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
+    return 1.0f / (M_PI * ax * ay * pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f));
 }
 
 float Lambda(vec3 V, float ax, float ay)

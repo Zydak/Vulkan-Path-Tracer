@@ -121,7 +121,6 @@ void Editor::Render()
 	{
 		m_ImGuiViewportResized = false;
 		Resize();
-		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 	if (m_ImageResized)
 	{
@@ -144,7 +143,6 @@ void Editor::Render()
 
 		m_ImageResized = false;
 		Resize();
-		m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 	else
 	{
@@ -725,7 +723,8 @@ void Editor::ImGuiSceneEditor()
 		if (ImGui::SliderFloat("Emissive Strength", (float*)&materialProps->EmissiveColor.w, 0.0f, 10.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Roughness", (float*)&materialProps->Roughness, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Metallic", (float*)&materialProps->Metallic, 0.0f, 1.0f)) { valuesChanged = true; };
-		if (ImGui::SliderFloat("Anisotropy", (float*)&materialProps->Anisotropy, -1.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Anisotropy", (float*)&materialProps->Anisotropy, 0.0f, 1.0f)) { valuesChanged = true; };
+		if (ImGui::SliderFloat("Anisotropy Rotation", (float*)&materialProps->AnisotropyRotation, 0.0f, 360.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Specular Tint", (float*)&materialProps->SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
@@ -1194,6 +1193,8 @@ void Editor::ImGuiSerializationSettings()
 
 void Editor::Resize()
 {
+	Vulture::Device::WaitIdle();
+
 	RescaleQuad();
 	CreateQuadRenderTarget();
 	CreateQuadDescriptor();
@@ -1205,6 +1206,8 @@ void Editor::Resize()
 
 	m_QuadCamera.SetOrthographicMatrix({ -x, x, -y, y }, 0.1f, 100.0f);
 	m_QuadCamera.UpdateViewMatrix();
+
+	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Editor::UpdateModel()

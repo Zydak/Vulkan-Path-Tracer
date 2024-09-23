@@ -1,6 +1,6 @@
 # Overview
 
-The main goal for this project was to create energy conserving and preserving offline path tracer with complex materials. I think that the goal has been achieved pretty well. There are 10 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Specular Tint, Transparency, Medium Density, Medium Color and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
+The main goal for this project was to create energy conserving and preserving offline path tracer with complex materials. I think that the goal has been achieved pretty well. There are 11 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Anisotropy Rotation, Specular Tint, Transparency, Medium Density, Medium Color and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
 
 # Table Of Contents
 
@@ -89,7 +89,7 @@ First let's talk about ray gen shader. There are 2 approaches for generating ray
 * In loop based approach, you create a loop inside the ray gen shader which spawns rays over and over again and don't use recursion in closest hit shader. You just get back into the raygen and spawn another ray where the last one left off.
 
 I used the loop based approach as it is way better than a recursive one, why?
-* I found out that it's about 2-3 times faster than the recursive method. I suspect that's because there's really no efficient way of implementing stack on the GPU, which just causes recursive function calls to work like shit.
+* It's about 2-3 times faster than the recursive method. I suspect that's because there's really no efficient way of implementing stack on the GPU, which just causes recursive function calls to work like shit.
 * You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit, but on my computer the maximum recursion is 31, it of probably varies per device. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR::maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
 
 Now let's talk about some techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and Caustics Suppression.
@@ -98,22 +98,23 @@ Now let's talk about some techniques that I used in my raygen shader to improve 
 
 Aliasing is a known artefact in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offsetting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
 
-It's really simple in terms of code, we just generate random point on a 2D circle or square and then we offset the ray direction with it.
+It's really simple in terms of code, we just generate random point on a 2D square and then we offset the pixel center with it.
 
 ```
-// Calculate random point on a 2D circle or square
-vec3 randomCirclePoint = RandomPointInCircle(seed) * 0.5f / outputImageSize;
+vec2 antiAliasingJitter = RandomPointInSquare(payload.Seed) * 0.5f;
 
-// When projecting rays their direction is dependent on the FOV of the camera,
-// but the jitter is set only based on the image size and not FOV. So when you
-// decrease the fov the anti-aliasing will become stronger and stronger. The way to
-// counter act that is to either set the jitter based on the FOV, or like I did,
-// expose the aliasing strength to the user with AliasingStrength param that can be
-// manually tweaked on low FOVs.
-vec2 antiAliasingJitter = randomCirclePoint * pcRay.AliasingJitter;
+const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + antiAliasingJitter;
+```
 
-// Finally offset the direction
-direction += camRight * antiAliasingJitter.x + camUp * antiAliasingJitter.y;
+And then just calculate direction like before:
+
+```
+const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+vec2 d = inUV * 2.0 - 1.0;
+
+vec4 origin    = uni.ViewInverse * vec4(0, 0, 0, 1);
+vec4 target    = uni.ProjInverse * vec4(d.x, d.y, 1, 1);
+vec3 direction = vec3(uni.ViewInverse * vec4(normalize(target.xyz), 0.0f));
 ```
 
 Here's the result:
