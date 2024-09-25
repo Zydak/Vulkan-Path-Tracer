@@ -20,6 +20,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Open generated solution in Visual Studio.
 
 # Gallery
+![DragonHead](./Gallery/DragonHead.png)
+--------
 ![OceanAjax](./Gallery/OceanAjax.png)
 --------
 ![CornellBox](./Gallery/CornellBox.png)
@@ -123,6 +125,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf)
 
 ## Models
+- https://sketchfab.com/3d-models/screaming-dragon-head-3d-print-5712b52618f743b193bdd39459099f25 - Screaming Dragon Head
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
 - https://github.com/mmacklin/tinsel - Ajax
 - https://pbrt.org/scenes-v3 - Small Dragon
