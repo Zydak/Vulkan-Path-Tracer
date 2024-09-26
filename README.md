@@ -29,11 +29,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![Fog](./Gallery/Fog.png)
 --------
 ![Mustang0](./Gallery/Mustang0.png)
-![Mustang1](./Gallery/Mustang1.png)
 --------
 ![TranslucentDragon](./Gallery/TranslucentDragon.png)
---------
-![Sponza1](./Gallery/Sponza1.png)
 --------
 ![Volume](./Gallery/NonUniform.png)
 --------
@@ -46,8 +43,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![Caustics](./Gallery/Caustics.png)
 --------
-![Sponza](./Gallery/Sponza.png)
---------
 
 ## Material Showcase
 
@@ -57,11 +52,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Roughness factor on metallic surface ranging from 0 to 1.
 ![metalRoughness](./Gallery/materialShowcase/metalRoughness.png)
 
-- Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to -1.
-![Anisotropy-](./Gallery/materialShowcase/Anisotropy-.png)
-
 - Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to 1.
-![Anisotropy+](./Gallery/materialShowcase/Anisotropy+.png)
+![Anisotropy-](./Gallery/materialShowcase/Anisotropy-.png)
 
 - Index of refraction (IOR) factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
 ![specular](./Gallery/materialShowcase/specular.png)
