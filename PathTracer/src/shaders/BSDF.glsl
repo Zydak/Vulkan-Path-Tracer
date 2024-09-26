@@ -74,6 +74,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
     
     data.PDF = 1.0f;
     bool reflection = true;
+    data.BSDF = vec3(1.0f);
     if (r1 < diffuseCDF)
     {
         // Diffuse
@@ -192,12 +193,14 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 
                 vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
                 data.RayDir = normalize(reflect(-V, H));
+
+                Color *= mat.Color.xyz;
             }
 
             if (data.RayDir.z > 0.0f)
                 return false;
 
-            data.BSDF = vec3(mat.Color.xyz);
+            data.BSDF = Color;
 
             reflection = false;
 

@@ -1041,6 +1041,16 @@ Left render evaluated refractions with BSDF = Color. Right render evaluated them
 
 Using this method also requires a new parameter medium density, which is well, density of a medium, glass in this case. We could also keep the surface attenuation as a separate thing, so on surface hit it still gets attenuated `BSDF = Color;`, which is also fine and gives you more artistic freedom. But then another parameter called medium color has to be introduced.
 
+With this approach we can also try to model sub-surface scattering by making it fully transparent with full roughness and set the medium density really high, this way the material will look like wax or human skin:
+
+<p align="center">
+  <img src="./Gallery/Graphics/Diffuse.png" alt="Diffuse" width="500" height="500" />
+  <img src="./Gallery/DragonHead.png" alt="DragonHead" width="500" height="500" />
+</p>
+<p align="center">
+Left render uses simple diffuse. Right render is doing sub-surface scattering.
+</p>
+
 ### Conclusion
 
 Well, this section was quite long, but hopefully now you can understand how and why the BSDF in my path tracer works the way it works! I really recommend reading all of the papers that I referenced to understand the topic better. Especially [Turquin](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) and [Heitz](https://eheitzresearch.wordpress.com/240-2/) to understand the multiple scattering and [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf), [Refraction through Rough Surfaces](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf) to understand the GGX distribution, and finally [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/index.html) if you're interested in participating media.
