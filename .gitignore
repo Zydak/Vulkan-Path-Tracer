@@ -8,3 +8,5 @@ bin-int/
 **/CachedShaders/**
 **/*.cmd
 **/*.rsp
+**/DragonHead.gltf
+**/DragonHead.bin
