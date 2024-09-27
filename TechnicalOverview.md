@@ -1,6 +1,6 @@
 # Overview
 
-The main goal for this project was to create energy conserving and preserving offline path tracer with complex materials. I think that the goal has been achieved pretty well. There are 11 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Anisotropy Rotation, Specular Tint, Transparency, Medium Density, Medium Color and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
+The main goal for this project was to create energy conserving and preserving offline renderer with complex materials. I think that the goal has been achieved pretty well. There are 11 different material parameters available: Albedo, Emissive, Roughness, Metallic, Anisotropy, Anisotropy Rotation, Specular Tint, Transparency, Medium Density, Medium Color and IOR. Everything is powered by Vulkan and all of the calculations are done on the GPU, so the entire thing runs pretty fast, especially compared to the CPU path tracers (more info in the [Benchmark](#benchmark) section). So let's take a deeper look how exactly is everything working.
 
 # Table Of Contents
 
@@ -54,24 +54,28 @@ The main goal for this project was to create energy conserving and preserving of
   - [Post Processing Section](#post-processing-section)
   - [Serialization Section](#serialization-section)
   - [Conclusion](#conclusion-2)
-- [Limitations And Possible Future Improvements](#limitations-and-possible-future-improvements)
-  - [Editor](#editor-1)
 
 # Implementation Details
 
 ## Ray Tracing
 
-First, let's look into how exactly is the path tracing working. And then we'll take a look at the BSDF and how the shading is done.
+In real world, light sources emit photons which travel through space until they hit an object, at which point they can be absorbed, reflected, refracted, or scattered. Each of these interactions contributes to how we perceive the color, brightness, and texture of objects. Light does not travel in a single straight path, it scatters in various directions after hitting a surface, bouncing multiple times, losing energy, and interacting with different materials before some of it eventually reaches our eyes and produces an image. When light hits a surface, its behavior depends on the material properties. For instance, metals reflect light in a very controlled and often mirror-like manner (specular reflection), while rough surfaces like concrete, scatter light in many directions (diffuse reflection). Some materials, like glass or water, allow light to pass through but change its direction, a phenomenon known as refraction. Furthermore, light often bounces off multiple surfaces before reaching our eyes, contributing to effects like soft shadows and indirect lighting.
+
+Path tracing tries to replicate this real world behavior by simulating (tracing) the path of light rays (hence the name path tracing). It assumes that light is emitted from a light source and bounces around the scene. Instead of trying to model billions of photons like in real life (which would be impossible), path tracing works in reverse. Rays are cast from the camera into the scene and traced backward to their potential light sources. This backward tracing avoids the need to simulate every possible light interaction with the scene, we only care about light that hits the camera.
+
+So we shoot a ray from the camera (eye), where each ray represents a path that light *could* have taken to arrive at that point in the image. When the ray hits a surface, the algorithm must figure out what light is coming from that point, which includes both direct light (light coming straight from a light source) and indirect light (light that has bounced off other surfaces before hitting the point). This is where the challenge lies, the light could have come from any direction, not just directly from the light source. But calculating incoming light from every direction on the hemisphere above the shading point is computationally impossible, so instead something called **Monte Carlo** simulation is used to estimate the shading of a point, i.e. it accumulates random directions on the hemisphere over time instead of calculating them all at once (That's why there is noise in path tracers). So each time we hit a surface we randomly choose next direction and evaluate that. By doing a Monte Carlo simulation, path tracing estimates the amount of light coming from the randomly selected directions on the hemisphere. So the more samples taken, the better the approximation becomes, gradually building up a realistic picture of the light contributions from direct lighting, indirect lighting, and even more complex effects like caustics (the focusing of light through reflection or refraction), soft shadows or even dispersion.
+
+So to summarize, we shoot a ray into a scene, compute where does it intersect with geometry, calculate surface properties, and compute the random direction for the next ray. So let's take a look at how exactly is that working.
 
 ### RT Pipeline
 
-The entire ray traversal through the scene is handled by a Vulkan Ray Tracing Pipeline and not my custom code. Why? It's faster, because unlike doing everything in compute shaders, it enables you to use specialized RT cores on modern GPUs. And It's way simpler, You don't have to code your own BVH, ray geometry intersections etc. all of that is handled for you, so it is generally faster to deploy.
+The entire ray traversal through the scene is handled by a Vulkan Ray Tracing Pipeline and not my custom code. Why? Because It's faster, unlike doing everything in compute shaders, it enables you to use specialized RT cores on modern GPUs. And It's way simpler, You don't have to code your own BVH, ray geometry intersections etc. all of that is handled for you, so it is generally faster to deploy. I won't go over how the ray tracing pipeline and acceleration structure are initialized in this readme, but I can recommend [this tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/) if you're interested in that. I'll only be doing a general overview of the crucial components inside the shaders.
 
 ### Shader types
 The Vulkan Ray Tracing Pipeline is fairly flexible because it's made out of several programmable shader stages. These shader stages are designed to handle different aspects of ray traversal and interaction with the scene. There are 5 types of these shaders but I'm using only 3 of them:
 
 **Ray Generation Shader**
-* It serves as an entry point for the ray tracing by generating the rays. It basically defines origin and direction of the starting rays.
+* It serves as an entry point for the ray tracing by generating the rays. It basically defines origin and direction of the first rays.
 
 **Closest-Hit Shader**
 * This shader is called for each ray intersection with the geometry. It most often handles the actual shading of the hit point and chooses next direction.
@@ -90,13 +94,13 @@ First let's talk about ray gen shader. There are 2 approaches for generating ray
 
 I used the loop based approach as it is way better than a recursive one, why?
 * It's about 2-3 times faster than the recursive method. I suspect that's because there's really no efficient way of implementing stack on the GPU, which just causes recursive function calls to work like shit.
-* You're not constricted by the depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit, but on my computer the maximum recursion is 31, it of probably varies per device. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR::maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like.
+* There is no depth limit. In RT pipeline you can't just use recursion infinitely, I don't know what's the minimum guaranteed limit, but on my computer the maximum recursion is 31. You can query the limit using **VkPhysicalDeviceRayTracingPipelinePropertiesKHR::maxRayRecursionDepth**. If you cross the limit device will be lost so you'll most likely just crash. Of course loop based approach doesn't have this limit, you can bounce rays through the scene for as long as you like because you're not constricted by the stack.
 
 Now let's talk about some techniques that I used in my raygen shader to improve quality and speed: Anti aliasing, Russian Roulette, Depth of field, and Caustics Suppression.
 
 ##### Anti Aliasing
 
-Aliasing is a known artefact in computer graphics, it's caused by the fact that in real world cameras edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offsetting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
+Aliasing is a known artefact in computer graphics, it's caused by the fact that in real world cameras, edges of pixels are a blend of foreground and background, that's because in real world the space is continuous, it has infinite resolution, so if we want to turn this space into pixels we're basically averaging all the space that pixel takes up. In computer graphics we're not averaging anything, we're just shooting a ray in some direction and sampling it's color. This approach is called **point sampling**, luckily for us in path tracing we're averaging multiple rays per pixel anyway, so the easiest fix to our problem is just offsetting the rays a little bit in random direction so that they are average color of the space that the pixel takes up.
 
 It's really simple in terms of code, we just generate random point on a 2D square and then we offset the pixel center with it.
 
@@ -106,7 +110,7 @@ vec2 antiAliasingJitter = RandomPointInSquare(payload.Seed) * 0.5f;
 const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + antiAliasingJitter;
 ```
 
-And then just calculate direction like before:
+And then just calculate direction like so:
 
 ```
 const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
@@ -130,20 +134,20 @@ Left image was rendered with anti-aliasing and the right was rendered without. T
 
 ##### Depth Of Field
 
-Depth of field (DoF) effect is pretty simple, it's a camera effect that simulates a real-world lens. It causes objects at a certain distance from the camera (Focal point) to appear sharp, while objects farther from that point appear progressively more blurred due to the camera lens bending the light. 
+Depth of field (DoF) effect is pretty simple, it's a camera effect that simulates a real-world camera lens. It causes objects at a certain distance from the camera to appear sharp, while objects farther from that point appear progressively more blurred due to the camera lens bending the light. 
 
 <p align="center">
   <img src="./Gallery/Graphics/DepthOfField.png" alt="depth of field" />
 </p>
 <p align="center"> 
-Offsetting origin of the ray 
+Offsetting origin of the ray i.e. sampling with depth of field on
 </p>
 
 <p align="center">
   <img src="./Gallery/Graphics/PointSampling.png" alt="point sampling" />
 </p>
 <p align="center"> 
-Point sampling
+Point sampling i.e. sampling with depth of field off
 </p>
 
 So really all you need to do in code is randomly offset ray origin and set ray direction to **focalPoint - rayOrigin**.
@@ -154,13 +158,13 @@ So really all you need to do in code is randomly offset ray origin and set ray d
 vec3 focalPoint = origin.xyz + direction * pcRay.FocalPoint;
 
 // Calculate random jitter
-vec2 jitter = RandomPointInCircle(seed) * pcRay.DoFStrenght / 500.0f;
+vec2 jitter = RandomPointInCircle(seed) * pcRay.DoFStrenght;
 
 // Offset the origin
 RayOrigin = origin.xyz + camRight * jitter.x + camUp * jitter.y;
 
 // Calculate the direction
-RayDirection = normalize(focalPoint - payload.RayOrigin);
+RayDirection = normalize(focalPoint - origin.xyz);
 ```
 <p align="center">
 
@@ -180,9 +184,9 @@ $$F = \prod_{i=0}^{N} F_i$$
 
 where $F$ is the integrand (light contribution of the ray), $F_i$ is contribution of each bounce, and $N$ is the number of ray bounces.
 
-Because the ray accumulation is a monte carlo simulation, to have a completely unbiased and mathematically correct result of the sample, ray should be bounced around a scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases due to color absorption) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how is this limit chosen? If it's too small result is biased so much that it's no longer visually appealing, if it's too large, it's a waste of time computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
+Because the ray accumulation is a monte carlo simulation, to have a completely unbiased and mathematically correct result of the sample, ray should be bounced around a scene infinite amount of times, which is completely impossible to do. But as each successive bounce does less and less visually (it's throughput decreases due to color absorption) path tracers usually set the bounce limit to some hardcoded value like 10 or 20, so the image is still "visually" correct, although it's mathematically wrong. But how to choose this limit? If it's too small result is biased so much that it's no longer visually appealing, if it's too large, it's a waste of time computing low throughput paths which don't change anything visually. Here's when the **Russian Roulette** comes into play.
 
-At each ray-surface intersection, probability $p$ is set it can be chosen in any manner, I set it based on the minimum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p}$ to account for the termination of other paths. Here's a mathematical formulation of this:
+At each ray-surface intersection, probability $p$ is set, it can be chosen in any manner, I set it based on the maximum value of one of three RGB ray channels. A random number $r$ is generated, and if $r$ is less than $p$, the ray continues, otherwise, it terminates. If the ray continues, its contribution is multiplied by a factor of $\frac{1}{p}$ to account for the termination of other paths. Here's a mathematical formulation of this:
 
 When applying Russian Roulette, after each bounce new integrand is computed:
 
@@ -197,7 +201,7 @@ So as you can see that as long as $F$ is divided by $p$ the expected value remai
 
 $$ E[F\prime] = \left(1 - p\right) \cdot 0 + p \cdot \frac{E[F]}{p} = E[F] $$
 
-Of course if we choose to sample with probability $(1 - p)$ which means the $F\prime$ equals 0, we can stop bouncing the ray any further, it's throughput is 0. And every other bounce, no matter it's throughput, will also be zero since anything times 0 is 0.
+Of course if we choose to sample with probability $(1 - p)$ which means the $F\prime$ equals 0, we can stop bouncing the ray any further, it's throughput is 0. And every other bounce, no matter it's throughput, will also be 0 since anything times 0 is 0.
 
 And because only paths with low throughput get terminated, only small amount variance is introduced and the convergence rate stays relatively similar to the original one. This way the result is not only mathematically correct, but a lot of computation time is saved by not evaluating low throughput paths. 
 
@@ -206,7 +210,7 @@ By applying russian roulette we're in fact **always** introducing more variance,
 In terms of code it's really simple:
 ```
 // Calculate probability
-float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)) + 0.001, 1.0f);
+float p = max(curWeight.x, max(curWeight.y, curWeight.z));
 
 // Decide whether to terminate
 if(Rnd(seed) >= p)
@@ -247,7 +251,7 @@ The left image shows cornell box lit by a very bright env map, the image has 200
 </p>
 
 
-There are 2 things we can do about that. One is to implement importance sampling, and the other one is to just limit the environment map brightness. I chose to do the second approach.
+There are 2 things we can do about that. One is to implement importance sampling, and the other one is to just limit the environment map brightness. I did both.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="700" height="700" />
@@ -257,13 +261,15 @@ There are 2 things we can do about that. One is to implement importance sampling
 Image Shows the same image as above (200k samples per pixel) but this time max luminance of the env map is limited to 500.
 </p>
 
-As you can see the image is way darker, but that's logical if the brightness is limited.
+As you can see the image is way darker, but that's logical if the brightness is limited. But the noise is pretty much gone.
+
+MIS TODO:
 
 And that concludes the Ray Generation Shader! Full code of the shader can be found in [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rgen).
 
 #### Closest Hit Shader
 
-The closest hit is pretty simple, it queries the mesh data of the object that has been hit. Computes barycentric coordinates of the hit point. Calculates material properties and then the shading and next ray direction is handled by the BSDF which I'll talk about later. Code can be found [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rchit).
+The closest hit is pretty simple, it queries the mesh data of the object that has been hit. Computes texture coords and normals based on barycentric coordinates of the hit point. Calculates material properties, and then the shading and next ray direction are handled by the BSDF which I'll talk about later. Code can be found [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rchit).
 
 #### Miss Shader
 
@@ -271,7 +277,7 @@ The miss shader is even simpler, there's really nothing to talk about here, it j
 
 ## BSDF And Light Transport
 
-Light transport and BSDF are the most important parts of the path tracer. BSDF determines shading of the pixels and ray directions, and light transport algorithm determines how fast the path tracer will converge on the correct result. So maybe let's talk about specific implementation of these two.
+Light transport and BSDF are the most important parts of the path tracer. When surface is hit by the ray we need 2 things to trace further, next ray direction and how much light did the surface absorb. These 2 things are determined by the BSDF and Light Transport algorithm.
 
 ### Light Transport
 
@@ -279,9 +285,9 @@ For light transport I'm using simple naive approach of picking ray directions ba
 
 ### BSDF
 
-When we want to get the color of the pixel we need to know what materials the ray hit on the way. So at each bounce we essentially want to know what colors does the material absorb. If we want, we could go with the easy approach of just multiplying the ray color by the material color. Or just modelling the color absorption in pretty much any way we want (so probably keep it as material color for diffuse and conductors and change it to 1 for dielectrics). But this has one major issue, we'll be stuck with a naive light transport algorithm forever. That's because we can't really evaluate some ordinary ray direction, we can only evaluate the EXACT direction that the light bounces off the surface. And complex light transport algorithms like light sampling *require* this property of being able to evaluate an ordinary ray direction (in this case the direction to light from the surface). And this is when the BSDF comes into action.
+When we want to get the color of the pixel we need to know what materials the ray hit on the way. So at each bounce we essentially want to know what colors does the material absorb. If we want, we could go with the easy approach of just multiplying the ray color by the material color. Or just modelling the color absorption in pretty much any way we want (so probably keep it as material color for diffuse and conductors and change it to 1 for dielectrics). But this has one major issue, we'll be stuck with a naive light transport algorithm forever. That's because we can't really evaluate some ordinary ray direction, we can only evaluate the EXACT direction that the light bounces off the surface. And complex light transport algorithms like light sampling *require* this property of being able to evaluate an ordinary ray direction (in this case the direction to light from the surface). So to fix this issue we can use BSDF.
 
-BSDF is **bidirectional scattering distribution function**, it's a mathematical function that determines how much energy is absorbed during the process of reflection or refraction based on the surface properties, it can be denoted as $f_s(i, o, n)$, where $i$ is the incoming direction, $o$ is the outgoing direction, and $n$ is the surface normal. Speaking more precisely, it is combination of BRDF (**bidirectional reflectance distribution function**) which is reflected component and BTDF (**bidirectional transmittance distribution function**) which is transmitted component. So we can denote it as $f_s(i, o, n) = f_r(i, o, n) + f_t(i, o, n)$. It returns how much energy (color) is absorbed if ray bounces from $i$ to $o$.
+BSDF is **bidirectional scattering distribution function**, it's a mathematical function that determines how much energy is absorbed during the process of reflection or refraction based on the surface properties alongside with incoming and outgoing direction, it can be denoted as $f_s(i, o, n)$, where $i$ is the incoming direction, $o$ is the outgoing direction, and $n$ is the surface normal. Speaking more precisely, it is combination of BRDF (**bidirectional reflectance distribution function**) which is reflected component and BTDF (**bidirectional transmittance distribution function**) which is transmitted component. So we can denote it as $f_s(i, o, n) = f_r(i, o, n) + f_t(i, o, n)$. It returns how much energy (color) is absorbed if ray bounces from $i$ to $o$.
 
 <p align="center">
   <img src="./Gallery/Graphics/BSDF.png" alt="BSDF"/>
@@ -1237,8 +1243,3 @@ TODO
 ## Conclusion
 
 So as you can see the editor isn't really complex, it allows you to edit a handful of the most basic settings of a scene and path tracer, but it's far from allowing you to create your own scenes from scratch, for the scenes in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery) I had to modify object positions in blender and then export them to GLTF. It also doesn't allow you to switch textures on models so you also have to do that in blender. But despite all this, I managed to create all renders that you can find in this readme as well as in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer#gallery). So it's simple, but definitely sufficient for showcasing the path tracer.
-
-# Limitations And Possible Future Improvements
-
-## Editor
-Currently the editor is quite limited, for example it doesn't allow to move loaded meshes. That's because moving anything would require rebuilding the entire acceleration structure. Which isn't that hard to do, but still requires some effort. And since I've never needed this feature and was focused on other things, it's just not there. You also can't load more than one mesh for pretty much the same reasons. You also can't choose textures for materials. They are loaded from the object file and stick to the material permanently.
