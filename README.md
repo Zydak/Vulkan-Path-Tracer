@@ -24,11 +24,11 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![DragonHead](./Gallery/DragonHead.png)
 --------
+![Classroom](./Gallery/Classroom.png)
+--------
 ![OceanAjax](./Gallery/OceanAjax.png)
 --------
 ![CornellBox](./Gallery/CornellBox.png)
---------
-![Fog](./Gallery/Fog.png)
 --------
 ![Mustang0](./Gallery/Mustang0.png)
 --------
@@ -121,6 +121,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf)
 
 ## Models
+- https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html - Sponza
+- https://www.blender.org/download/demo-files/ - Classroom
 - https://sketchfab.com/3d-models/screaming-dragon-head-3d-print-5712b52618f743b193bdd39459099f25 - Screaming Dragon Head
 - https://sketchfab.com/3d-models/dog-statue-49d97ca2fbf34f85b6c88ae8ebc7514f - Dog Statue
 - https://github.com/mmacklin/tinsel - Ajax
@@ -133,5 +135,4 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://renderman.pixar.com/official-swatch - RenderMan teapot
 - https://www.cgbookcase.com/ - Textures for teapots
-- https://sketchfab.com/3d-models/sponza-0cbee5e07f3a4fae95be8b3a036abc91 - Sponza
 - https://benedikt-bitterli.me/resources/ - Material Test Ball
