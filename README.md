@@ -80,6 +80,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
   <img src="./Gallery/Graphics/Original.png" alt="Original" />
 </p>
 
+- BSSRDF
 - Complex Materials
 - Volumetric Scattering using delta tracking
 - Textures and Normal Maps
