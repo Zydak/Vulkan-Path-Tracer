@@ -20,6 +20,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Open generated solution in Visual Studio.
 
 # Gallery
+![Sponza](./Gallery/GodRays.png)
+--------
 ![DragonHead](./Gallery/DragonHead.png)
 --------
 ![OceanAjax](./Gallery/OceanAjax.png)
@@ -81,6 +83,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 </p>
 
 - BSSRDF
+- MIS
 - Complex Materials
 - Volumetric Scattering using delta tracking
 - Textures and Normal Maps
