@@ -178,7 +178,6 @@ struct Volume
     AABB Aabb;
     vec3 Color;
     float ScatteringCoefficient;
-    float AbsorptionCoefficient;
     float G;
 };
 
@@ -299,6 +298,13 @@ vec3 TangentToWorld(vec3 T, vec3 B, vec3 N, vec3 V)
 vec3 WorldToTangent(vec3 T, vec3 B, vec3 N, vec3 V)
 {
     return normalize(vec3(dot(V, T), dot(V, B), dot(V, N)));
+}
+
+float EvaluateHenyeyGreenstein(float g, vec3 V, vec3 L)
+{
+    //return 1.0f / (2.0f);
+    float denom = 1 + g * g + 2 * g * dot(V, L);
+    return (1.0f / (2.0f)) * (1 - g * g) / (denom * sqrt(denom));
 }
 
 vec3 SampleHenyeyGreenstein(float g, vec3 incidentDir, vec2 rand)

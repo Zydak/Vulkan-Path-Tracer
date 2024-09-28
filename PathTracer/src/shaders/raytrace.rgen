@@ -8,7 +8,14 @@
 
 #include "raycommon.glsl"
 
-// clang-format off
+layout(set = 1, binding = 2) readonly buffer uEnvMapAccel
+{
+    EnvAccel[] uAccels;
+};
+layout(push_constant) uniform _PushConstantRay { PushConstantRay push; };
+
+#include "Sampling.glsl"
+
 layout(location = 0) rayPayloadEXT hitPayload payload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
@@ -16,8 +23,7 @@ layout(set = 0, binding = 1, rgba32f) uniform image2D image;
 layout(set = 0, binding = 8) buffer DOFUniform { float uDof; };
 layout(set = 0, binding = 12, scalar) buffer Volumes { Volume uVolumes[]; };
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
-layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
-// clang-format on
+layout(set = 1, binding = 1) uniform sampler2D uEnvMap;
 
 void main()
 {
@@ -61,7 +67,7 @@ void main()
     
     const vec3 camRight = vec3(uni.ViewInverse[0][0], uni.ViewInverse[1][0], uni.ViewInverse[2][0]);
     const vec3 camUp = vec3(uni.ViewInverse[0][1], uni.ViewInverse[1][1], uni.ViewInverse[2][1]);
-    for (int i = 0; i < pcRay.SamplesPerFrame; i++)
+    for (int i = 0; i < push.SamplesPerFrame; i++)
     {
         vec2 antiAliasingJitter = RandomPointInSquare(payload.Seed) * 0.5f;
 
@@ -81,8 +87,8 @@ void main()
         payload.HitValue = vec3(0.0);
         payload.Depth = 0;
 
-        vec3 focalPoint = origin.xyz + direction * pcRay.FocalLenght;
-        vec2 jitter = RandomPointInCircle(payload.Seed) * pcRay.DoFStrenght / 500.0f;
+        vec3 focalPoint = origin.xyz + direction * push.FocalLenght;
+        vec2 jitter = RandomPointInCircle(payload.Seed) * push.DoFStrenght / 500.0f;
         payload.RayOrigin = origin.xyz + camRight * jitter.x + camUp * jitter.y;
 
         payload.RayDirection = normalize(focalPoint - payload.RayOrigin);
@@ -93,13 +99,15 @@ void main()
         vec3 curWeight = vec3(1);
         vec3 hitValue  = vec3(0);
 
-        for(; payload.Depth < pcRay.MaxDepth; payload.Depth++)
+        for(; payload.Depth < push.MaxDepth; payload.Depth++)
         {
             float closestScatterDistanceFromCamera = FLT_MAX;
             vec3 finalColor = vec3(0.0f);
             float finalG = 0.0f;
             float finalNullCollision = 0.0f;
             float finalSigmaT = 0.0f;
+            float finalPathLengthThroughVolume = 0.0f;
+            float finalVolumeWidth = 0.0f;
 
             // Check at what distance the closest geometry is
             float closestGeometry = -1.0f;
@@ -111,8 +119,13 @@ void main()
 		        closestGeometry = rayQueryGetIntersectionTEXT(query, true);
 		    }
 
+            vec3 dirToLight;
+            vec3 randVal = vec3(Rnd(payload.Seed), Rnd(payload.Seed), Rnd(payload.Seed));
+            vec4 envColor = SampleImportanceEnvMap(uEnvMap, randVal, dirToLight);
+            bool canHit = true;
+
             // Iterate through all volumes
-            for (int i = 0; i < pcRay.VolumesCount; i++)
+            for (int i = 0; i < push.VolumesCount; i++)
             {
                 Volume volume = uVolumes[i];
 
@@ -189,8 +202,20 @@ void main()
                     finalColor = volume.Color;
                     finalG = volume.G;
                     finalNullCollision = nullCollision;
+                    finalPathLengthThroughVolume = pathLengthThroughVolume;
 
                     closestScatterDistanceFromCamera = scatterDistanceFromCamera;
+
+                    // Light sampling
+                    IntersectRayAABB(payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection), dirToLight, volume.Aabb, hitPosNear, hitPosFar);
+            
+                    bool isInside = IsInsideAABB(payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection), volume.Aabb);
+                    if (isInside)
+                        hitPosNear = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
+
+                    float volumeWidth = length(hitPosFar - hitPosNear);
+
+                    finalVolumeWidth = volumeWidth;
                 }
             }
 
@@ -204,11 +229,29 @@ void main()
                     continue;
                 }
 
-                // Absorption
-                curWeight *= finalColor;
-
                 // New values
                 payload.RayOrigin = payload.RayOrigin + (closestScatterDistanceFromCamera * payload.RayDirection);
+
+                // Absorption
+                rayQueryEXT query;
+		        rayQueryInitializeEXT(query, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, payload.RayOrigin, 0.00001f, dirToLight, 10000.0f);
+		        rayQueryProceedEXT(query);
+		        if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
+		        {
+			        canHit = false;
+		        }
+                
+                curWeight *= finalColor;
+                if (canHit)
+                {
+                    float PDF = EvaluateHenyeyGreenstein(finalG, payload.RayDirection, dirToLight);
+    
+                    const float misWeight = envColor.w / (envColor.w + 1.0f);
+                    const vec3 w = (envColor.xyz / envColor.w) * misWeight;
+    
+                    hitValue += w * exp(-finalSigmaT * finalVolumeWidth) * curWeight * PDF;
+                }
+
                 payload.RayDirection = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));
             }
             // scattering didn't occur, scatter on surface
@@ -241,7 +284,7 @@ void main()
 
         // Eliminate caustics
 #ifdef USE_CAUSTICS_SUPPRESION
-        const float maxLuminance = pcRay.CausticsLuminance;
+        const float maxLuminance = push.CausticsLuminance;
         float lum = dot(hitValue, vec3(0.212671f, 0.715160f, 0.072169f));
         if(lum > maxLuminance)
         {
@@ -260,9 +303,9 @@ void main()
     // don't save it if final hit value is nan or inf (they may happen on refraction due to fresnel not being a complex equation but a simplification)
     if (!isinf(finalHitValue.x) && !isinf(finalHitValue.y) && !isinf(finalHitValue.z) && !isnan(finalHitValue.x) && !isnan(finalHitValue.y) && !isnan(finalHitValue.z))
     {
-        if (pcRay.Frame > 0)
+        if (push.Frame > 0)
         {
-            float a  = 1.0f / float(pcRay.Frame + 1);
+            float a  = 1.0f / float(push.Frame + 1);
             vec3 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
             imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, finalHitValue, a), 1.f));
         }

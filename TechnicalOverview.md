@@ -69,7 +69,7 @@ So to summarize, we shoot a ray into a scene, compute where does it intersect wi
 
 ### RT Pipeline
 
-The entire ray traversal through the scene is handled by a Vulkan Ray Tracing Pipeline and not my custom code. Why? Because It's faster, unlike doing everything in compute shaders, it enables you to use specialized RT cores on modern GPUs. And It's way simpler, You don't have to code your own BVH, ray geometry intersections etc. all of that is handled for you, so it is generally faster to deploy. I won't go over how the ray tracing pipeline and acceleration structure are initialized in this readme, but I can recommend [this tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/) if you're interested in that. I'll only be doing a general overview of the crucial components inside the shaders.
+The entire ray traversal through the scene is handled by a Vulkan Ray Tracing Pipeline and not my own code. Why? Because It's faster, unlike doing everything in compute shaders, it enables you to use specialized RT cores on modern GPUs. And It's way simpler, You don't have to code your own BVH, ray geometry intersections etc. all of that is handled for you, so it is generally faster to deploy. I won't go over how the ray tracing pipeline and acceleration structure are initialized in this readme, but I can recommend [this tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/) if you're interested in that. I'll only be doing a general overview of the crucial components inside the shaders.
 
 ### Shader types
 The Vulkan Ray Tracing Pipeline is fairly flexible because it's made out of several programmable shader stages. These shader stages are designed to handle different aspects of ray traversal and interaction with the scene. There are 5 types of these shaders but I'm using only 3 of them:
@@ -250,8 +250,7 @@ Caustics Suppression is a method used to limit the luminance of the sampled ray.
 The left image shows cornell box lit by a very bright env map, the image has 200k samples per pixel. Right image shows an attempt at denoising it.
 </p>
 
-
-There are 2 things we can do about that. One is to implement importance sampling, and the other one is to just limit the environment map brightness. I did both.
+There are 2 things we can do about that. One is to implement importance sampling, and the other one is to just limit the environment map brightness. I did the latter.
 
 <p align="center">
   <img src="./Gallery/materialShowcase/CausticsEliminated.png" alt="No Caustics" width="700" height="700" />
@@ -262,8 +261,6 @@ Image Shows the same image as above (200k samples per pixel) but this time max l
 </p>
 
 As you can see the image is way darker, but that's logical if the brightness is limited. But the noise is pretty much gone.
-
-MIS TODO:
 
 And that concludes the Ray Generation Shader! Full code of the shader can be found in [here](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/PathTracer/src/shaders/raytrace.rgen).
 
@@ -277,17 +274,17 @@ The miss shader is even simpler, there's really nothing to talk about here, it j
 
 ## BSDF And Light Transport
 
-Light transport and BSDF are the most important parts of the path tracer. When surface is hit by the ray we need 2 things to trace further, next ray direction and how much light did the surface absorb. These 2 things are determined by the BSDF and Light Transport algorithm.
+Light transport and BSDF are the most important parts of the path tracer. When surface is hit by the ray we need 2 things to trace further, next ray direction and the amount of light that surface absorbed. These 2 things are determined by the BSDF and Light Transport algorithm.
 
 ### Light Transport
 
-For light transport I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemisphere. This approach results in high amount of variance in large scenes with small lights (or high variance env maps like I've shown above), but that's okay for me, using a complex light transport algorithm was way out of the scope for this project.
+Light Transport dictates the next ray direction. I'm using simple naive approach of picking ray directions based on the BSDF, so for mirror-like surface the direction will be perfect reflection and for more matte surfaces it will be random direction on the hemisphere above the hit point. This approach results in high amount of variance in large scenes with small lights (or high variance env maps like I've shown above), but that's okay for me, using a complex light transport algorithm was way out of the scope for this project. And it still gives really good results, it just converges slower.
 
 ### BSDF
 
-When we want to get the color of the pixel we need to know what materials the ray hit on the way. So at each bounce we essentially want to know what colors does the material absorb. If we want, we could go with the easy approach of just multiplying the ray color by the material color. Or just modelling the color absorption in pretty much any way we want (so probably keep it as material color for diffuse and conductors and change it to 1 for dielectrics). But this has one major issue, we'll be stuck with a naive light transport algorithm forever. That's because we can't really evaluate some ordinary ray direction, we can only evaluate the EXACT direction that the light bounces off the surface. And complex light transport algorithms like light sampling *require* this property of being able to evaluate an ordinary ray direction (in this case the direction to light from the surface). So to fix this issue we can use BSDF.
+When we want to get the color of the pixel we need to know what materials the ray hit on the way. So at each bounce we essentially want to know what colors does the material absorb. If we want, we could go with the easy approach of just multiplying the ray color by the material color. Or just modelling the color absorption in pretty much any way we want. But this has one major issue, we'll be stuck with a naive light transport algorithm forever. That's because we can't really evaluate some ordinary ray direction, we can only evaluate the EXACT direction that the light bounces off the surface. And complex light transport algorithms like light sampling *require* this property of being able to evaluate an ordinary ray direction (in this case the direction to light from the surface). So to fix this issue we can use BSDF.
 
-BSDF is **bidirectional scattering distribution function**, it's a mathematical function that determines how much energy is absorbed during the process of reflection or refraction based on the surface properties alongside with incoming and outgoing direction, it can be denoted as $f_s(i, o, n)$, where $i$ is the incoming direction, $o$ is the outgoing direction, and $n$ is the surface normal. Speaking more precisely, it is combination of BRDF (**bidirectional reflectance distribution function**) which is reflected component and BTDF (**bidirectional transmittance distribution function**) which is transmitted component. So we can denote it as $f_s(i, o, n) = f_r(i, o, n) + f_t(i, o, n)$. It returns how much energy (color) is absorbed if ray bounces from $i$ to $o$.
+BSDF is **bidirectional scattering distribution function**, it's a mathematical function that determines how much energy is absorbed during the process of reflection or refraction based on the surface properties alongside with incoming and outgoing direction, it can be denoted as $f_s(i, o, n)$, where $i$ is the incoming direction, $o$ is the outgoing direction, and $n$ is the surface normal. Speaking more precisely, it is combination of BRDF (**bidirectional reflectance distribution function**) which is reflected component and BTDF (**bidirectional transmittance distribution function**) which is transmitted component. So we can denote it as $f_s(i, o, n) = f_r(i, o, n) + f_t(i, o, n)$. It returns how much energy (color) is absorbed if ray bounces from $i$ to $o$. Later on it's also extended to BSSRDF **bidirectional scattering surface reflectance distribution function** that also simulates more complex phenomenon like subsurface scattering or more generally volume scattering inside the object.
 
 <p align="center">
   <img src="./Gallery/Graphics/BSDF.png" alt="BSDF"/>
@@ -1047,7 +1044,7 @@ Left render evaluated refractions with BSDF = Color. Right render evaluated them
 
 Using this method also requires a new parameter medium density, which is well, density of a medium, glass in this case. We could also keep the surface attenuation as a separate thing, so on surface hit it still gets attenuated `BSDF = Color;`, which is also fine and gives you more artistic freedom. But then another parameter called medium color has to be introduced.
 
-With this approach we can also try to model sub-surface scattering by making it fully transparent with full roughness and set the medium density really high, this way the material will look like wax or human skin:
+With this approach we can also try to model sub-surface scattering by making it fully transparent with full roughness and set the medium density really high, this way the material will look like wax or human skin than concrete:
 
 <p align="center">
   <img src="./Gallery/Graphics/Diffuse.png" alt="Diffuse" width="500" height="500" />
@@ -1055,6 +1052,13 @@ With this approach we can also try to model sub-surface scattering by making it 
 </p>
 <p align="center">
 Left render uses simple diffuse. Right render is doing sub-surface scattering.
+</p>
+
+<p align="center">
+<img src="./Gallery/Graphics/SubsurfaceMonkey.png" alt="SubsurfaceMonkey" />
+</p>
+<p align="center">
+Another showcase of subsurface scattering.
 </p>
 
 ### Conclusion

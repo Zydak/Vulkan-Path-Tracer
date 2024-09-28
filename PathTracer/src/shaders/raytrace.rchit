@@ -38,7 +38,7 @@ layout(set = 0, binding = 5) uniform sampler2D uNormalTextures[];
 layout(set = 0, binding = 6) uniform sampler2D uRoghnessTextures[];
 layout(set = 0, binding = 7) uniform sampler2D uMetallnessTextures[];
 layout(set = 1, binding = 1) uniform sampler2D uEnvMap;
-layout(set = 0, binding = 12, scalar) buffer Volumes { AABB uVolumes[]; };
+layout(set = 0, binding = 12, scalar) buffer Volumes { Volume uVolumes[]; };
 
 vec3 GetViewReflectedNormal(vec3 N, vec3 V)
 {
@@ -229,6 +229,26 @@ void main()
     
         if (canHit)
         {
+            vec3 volumeAbsorption = vec3(1.0f);
+            // Iterate through all volumes
+            for (int i = 0; i < push.VolumesCount; i++)
+            {
+                Volume volume = uVolumes[i];
+
+                // Check collision positions with volume
+                vec3 hitPosNear;
+                vec3 hitPosFar;
+                IntersectRayAABB(worldPos.xyz, dirToLight, volume.Aabb, hitPosNear, hitPosFar);
+            
+                bool isInside = IsInsideAABB(worldPos.xyz, volume.Aabb);
+                if (isInside)
+                    hitPosNear = worldPos.xyz;
+
+                float volumeWidth = length(hitPosFar - hitPosNear);
+
+                volumeAbsorption *= exp(-(1.0f - volume.Color) * volume.ScatteringCoefficient * volumeWidth);
+            }
+
             float PDF = 0.0f;
             vec3 BSDF = vec3(0.0f);
             EvaluateBSDF(material, surface, dirToLight, -gl_WorldRayDirectionEXT, PDF, BSDF);
@@ -236,7 +256,7 @@ void main()
             const float misWeight = envColor.w / (envColor.w + PDF);
             const vec3 w = (envColor.xyz / envColor.w) * misWeight;
     
-            payload.HitValue += w * BSDF;
+            payload.HitValue += w * BSDF * volumeAbsorption;
         }
     }
     
