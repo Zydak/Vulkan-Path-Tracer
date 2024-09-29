@@ -64,19 +64,17 @@ void Editor::SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneH
 	m_PathTracer.SetScene(*scene);
 	m_PostProcessor.SetScene(*scene);
 	
-	// TODO
-// 	// Get Vertex and index count
-// 	auto view = m_CurrentScene->GetRegistry().view<ModelComponent>();
-// 	for (auto& entity : view)
-// 	{
-// 		ModelComponent* modelComp = &m_CurrentScene->GetRegistry().get<ModelComponent>(entity); // TODO: support more than one model
-// 		Vulture::Model* model = modelComp->ModelHandle.GetModel();
-// 		m_VertexCount = model->GetVertexCount();
-// 		m_IndexCount = model->GetIndexCount();
-// 	}
-
+	// Get Vertex and index count
 	m_VertexCount = 0;
 	m_IndexCount = 0;
+	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+	for (auto& entity : view)
+	{
+		Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity); // TODO: support more than one model
+		Vulture::Mesh* mesh = meshComp->AssetHandle.GetMesh();
+		m_VertexCount += mesh->GetVertexCount();
+		m_IndexCount += mesh->GetIndexCount();
+ 	}
 }
 
 void Editor::Render()
@@ -1230,34 +1228,34 @@ void Editor::UpdateModel()
 		(*m_CurrentScene)->GetRegistry().destroy(entity);
 	}
 
-	auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
-	for (auto& entity : viewTonemap)
-	{
-		(*m_CurrentScene)->GetRegistry().destroy(entity);
-	}
-
-	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
-	for (auto& entity : viewBloom)
-	{
-		(*m_CurrentScene)->GetRegistry().destroy(entity);
-	}
-
-	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-	for (auto& entity : viewPathTracing)
-	{
-		(*m_CurrentScene)->GetRegistry().destroy(entity);
-	}
-
-	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
-	for (auto& entity : viewEditor)
-	{
-		(*m_CurrentScene)->GetRegistry().destroy(entity);
-	}
-
 	std::string extension = m_ChangedModelFilepath.substr(m_ChangedModelFilepath.find_last_of('.'));
 
 	if (extension == ".ptscene")
 	{
+		auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
+		for (auto& entity : viewTonemap)
+		{
+			(*m_CurrentScene)->GetRegistry().destroy(entity);
+		}
+
+		auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
+		for (auto& entity : viewBloom)
+		{
+			(*m_CurrentScene)->GetRegistry().destroy(entity);
+		}
+
+		auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+		for (auto& entity : viewPathTracing)
+		{
+			(*m_CurrentScene)->GetRegistry().destroy(entity);
+		}
+
+		auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+		for (auto& entity : viewEditor)
+		{
+			(*m_CurrentScene)->GetRegistry().destroy(entity);
+		}
+
 		// Reload entire scene asset
 		m_SceneHandle.Unload();
 
@@ -1322,6 +1320,18 @@ void Editor::UpdateModel()
 	m_PathTracer.SetScene((*m_CurrentScene));
 	m_PostProcessor.SetScene(*m_CurrentScene);
 	m_PathTracer.ResetFrameAccumulation();
+
+	// Get index and vertex count
+	m_VertexCount = 0;
+	m_IndexCount = 0;
+	auto viewMesh = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+	for (auto& entity : viewMesh)
+	{
+		Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity); // TODO: support more than one model
+		Vulture::Mesh* mesh = meshComp->AssetHandle.GetMesh();
+		m_VertexCount += mesh->GetVertexCount();
+		m_IndexCount += mesh->GetIndexCount();
+	}
 }
 
 void Editor::UpdateSkybox()

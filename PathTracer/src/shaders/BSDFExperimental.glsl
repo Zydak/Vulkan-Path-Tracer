@@ -94,7 +94,7 @@ vec3 EvalReflection(in Material mat, vec3 L, vec3 V, vec3 H, vec3 F, out float p
 	//pdf = 1.0f;
 	//vec3 bsdf = F * GL;
 
-	pdf = (GV * D) / (4.0f * V.z);
+	pdf = (GV * VdotH * D / V.z) / (4.0f * VdotH);
 	vec3 bsdf = D * F * GV * GL / (4.0f * V.z);
 
 	return bsdf;
@@ -155,7 +155,7 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 	if (r1 < diffuseCDF)
 	{
 		// Diffuse
-
+	
 		data.RayDir = CosineSamplingHemisphere(seed, surface.Normal);
 		vec3 L = WorldToTangent(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 		data.BSDF = EvalDiffuse(mat, L, data.PDF);
@@ -163,73 +163,75 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 	else if (r1 < metallicCDF)
 	{
 		// Metallic
-
+	
 		vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
 		data.RayDir = normalize(reflect(-V, H));
-
+	
 		if (data.RayDir.z < 0.0f)
 			return false;
-
+	
 		vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
 		data.BSDF = EvalReflection(mat, data.RayDir, V, H, F, data.PDF);
+	
+		mat.Anisotropy = 0.0f;
 
 		// Lookup table for energy compensation
 		float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
 		float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
 		
 		data.BSDF = (1.0f + F * vec3(energyCompensation)) * data.BSDF;
-
+	
 		data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 	}
 	else if (r1 < dielectricCDF)
 	{
 		// Dielectric
-
+	
 		vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
 		data.RayDir = normalize(reflect(-V, H));
-
+	
 		if (data.RayDir.z < 0.0f)
 			return false;
-
+	
 		data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
-
+	
 		// Lookup table for energy compensation
 		float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
 		float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
-
-		data.BSDF = (1.0f + vec3(1.0f) * vec3(energyCompensation)) * data.BSDF;
-
+	
+		//data.BSDF = (1.0f + vec3(1.0f) * vec3(energyCompensation)) * data.BSDF;
+	
 		data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 	}
 	else if (r1 < glassCDF)
 	{
 		// Glass
-
+	
 		vec3 H = GGXSampleAnisotopic(V, mat.ax, mat.ay, Rnd(seed), Rnd(seed));
 		float F = DielectricFresnel(abs(dot(V, H)), mat.eta);
-
+	
 		float r2 = Rnd(seed);
-
+	
 		if (r2 < F)
 		{
 			// Reflect
 			data.RayDir = normalize(reflect(-V, H));
-
+	
 			if (data.RayDir.z < 0.0f)
 				return false;
-
+	
 			data.BSDF = EvalReflection(mat, data.RayDir, V, H, vec3(1.0f), data.PDF);
-
+	
 			// Lookup table for energy compensation
 			float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
 			float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
 			data.BSDF = (1.0f + vec3(energyCompensation)) * data.BSDF;
-
+	
 			if (hitFromTheInside)
 			{
 				payload.InMedium = true;
 				payload.MediumID = gl_InstanceCustomIndexEXT;
-
+	
 				payload.MediumColor = mat.MediumColor.rgb;
 				payload.MediumDensity = mat.MediumDensity;
 				payload.MediumAnisotropy = mat.MediumAnisotropy;
@@ -238,42 +240,42 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 		else
 		{
 			// Refract
-
+	
 			data.RayDir = normalize(refract(-V, H, mat.eta));
-
+	
 			if (data.RayDir.z > 0.0f)
 				return false;
-
+	
 			data.BSDF = EvalDielectricRefraction(mat, surface, data.RayDir, V, H, 0.0f, data.PDF) / data.PDF;
 			data.PDF = 1.0f;
-
+	
 			// Lookup table for energy compensation
 			float layer = (mat.Ior - 1.0f) * 32.0f;
-
+	
 			if (mat.eta > 1.0f)
 			{
 				float energyComp = texture(uRefractionEnergyLookupTextureEtaGreaterThan1, vec3(V.z, mat.Roughness, layer)).r;
-
+	
 				data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
 			}
 			else
 			{
 				float energyComp = texture(uRefractionEnergyLookupTextureEtaLessThan1, vec3(V.z, mat.Roughness, layer)).r;
-
+	
 				data.BSDF += vec3(1.0f - energyComp) * mat.Color.xyz;
 			}
-
+	
 			if (!hitFromTheInside)
 			{
 				payload.InMedium = true;
 				payload.MediumID = gl_InstanceCustomIndexEXT;
-
+	
 				payload.MediumColor = mat.MediumColor.rgb;
 				payload.MediumDensity = mat.MediumDensity;
 				payload.MediumAnisotropy = mat.MediumAnisotropy;
 			}
 		}
-
+	
 		data.RayDir = TangentToWorld(surface.Tangent, surface.Bitangent, surface.Normal, data.RayDir);
 	}
 

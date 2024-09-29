@@ -304,7 +304,7 @@ float EvaluateHenyeyGreenstein(float g, vec3 V, vec3 L)
 {
     //return 1.0f / (2.0f);
     float denom = 1 + g * g + 2 * g * dot(V, L);
-    return (1.0f / (2.0f)) * (1 - g * g) / (denom * sqrt(denom));
+    return (1.0f / (4.0f * M_PI)) * (1 - g * g) / (denom * sqrt(denom));
 }
 
 vec3 SampleHenyeyGreenstein(float g, vec3 incidentDir, vec2 rand)

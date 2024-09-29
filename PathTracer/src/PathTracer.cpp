@@ -272,7 +272,7 @@ void PathTracer::RecreateRayTracingPipeline()
 
 void PathTracer::DrawGBuffer()
 {
-	if (!m_DrawGBuffer)
+	//if (!m_DrawGBuffer)
 		return;
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
@@ -529,7 +529,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 {
 	{
 		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 5000; // TODO: dynamic amount of meshes
+		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMeshesBuffer.Init(bufferInfo);
@@ -537,7 +537,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 	{
 		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 5000; // TODO: dynamic amount of meshes
+		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 50000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMaterialsBuffer.Init(bufferInfo);
@@ -796,35 +796,6 @@ glm::vec3 GGXSampleAnisotopic(glm::vec3 Ve, float ax, float ay, float u1, float 
 	return Ne;
 }
 
-float BRDF(glm::vec3 V, float F, float ax, float ay)
-{
-	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
-
-	glm::vec3 L = glm::reflect(-V, H);
-
-	if (L.z < 0.0f)
-		return 0.0f;
-
-	// BRDF = D * F * GV * GL / (4.0f * NdotV)
-	// 
-	// PDF is VNDF / jacobian of reflect()
-	// PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
-	//
-	// F = BRDF / PDF
-	//
-	// If we expand it we get
-	// 
-	//      D * F * GV * GL * 4.0f * NdotV * VdotH
-	//  F = --------------------------------------
-	//      4.0f * VdotH * NdotV * GV * D
-	//
-	// almost everything cancels out and we're only left with F * GL.
-
-	float GL = F * GGXSmithAnisotropic(L, ax, ay);
-
-	return GL;
-}
-
 float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
 {
 	float Hx2 = H.x * H.x;
@@ -834,7 +805,54 @@ float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
 	float ax2 = ax * ax;
 	float ay2 = ay * ay;
 
-	return 1.0f / float(M_PI) * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f);
+	return 1.0f / (float(M_PI) * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f));
+}
+
+float EvalReflection(glm::vec3 L, glm::vec3 V, glm::vec3 H, float F, float ax, float ay)
+{
+	// BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
+	// 
+	// PDF is VNDF / jacobian of reflect()
+	// PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
+	//
+	// Fr = BRDF / PDF
+	//
+	// If we expand it we get
+	// 
+	//      D * F * GV * GL * 4.0f * NdotV * NdotL * VdotH
+	// Fr = ----------------------------------------------
+	//          4.0f * NdotL * VdotH * NdotV * GV * D
+	//
+	// almost everything cancels out and we're only left with F * GL.
+
+	float LdotH = glm::max(0.0f, dot(L, H));
+	float VdotH = glm::max(0.0f, dot(V, H));
+
+	float D = GGXDistributionAnisotropic(H, ax, ay);
+
+	float GV = GGXSmithAnisotropic(V, ax, ay);
+	float GL = GGXSmithAnisotropic(L, ax, ay);
+	float G = GV * GL;
+
+	//pdf = 1.0f;
+	//vec3 bsdf = F * GL;
+
+	float pdf = (GV * D) / (4.0f * V.z);
+	float bsdf = D * F * GV * GL / (4.0f * V.z);
+
+	return bsdf / pdf;
+}
+
+float BRDF(glm::vec3 V, float F, float ax, float ay)
+{
+	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
+
+	glm::vec3 L = glm::normalize(glm::reflect(-V, H));
+
+	if (L.z < 0.0f)
+		return 0.0f;
+
+	return EvalReflection(L, V, H, F, ax, ay);
 }
 
 float EvalDielectricRefraction(float ax, float ay, float eta, glm::vec3 L, glm::vec3 V, glm::vec3 H, float F)
@@ -907,20 +925,11 @@ float BSDF(glm::vec3 V, float ax, float ay, float IOR, bool AboveTheSurface)
 static float AccumulateBRDF(float roughness, float viewCosine, float anisotropy)
 {
 	float ax, ay;
-	if (anisotropy >= 0)
-	{
-		const float aspect = glm::sqrt(1.0f - glm::sqrt(anisotropy) * 0.9f);
-		ax = glm::max(0.001f, roughness / aspect);
-		ay = glm::max(0.001f, roughness * aspect);
-	}
-	else
-	{
-		const float aspect = glm::sqrt(1.0f - glm::sqrt(glm::abs(anisotropy)) * 0.9f);
-		ax = glm::max(0.001f, roughness * aspect);
-		ay = glm::max(0.001f, roughness / aspect);
-	}
+	const float aspect = glm::sqrt(1.0f - glm::sqrt(anisotropy) * 0.9f);
+	ax = glm::max(0.001f, roughness / aspect);
+	ay = glm::max(0.001f, roughness * aspect);
 
-	int sampleCount = 100'000;
+	int sampleCount = 10'000;
 	float totalEnergy = 0.0f;
 
 	for (int i = 0; i < sampleCount; i++)
@@ -997,6 +1006,21 @@ void PathTracer::BuildEnergyLookupTable()
 	//	{
 	//		for (int v = 0; v < 32; v++)
 	//		{
+	//			float viewCosine = glm::clamp((float(v + 1)) / 32.0f, 0.0001f, 0.9999f);
+	//			float roughness = glm::clamp((float(r + 1)) / 32.0f, 0.0001f, 0.9999f);
+	//			float anisotropy = 0.0f;
+	//
+	//			futures.push_back(std::async(std::launch::async, AccumulateBRDF, roughness, viewCosine, anisotropy));
+	//		}
+	//	}
+	//}
+	// 
+	//for (int i = 0; i < 32; i++)
+	//{
+	//	for (int r = 0; r < 32; r++)
+	//	{
+	//		for (int v = 0; v < 32; v++)
+	//		{
 	//			float roughness = glm::max((float(r)) / 32.0f, 0.0001f);
 	//			float viewCosine = glm::max((float(v)) / 32.0f, 0.0001f);
 	//			float IOR = 1.0f + glm::max((float(i)) / 32.0f, 0.0001f);
@@ -1020,7 +1044,7 @@ void PathTracer::BuildEnergyLookupTable()
 	//		}
 	//	}
 	//}
-	//
+	// 
 	//for (int i = 0; i < 32; i++)
 	//{
 	//	for (int r = 0; r < 32; r++)
@@ -1028,6 +1052,24 @@ void PathTracer::BuildEnergyLookupTable()
 	//		for (int v = 0; v < 32; v++)
 	//		{
 	//			int index = v + 32 * r + 32 * 32 * i;
+	//			futures[index].wait();
+	//			float totalEnergy = futures[index].get();
+	//
+	//			//if (totalEnergy > 0)
+	//			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
+	//
+	//			m_ReflectionEnergyLookupTable[i].push_back(totalEnergy);
+	//		}
+	//	}
+	//}
+	//
+	//for (int i = 0; i < 32; i++)
+	//{
+	//	for (int r = 0; r < 32; r++)
+	//	{
+	//		for (int v = 0; v < 32; v++)
+	//		{
+	//			int index = v + 32 * r + 32 * 32 * (i + 32);
 	//			futures[index].wait();
 	//			float totalEnergy = futures[index].get();
 	//
@@ -1046,7 +1088,7 @@ void PathTracer::BuildEnergyLookupTable()
 	//	{
 	//		for (int v = 0; v < 32; v++)
 	//		{
-	//			int index = v + 32 * r + 32 * 32 * (i + 32);
+	//			int index = v + 32 * r + 32 * 32 * (i + 64);
 	//			futures[index].wait();
 	//			float totalEnergy = futures[index].get();
 	//

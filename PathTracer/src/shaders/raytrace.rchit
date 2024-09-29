@@ -234,7 +234,7 @@ void main()
             for (int i = 0; i < push.VolumesCount; i++)
             {
                 Volume volume = uVolumes[i];
-
+    
                 // Check collision positions with volume
                 vec3 hitPosNear;
                 vec3 hitPosFar;
@@ -243,12 +243,12 @@ void main()
                 bool isInside = IsInsideAABB(worldPos.xyz, volume.Aabb);
                 if (isInside)
                     hitPosNear = worldPos.xyz;
-
+    
                 float volumeWidth = length(hitPosFar - hitPosNear);
-
+    
                 volumeAbsorption *= exp(-(1.0f - volume.Color) * volume.ScatteringCoefficient * volumeWidth);
             }
-
+    
             float PDF = 0.0f;
             vec3 BSDF = vec3(0.0f);
             EvaluateBSDF(material, surface, dirToLight, -gl_WorldRayDirectionEXT, PDF, BSDF);

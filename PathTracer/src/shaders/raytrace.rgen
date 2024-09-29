@@ -276,7 +276,7 @@ void main()
             }
 
             // Russian roulette based on ray color
-            float p = max(curWeight.x, max(curWeight.y, curWeight.z));
+            float p = min(max(curWeight.x, max(curWeight.y, curWeight.z)), 1.0f);
             if(Rnd(payload.Seed) >= p)
                 break;  // paths with low throughput that won't contribute
             curWeight /= p;
