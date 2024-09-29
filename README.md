@@ -22,6 +22,8 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 # Gallery
 ![Sponza](./Gallery/GodRays.png)
 --------
+![Bistro](./Gallery/Bistro.png)
+--------
 ![DragonHead](./Gallery/DragonHead.png)
 --------
 ![Classroom](./Gallery/Classroom.png)
@@ -76,23 +78,23 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 ![IOR](./Gallery/materialShowcase/ior.png)
 
 # List Of Features
-- Energy Conserving BSDF.
+- Energy Conserving BSSRDF.
 <p align="center">
   <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
   <img src="./Gallery/Graphics/Original.png" alt="Original" />
 </p>
 
-- BSSRDF
-- MIS
+- HDR Environment Maps
+- Environment map MIS
 - Complex Materials
 - Volumetric Scattering using delta tracking
 - Textures and Normal Maps
 - Editor
   - Loading your own scenes in .gltf .fbx and .obj format
   - Editing scene materials in runtime
-- Exporting renders into .PNG files
+  - Exporting renders into .PNG files
+  - Saving and loading scenes
 - Shader hot reloading and caching
-- HDR Environment Maps
 - Post Processing
   - Bloom using Mip Maps
   - Exposure
@@ -106,7 +108,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
   - Chromatic Aberration
   - 6 Tonemappers (Filmic, Hill Aces, Narkowicz Aces, Exposure Mapping, Uncharted 2, Reinchard Extended)
 - Anti Aliasing
-- Saving and loading scenes
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
 - Camera controller made using quaternions
@@ -121,6 +122,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf)
 
 ## Models
+- https://developer.nvidia.com/orca/amazon-lumberyard-bistro - Bistro
 - https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html - Sponza
 - https://www.blender.org/download/demo-files/ - Classroom
 - https://sketchfab.com/3d-models/screaming-dragon-head-3d-print-5712b52618f743b193bdd39459099f25 - Screaming Dragon Head
