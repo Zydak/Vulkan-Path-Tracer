@@ -272,7 +272,7 @@ void PathTracer::RecreateRayTracingPipeline()
 
 void PathTracer::DrawGBuffer()
 {
-	//if (!m_DrawGBuffer)
+	if (!m_DrawGBuffer)
 		return;
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });

@@ -253,7 +253,7 @@ void main()
             vec3 BSDF = vec3(0.0f);
             EvaluateBSDF(material, surface, dirToLight, -gl_WorldRayDirectionEXT, PDF, BSDF);
     
-            const float misWeight = envColor.w / (envColor.w + PDF);
+            const float misWeight = envColor.w / (envColor.w + (1.0f / PDF));
             const vec3 w = (envColor.xyz / envColor.w) * misWeight;
     
             payload.HitValue += w * BSDF * volumeAbsorption;
