@@ -244,12 +244,12 @@ void main()
                 curWeight *= finalColor;
                 if (canHit)
                 {
-                    float PDF = 1.0f / EvaluateHenyeyGreenstein(finalG, payload.RayDirection, dirToLight);
+                    float PDF = EvaluateHenyeyGreenstein(finalG, payload.RayDirection, dirToLight);
     
-                    const float misWeight = envColor.w / (envColor.w + PDF);
+                    const float misWeight = envColor.w / (envColor.w + (1.0f / PDF));
                     const vec3 w = (envColor.xyz / envColor.w) * misWeight;
     
-                    hitValue += w * exp(-finalSigmaT * finalVolumeWidth) * curWeight;
+                    hitValue += w * exp(-finalSigmaT * finalVolumeWidth) * curWeight * PDF;
                 }
 
                 payload.RayDirection = SampleHenyeyGreenstein(finalG, payload.RayDirection, vec2(Rnd(seed), Rnd(seed)));

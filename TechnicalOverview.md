@@ -606,7 +606,18 @@ So I assume that's just how things are, it's not really possible to perfectly ap
 First image shows the BRDF before applying energy compensation. The second image shows BRDF after applying energy compensation. Material is perfectly transparent with IOR 1.2 and roughness changing from left to right.
 </p>
 
-But there actually is another way to get everything 100% energy conserving, and without implementing some complex multiple scattering algorithm. And that is to not use the distributions. Remember when I talked about the *easy* approach at the start of the [BSDF](#bsdf) section? Well, that is a completely valid approach. But as I said there, you just can't evaluate some ordinary direction like you can with a BSDF evaluation function. But it has a property of being 100% energy conserving. And it will look completely the same as the evaluation method, since the only thing that determines the actual color is the Fresnel, and we can easily just replace the material color with fresnel. Remember when I talked about the 2 problems that cause the destruction of energy? The first one was the case when we're bouncing into the object and we have to discard the sample, with distributions we can't use rejection sampling because we'll no longer match our distribution of normals, but guess what, if there's no BSDF there's no distribution to match. So we can actually use rejection sampling. And the second problem, the shadowing-masking term, it's also absent because there's no BSDF. So our problems are magically solved. We suddenly can implement pseudo random walk on the microsurface using rejection sampling like so:
+But there actually is another way to get everything 100% energy conserving, and without implementing some complex multiple scattering algorithm. And that is to not use the distributions. Remember when I talked about the *easy* approach at the start of the [BSDF](#bsdf) section? So just shading the surface based on the material color without some complex equations? Well, that is a completely valid approach. But as I said there, you just can't evaluate some ordinary direction like you can with a BSDF evaluation function. But it has a property of being 100% energy conserving. And it will look about the same as the evaluation method. 
+
+<p align="center">
+  <img src="./Gallery/Graphics/Blender.png" alt="Blender" width="500" height="500" />
+  <img src="./Gallery/Graphics/Evaluation.png" alt="Evaluation" width="500" height="500" />
+  <img src="./Gallery/Graphics/NoEvaluation.png" alt="NoEvaluation" width="500" height="500" />
+</p>
+<p align="center">
+The first image was rendered using Blender Cycles just for reference. Second image was rendered using the evaluation with distributions, It looks pretty much the same as the blender reference. Third one was rendered with the simpler energy conserving approach. They look about the same. The difference is visible here, but when you enable tonemapping and run more complex scene it's pretty much indistinguishable
+</p>
+
+Since the only thing that determines the actual color for metals is Fresnel, and we can easily just replace the material color with fresnel. Remember when I talked about the 2 problems that cause the destruction of energy? The first one was the case when we're bouncing into the object and we have to discard the sample, with distributions we can't use rejection sampling because we'll no longer match our distribution of normals, but guess what, if there's no BSDF there's no distribution to match. So we can actually use rejection sampling. And the second problem, the shadowing-masking term, it's also absent because there's no BSDF. So our problems are magically solved. We suddenly can implement pseudo random walk on the microsurface using rejection sampling like so:
 
 ```
 // Pick initial direction the same way we're doing it with BSDF
@@ -635,9 +646,7 @@ for (int i = 0; i < 100; i++) // 100 is just there so that we do not blow the GP
 BSDF = F;
 ```
 
-And that's it! The code above is for conductor, but we can easily change the fresnel to be whatever we want for dielectric reflection and refraction. This way we get a 100% energy conserving BSDF, the only downside is that we can't evaluate directions which is a real bummer and a must have for more complex light transport. But since I'm not really using any complex light transport algorithm anyway, I couldn't care less, I'm not evaluating the directions anyway, so all of the images in the [Gallery](https://github.com/Zydak/Vulkan-Path-Tracer?tab=readme-ov-file#gallery) are taken with this approach and not with the distributions just for the better look. If you also aren't going for a complex light transport like light sampling I advise to just use the rejection sampling approach, because you get absolutely no advantage of using distributions in that case. And you'll just make yourself a ton of work with energy compensations like I did. But if for some reason you want or need to evaluate the direction then you'll have to go through all that trouble.
-
-For conductors it looks pretty much the same, the only thing that differs is the fresnel, since with rejection sampling we're attenuating the color with each microsurface hit. And with energy compensation we're just approximating this phenomenon by multiplying by the fresnel of the final outgoing direction. So the rejection sampling will look more correct.
+And that's it! The code above is for metals, but we can easily change the fresnel to be whatever we want for dielectric reflection and refraction. This way we get a 100% energy conserving BSDF, the only downside is that we can't evaluate directions which is a real bummer and a must have for more complex light transport. If you also aren't going for a complex light transport like light sampling I advise to just use the rejection sampling approach, because you get pretty much no advantage of using distributions in that case.
 
 <p align="center">
   <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
@@ -709,7 +718,7 @@ vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
 
 Sampling the direction is exactly the same.
 
-And the last lobe which is dielectric refraction. This time you do want to attenuate it so your fresnel becomes the material color or whatever you like the most (you can use schlick here but I'm not sure that's based on anything in real world?). The only difference is that you call `refract` instead of `reflect`. And of course if you're doing distributions approach evaluate it differently than reflection. I also talked about that.
+And the last lobe which is dielectric refraction. This time you do want to attenuate it so your fresnel becomes the material color or whatever you like the most (you can use schlick here). The only difference is that you call `refract` instead of `reflect`. And of course if you're doing distributions approach evaluate it differently than reflection. I also talked about that.
 
 And these 4 simple lobes can create pretty much any material you can encounter in real world. In total we end up with 8 material parameters that change how the lobes act and the probability at which they are sampled.
 
@@ -717,7 +726,8 @@ And these 4 simple lobes can create pretty much any material you can encounter i
 * Emissive Color (I haven't talked about it but it's really simple, you just add it to the ray contribution like it's a light so it's just $L_e()$ function).
 * Roughness which changes the microfacet distribution.
 * Metallic. Determines whether to sample dielectric lobes or the conductors one.
-* Anisotropy. Changes the direction of highlights.
+* Anisotropy. Stretches the highlights.
+* Anisotropy Rotation. Changes the direction of stretching.
 * Specular Tint. I also haven't talked about this one, it just tints the color of specular (dielectric) highlights to the material color.
 * Transparency.
 * IOR. Index of Refraction, it determines how much the path of ray is bent when entering a medium (like glass).

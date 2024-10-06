@@ -178,8 +178,8 @@ vec4 SampleImportanceEnvMap(in sampler2D hdrTexture, in vec3 randVal, out vec3 t
 
     // Convert to a light direction vector in Cartesian coordinates
     toLight = vec3(cos_phi * sin_theta, cos_theta, sin_phi * sin_theta);
-    toLight = Rotate(toLight, vec3(1, 0, 0), -push.EnvAltitude + M_PI);
-    toLight = Rotate(toLight, vec3(0, 1, 0), -push.EnvAzimuth);
+    toLight = Rotate(toLight, vec3(0, 1, 0), push.EnvAzimuth);
+    toLight = Rotate(toLight, vec3(1, 0, 0), push.EnvAltitude + M_PI);
 
     // Lookup the environment value using
     return texture(hdrTexture, vec2(u, v));

@@ -220,7 +220,7 @@ void main()
     if (canHit)
     {
         rayQueryEXT query;
-		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.00001f, dirToLight, 10000.0f);
+		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.0f, dirToLight, 10000.0f);
 		rayQueryProceedEXT(query);
 		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		{

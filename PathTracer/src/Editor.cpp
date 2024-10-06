@@ -1211,6 +1211,7 @@ void Editor::Resize()
 void Editor::UpdateModel()
 {
 	Vulture::Device::WaitIdle();
+
 	Vulture::AssetHandle newAssetHandle;
 
 	// Unload current scene
@@ -1227,6 +1228,7 @@ void Editor::UpdateModel()
 		// Delete the entity
 		(*m_CurrentScene)->GetRegistry().destroy(entity);
 	}
+	Vulture::DeleteQueue::ClearQueue();
 
 	std::string extension = m_ChangedModelFilepath.substr(m_ChangedModelFilepath.find_last_of('.'));
 
