@@ -30,8 +30,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![Mustang0](./Gallery/Mustang0.png)
 --------
-![TranslucentDragon](./Gallery/TranslucentDragon.png)
---------
 ![Volume](./Gallery/NonUniform.png)
 --------
 ![Monster](./Gallery/MonsterRough.png)
