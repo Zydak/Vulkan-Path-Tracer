@@ -48,4 +48,6 @@ void main()
 
     payload.HitValue = color;
 	payload.Depth = DEPTH_INFINITE;
+	payload.SurfaceAlbedo = color;
+	payload.SurfaceNormal = vec3(0.0f);
 }

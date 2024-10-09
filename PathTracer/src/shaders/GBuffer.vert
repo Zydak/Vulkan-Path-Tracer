@@ -41,5 +41,5 @@ void main()
 	
 	dataOut.TexCoord = inTexCoord;
 	dataOut.material = push.material;
-	dataOut.Normal = inNormal;
+	dataOut.Normal = inNormal;//vec3(vec4(inNormal, 1.0f) * inverse(transpose(push.model)));
 }

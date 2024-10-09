@@ -25,6 +25,9 @@ layout(set = 0, binding = 12, scalar) buffer Volumes { Volume uVolumes[]; };
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 layout(set = 1, binding = 1) uniform sampler2D uEnvMap;
 
+layout(set = 0, binding = 14, rgba32f) uniform image2D uGBufferAlbedo;
+layout(set = 0, binding = 15, rgba32f) uniform image2D uGBufferNormal;
+
 void main()
 {
     uint seed = gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + int(clockARB());
@@ -59,6 +62,39 @@ void main()
 			uDof = rayQueryGetIntersectionTEXT(query, true);
 		}
     }
+
+    // -------------------------------------------------------------------------------------------------------
+    // Fill GBuffer
+
+    if (push.Frame == 0)
+    {
+        const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+        const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+        vec2 d = inUV * 2.0 - 1.0;
+
+        vec4 origin    = uni.ViewInverse * vec4(0, 0, 0, 1);
+        vec4 target    = uni.ProjInverse * vec4(d.x, d.y, 1, 1);
+        vec3 direction = vec3(uni.ViewInverse * vec4(normalize(target.xyz), 0.0f));
+
+        traceRayEXT(
+            topLevelAS,         // acceleration structure
+            rayFlags,           // rayFlags
+            0xFF,               // cullMask
+            0,                  // sbtRecordOffset
+            0,                  // sbtRecordStride
+            0,                  // missIndex
+            origin.xyz,             // ray origin
+            tMin,               // ray min range
+            direction,          // ray direction
+            tMax,               // ray max range
+            0                   // payload (location = 0)
+        );
+
+        imageStore(uGBufferAlbedo, ivec2(gl_LaunchIDEXT.xy), vec4(payload.SurfaceAlbedo, 1.f));
+        imageStore(uGBufferNormal, ivec2(gl_LaunchIDEXT.xy), vec4((payload.SurfaceNormal + 1.0f) * 0.5f, 1.f));
+    }
+
+    // -------------------------------------------------------------------------------------------------------
 
     vec3 curWeight = vec3(1);
     vec3 hitValue  = vec3(0);

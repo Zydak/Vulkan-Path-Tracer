@@ -182,7 +182,9 @@ vec4 SampleImportanceEnvMap(in sampler2D hdrTexture, in vec3 randVal, out vec3 t
     toLight = Rotate(toLight, vec3(1, 0, 0), push.EnvAltitude + M_PI);
 
     // Lookup the environment value using
-    return texture(hdrTexture, vec2(u, v));
+    vec4 color = texture(hdrTexture, vec2(u, v));
+    color.rgb *= 1.0f;
+    return color;
 }
 
 //

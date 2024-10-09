@@ -58,7 +58,8 @@ public:
 	PathTracer& operator=(PathTracer&& other) noexcept = delete;
 
 	inline Vulture::Image* GetOutputImage() { return &m_PathTracingImage; };
-	inline Vulture::Framebuffer* GetGBuffer() { return &m_GBufferFramebuffer; };
+	inline Vulture::Image* GetGBufferAlbedo() { return &m_GBufferAlbedo; };
+	inline Vulture::Image* GetGBufferNormal() { return &m_GBufferNormal; };
 
 	void Resize(VkExtent2D newSize);
 	void SetScene(Vulture::Scene* scene);
@@ -78,7 +79,6 @@ private:
 
 	// Initialization stuff
 	void CreateDescriptorSets();
-	void CreatePipelines();
 	void CreateRayTracingPipeline();
 	void CreateShaderBindingTable();
 	void CreateFramebuffers();
@@ -87,9 +87,6 @@ private:
 
 	// Camera ubo update
 	void UpdateDescriptorSetsData();
-
-	// GBuffer
-	void DrawGBuffer();
 
 	// Lookup table
 	void BuildEnergyLookupTable();
@@ -130,9 +127,8 @@ private:
 	VkExtent2D m_ViewportSize = { 900, 900 };
 
 	// GBuffer
-	Vulture::Framebuffer m_GBufferFramebuffer;
-	Vulture::Pipeline m_GBufferPipeline;
-	bool m_DrawGBuffer = true;
+	Vulture::Image m_GBufferAlbedo;
+	Vulture::Image m_GBufferNormal;
 
 	// Descriptor buffers
 	Vulture::Buffer m_GlobalSetBuffer;

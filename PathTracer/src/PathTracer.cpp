@@ -9,7 +9,6 @@ void PathTracer::Init(VkExtent2D size)
 	CreateFramebuffers();
 
 	CreateDescriptorSets();
-	CreatePipelines();
 
 	BuildEnergyLookupTable();
 
@@ -59,7 +58,6 @@ void PathTracer::Resize(VkExtent2D newSize)
 	ResetFrameAccumulation();
 
 	CreateFramebuffers();
-	CreatePipelines();
 
 	// Update Ray tracing set
 	VkDescriptorImageInfo info = { 
@@ -180,9 +178,6 @@ bool PathTracer::Render()
 	data->EnvAltitude = glm::radians(pathTracingSettings->Settings.EnvAltitude);
 	data->VolumesCount = volumesCount;
 
-	// Draw Albedo, Roughness, Metallness, Normal into GBuffer
-	DrawGBuffer();
-
 	static glm::mat4 previousViewMat{ 0.0f };
 	static glm::mat4 previousProjMat{ 0.0f };
 	auto camComp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
@@ -205,6 +200,9 @@ bool PathTracer::Render()
 
 		m_CurrentSamplesPerPixel += pathTracingSettings->Settings.SamplesPerFrame;
 	}
+
+	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
+	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
 
 	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Ray Trace Pass", { 1.0f, 0.0f, 0.0f, 1.0f });
 
@@ -245,6 +243,10 @@ bool PathTracer::Render()
 		data->VPInverse = glm::inverse(cam->GetProjView());
 		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer());
 	}
+
+	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+
 	return true;
 }
 
@@ -261,65 +263,11 @@ void PathTracer::ResetFrameAccumulation()
 {
 	m_PushContantRayTrace.GetDataPtr()->frame = 0;
 	m_CurrentSamplesPerPixel = 0;
-
-	m_DrawGBuffer = true;
 }
 
 void PathTracer::RecreateRayTracingPipeline()
 {
 	m_RecreateRTPipeline = true;
-}
-
-void PathTracer::DrawGBuffer()
-{
-	if (!m_DrawGBuffer)
-		return;
-
-	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "GBuffer rasterization", { 0.0f, 0.0f, 1.0f, 1.0f });
-
-	m_DrawGBuffer = false;
-	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>();
-	std::vector<VkClearValue> clearColors;
-	clearColors.reserve(5);
-	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.emplace_back(VkClearValue{ 0.0f, 0.0f, 0.0f, 0.0f });
-	clearColors.emplace_back(VkClearValue{ 1.0f, 0 });
-
-	m_GBufferFramebuffer.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
-	m_GBufferPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
-
-	m_GlobalDescriptorSets.Bind
-	(
-		0,
-		m_GBufferPipeline.GetPipelineLayout(),
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		Vulture::Renderer::GetCurrentCommandBuffer()
-	);
-
-	for (auto& entity : view)
-	{
-		auto [meshComp, materialComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>(entity);
-
-		Vulture::MeshAsset* meshAsset = (Vulture::MeshAsset*)meshComp.AssetHandle.GetAsset();
-		Vulture::Mesh* mesh = &meshAsset->Mesh;
-		Vulture::Material* material = materialComp.AssetHandle.GetMaterial();
-		Vulture::DescriptorSet* set = &material->Textures.TexturesSet;
-
-		m_PushContantGBuffer.GetDataPtr()->Material = material->Properties;
-		m_PushContantGBuffer.GetDataPtr()->Model = TransformComp.Transform.GetMat4();
-
-		m_PushContantGBuffer.Push(m_GBufferPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
-
-		set->Bind(1, m_GBufferPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, Vulture::Renderer::GetCurrentCommandBuffer());
-		mesh->Bind(Vulture::Renderer::GetCurrentCommandBuffer());
-		mesh->Draw(Vulture::Renderer::GetCurrentCommandBuffer(), 1, 0);
-	}
-
-	m_GBufferFramebuffer.Unbind(Vulture::Renderer::GetCurrentCommandBuffer());
-
-	Vulture::Device::EndLabel(Vulture::Renderer::GetCurrentCommandBuffer());
 }
 
 void PathTracer::CreateDescriptorSets()
@@ -338,68 +286,6 @@ void PathTracer::CreateDescriptorSets()
 	m_GlobalDescriptorSets.AddBuffer(0, m_GlobalSetBuffer.DescriptorInfo());
 
 	m_GlobalDescriptorSets.Build();
-}
-
-void PathTracer::CreatePipelines()
-{
-	// GBuffer
-	{
-		Vulture::Shader::CreateInfo shaderInfo{};
-		shaderInfo.Filepath = "src/shaders/GBuffer.vert";
-		shaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
-		Vulture::Shader testShader(shaderInfo);
-		{
-			Vulture::DescriptorSetLayout::Binding bin1{ 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT };
-			Vulture::DescriptorSetLayout::Binding bin2{ 1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT };
-			Vulture::DescriptorSetLayout::Binding bin3{ 2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT };
-			Vulture::DescriptorSetLayout::Binding bin4{ 3, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT };
-
-			Vulture::DescriptorSetLayout texturesLayout({ bin1, bin2, bin3, bin4 });
-
-			Vulture::PushConstant<PushConstantGBuffer>::CreateInfo pushInfo{};
-			pushInfo.Stage = VK_SHADER_STAGE_VERTEX_BIT;
-
-			m_PushContantGBuffer.Init(pushInfo);
-
-			// Configure pipeline creation parameters
-			Vulture::Pipeline::GraphicsCreateInfo info{};
-			info.AttributeDesc = Vulture::Mesh::Vertex::GetAttributeDescriptions();
-			info.BindingDesc = Vulture::Mesh::Vertex::GetBindingDescriptions();
-			Vulture::Shader shader1({ "src/shaders/GBuffer.vert", VK_SHADER_STAGE_VERTEX_BIT });
-
-			std::vector<Vulture::Shader::Define> defines;
-
-			Vulture::Shader shader2({ "src/shaders/GBuffer.frag", VK_SHADER_STAGE_FRAGMENT_BIT, defines });
-			info.Shaders.push_back(&shader1);
-			info.Shaders.push_back(&shader2);
-			info.DepthTestEnable = true;
-			info.Width = m_ViewportSize.width;
-			info.Height = m_ViewportSize.height;
-			info.PushConstants = m_PushContantGBuffer.GetRangePtr();
-			info.ColorAttachmentCount = 4;
-			info.RenderPass = m_GBufferFramebuffer.GetRenderPass();
-			info.debugName = "GBuffer Pipeline";
-
-			info.DescriptorSetLayouts = {
-				m_GlobalDescriptorSets.GetDescriptorSetLayout()->GetDescriptorSetLayoutHandle(),
-				texturesLayout.GetDescriptorSetLayoutHandle()
-			};;
-
-			m_GBufferPipeline.Init(info);
-		}
-	}
-
-	// DOF
-	{
-		Vulture::Effect<PushConstantDOF>::CreateInfo info{};
-		info.AdditionalTextures = { m_GBufferFramebuffer.GetImageNoVk(4).get() };
-		info.DebugName = "DOF Visualizer";
-		info.InputImage = &m_PathTracingImage;
-		info.OutputImage = &m_PathTracingImage;
-		info.ShaderPath = "src/shaders/DepthOfField.comp";
-
-		m_DOfVisualizer.Init(info);
-	}
 }
 
 void PathTracer::CreateRayTracingPipeline()
@@ -490,38 +376,20 @@ void PathTracer::CreateFramebuffers()
 
 	// GBuffer
 	{
-		Vulture::Framebuffer::CreateInfo info{};
-		info.AttachmentsFormats = {
-			Vulture::FramebufferAttachment::ColorRGBA32, // This has to be 32 per channel otherwise optix won't work
-			Vulture::FramebufferAttachment::ColorRGBA32, // This has to be 32 per channel otherwise optix won't work
-			Vulture::FramebufferAttachment::ColorRG8,
-			Vulture::FramebufferAttachment::ColorRGBA32,
-			Vulture::FramebufferAttachment::Depth16
-		};;
-		info.Extent = m_ViewportSize;
-		info.CustomBits = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		Vulture::Framebuffer::RenderPassCreateInfo rPassInfo{};
-		info.RenderPassInfo = &rPassInfo;
+		Vulture::Image::CreateInfo info{};
+		info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		info.Height = m_ViewportSize.height;
+		info.Width = m_ViewportSize.width;
+		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		info.SamplerInfo = Vulture::SamplerInfo{};
+		info.DebugName = "GBufferAlbedo";
+		m_GBufferAlbedo.Init(info);
+		m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL);
 
-		VkSubpassDependency dependency1 = {};
-		dependency1.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependency1.dstSubpass = 0;
-		dependency1.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dependency1.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dependency1.srcAccessMask = 0;
-		dependency1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		VkSubpassDependency dependency2 = {};
-		dependency2.srcSubpass = 0;
-		dependency2.dstSubpass = VK_SUBPASS_EXTERNAL;
-		dependency2.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency2.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		dependency2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		dependency2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		info.RenderPassInfo->Dependencies = { dependency1, dependency2 };
-
-		m_GBufferFramebuffer.Init(info);
+		m_GBufferNormal.Init(info);
+		m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL);
 	}
 }
 
@@ -577,8 +445,10 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		Vulture::DescriptorSetLayout::Binding bin11{ 11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin12{ 12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
 		Vulture::DescriptorSetLayout::Binding bin13{ 13, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin14{ 14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		Vulture::DescriptorSetLayout::Binding bin15{ 15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 
-		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12, bin13 }, &Vulture::Renderer::GetLinearSampler());
+		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12, bin13, bin14, bin15 }, &Vulture::Renderer::GetLinearSampler());
 
 		VkAccelerationStructureKHR geometryTlas = m_GeometryAS.GetTlas().Accel;
 		VkAccelerationStructureKHR volumeTlas = m_VolumesAS.GetTlas().Accel;
@@ -657,6 +527,20 @@ void PathTracer::CreateRayTracingDescriptorSets()
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
+		m_RayTracingDescriptorSet.AddImageSampler(
+			14,
+			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+				m_GBufferAlbedo.GetImageView(),
+				VK_IMAGE_LAYOUT_GENERAL }
+		);
+
+		m_RayTracingDescriptorSet.AddImageSampler(
+			15,
+			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+				m_GBufferNormal.GetImageView(),
+				VK_IMAGE_LAYOUT_GENERAL }
+		);
+
 		m_RayTracingDescriptorSet.AddBuffer(12, m_VolumesBuffer.DescriptorInfo());
 
 		m_RayTracingDescriptorSet.Build();
@@ -705,7 +589,6 @@ void PathTracer::CreateAccelerationStructure()
 	Vulture::AccelerationStructure::CreateInfo infoGeometry{};
 	Vulture::AccelerationStructure::CreateInfo infoVolumes{};
 
-	m_DrawGBuffer = false;
 	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
 
 	for (auto& entity : view)
@@ -753,6 +636,20 @@ void PathTracer::UpdateDescriptorSetsData()
 	m_GlobalSetBuffer.WriteToBuffer(&ubo);
 
 	m_GlobalSetBuffer.Flush();
+
+	m_RayTracingDescriptorSet.UpdateImageSampler(
+		14,
+		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			m_GBufferAlbedo.GetImageView(),
+			VK_IMAGE_LAYOUT_GENERAL }
+	);
+
+	m_RayTracingDescriptorSet.UpdateImageSampler(
+		15,
+		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			m_GBufferNormal.GetImageView(),
+			VK_IMAGE_LAYOUT_GENERAL }
+	);
 }
 
 float Lambda(glm::vec3 V, float ax, float ay)

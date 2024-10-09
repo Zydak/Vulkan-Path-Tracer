@@ -24,11 +24,16 @@ const int LAST_EVENT_SURFACE = 2;
 struct hitPayload
 {
     vec3 HitValue;
-    uint Seed;
-    uint Depth;
+    vec3 MediumColor;
     vec3 RayOrigin;
     vec3 RayDirection;
     vec3 Weight;
+
+    vec3 SurfaceAlbedo;
+    vec3 SurfaceNormal;
+
+    uint Seed;
+    uint Depth;
     bool MissedAllGeometry;
 
     uint LastEvent;
@@ -36,7 +41,6 @@ struct hitPayload
     bool InMedium;
     uint MediumID;
 
-    vec3 MediumColor;
     float MediumDensity;
     float MediumAnisotropy;
 };

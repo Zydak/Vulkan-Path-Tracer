@@ -33,6 +33,7 @@ private:
 	void ImGuiRenderingToFileSettings();
 
 	void ImGuiRenderPathTracingViewport();
+	void ImGuiRenderRasterizerViewport();
 	void ImGuiShaderSettings();
 	void ImGuiInfoHeader(bool resetButton);
 	void ImGuiSceneEditor();
@@ -43,6 +44,7 @@ private:
 	void ImGuiCameraSettings();
 	void ImGuiFileRenderSettings();
 	void ImGuiSerializationSettings();
+	void ImGuiRasterizerViewSettings();
 
 	void Resize();
 
@@ -52,6 +54,10 @@ private:
 	Vulture::Image m_DenoisedImage;
 	VkDescriptorSet m_PathTracerOutputImageSet = VK_NULL_HANDLE;
 	VkDescriptorSet m_DenoisedOutputImageSet = VK_NULL_HANDLE;
+
+	bool m_RasterizerShowColor = true;
+	VkDescriptorSet m_RasterizerOutputImageSet = VK_NULL_HANDLE;
+	VkDescriptorSet m_RasterizerNormalOutputImageSet = VK_NULL_HANDLE;
 
 	// Scene
 	Vulture::Scene** m_CurrentScene = nullptr; // ** because we have to change the pointer inside the Application, so we need a pointer to pointer

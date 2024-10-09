@@ -14,6 +14,8 @@ void Editor::Init()
 	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
 
@@ -185,8 +187,8 @@ void Editor::Render()
 				std::vector<Vulture::Image*> denoiserInput =
 				{
 					m_PathTracer.GetOutputImage(),
-					m_PathTracer.GetGBuffer()->GetImageNoVk(0).get(),
-					m_PathTracer.GetGBuffer()->GetImageNoVk(1).get()
+					m_PathTracer.GetGBufferAlbedo(),
+					m_PathTracer.GetGBufferNormal()
 				};
 
 				m_Denoiser.ImageToBuffer(Vulture::Renderer::GetCurrentCommandBuffer(), denoiserInput);
@@ -336,6 +338,7 @@ void Editor::RenderImGui()
 		ImGui::DockSpaceOverViewport(viewport);
 	}
 
+	ImGuiRenderRasterizerViewport();
 	ImGuiRenderPathTracingViewport();
 
 	if (m_RenderToFile)
@@ -360,7 +363,7 @@ void Editor::ImGuiRenderPathTracingViewport()
 	{
 		if (m_PathTracerViewportVisible)
 			camScript->m_CameraLocked = !isWindowHoveredAndDocked;
-
+	
 		if (m_RenderToFile)
 			camScript->m_CameraLocked = true; // Always lock camera when rendering to file
 	}
@@ -378,6 +381,55 @@ void Editor::ImGuiRenderPathTracingViewport()
 	m_ViewportSize = { viewportWidth, viewportHeight };
 
 	ImGui::Image(m_PathTracerOutputImageSet, viewportContentSize);
+
+	ImGui::End();
+	ImGui::PopStyleVar();
+}
+
+void Editor::ImGuiRenderRasterizerViewport()
+{
+	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
+
+	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	CameraScript* camScript = scComp ? scComp->GetScript<CameraScript>(0) : nullptr;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	m_PathTracerViewportVisible = ImGui::Begin("Rasterizer Preview Viewport");
+
+	bool isWindowHoveredAndDocked = ImGui::IsWindowHovered() && ImGui::IsWindowDocked();
+
+	static ImVec2 prevViewportSize = { 0, 0 };
+	ImVec2 viewportContentSize = ImGui::GetContentRegionAvail();
+	uint32_t viewportWidth = (uint32_t)viewportContentSize.x;
+	uint32_t viewportHeight = (uint32_t)viewportContentSize.y;
+	if (viewportWidth != prevViewportSize.x || viewportHeight != prevViewportSize.y)
+	{
+		m_ImGuiViewportResized = true;
+		prevViewportSize = viewportContentSize;
+	}
+
+	m_ViewportSize = { viewportWidth, viewportHeight };
+
+	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	EditorSettingsComponent* editorSettings = nullptr;
+	for (auto& entity : viewEditor)
+	{
+		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+	}
+
+	VL_CORE_ASSERT(editorSettings != nullptr, "Can't find editor settings");
+
+	ImVec2 size = { (float)editorSettings->ImageSize.x, (float)editorSettings->ImageSize.y };
+
+	float s = glm::min((float)viewportWidth / (float)editorSettings->ImageSize.x, (float)viewportHeight / (float)editorSettings->ImageSize.y);
+	ImGui::SameLine();
+	ImGui::SetCursorScreenPos(ImVec2{ ((float)viewportWidth - ((float)editorSettings->ImageSize.x * s)) / 2.0f, ImGui::GetCursorPos().y + ((float)viewportHeight - ((float)editorSettings->ImageSize.y * s)) / 2.0f });
+	
+	if (m_RasterizerShowColor)
+		ImGui::Image(m_RasterizerOutputImageSet, { editorSettings->ImageSize.x * s, editorSettings->ImageSize.y * s });
+	else
+		ImGui::Image(m_RasterizerNormalOutputImageSet, { editorSettings->ImageSize.x * s, editorSettings->ImageSize.y * s });
 
 	ImGui::End();
 	ImGui::PopStyleVar();
@@ -407,6 +459,8 @@ void Editor::ImGuiPathTracerSettings()
 	ImGuiFileRenderSettings();
 
 	ImGuiSerializationSettings();
+
+	ImGuiRasterizerViewSettings();
 
 	ImGui::End();
 }
@@ -1189,6 +1243,14 @@ void Editor::ImGuiSerializationSettings()
 	ImGui::Separator();
 }
 
+void Editor::ImGuiRasterizerViewSettings()
+{
+	if (!ImGui::CollapsingHeader("Debug Settings"))
+		return;
+
+	ImGui::Checkbox("Show Color Or Normal", &m_RasterizerShowColor);
+}
+
 void Editor::Resize()
 {
 	Vulture::Device::WaitIdle();
@@ -1206,6 +1268,8 @@ void Editor::Resize()
 	m_QuadCamera.UpdateViewMatrix();
 
 	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Editor::UpdateModel()

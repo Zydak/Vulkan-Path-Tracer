@@ -153,6 +153,9 @@ void main()
     material.Metallic *= texture(uMetallnessTextures[gl_InstanceCustomIndexEXT], texCoord).r;
 
     material.eta = dot(gl_WorldRayDirectionEXT, surface.GeoNormal) < 0.0 ? (1.0 / material.Ior) : material.Ior;
+
+    payload.SurfaceAlbedo = material.Color.rgb;
+    payload.SurfaceNormal = surface.Normal;
     
     // -------------------------------------------
     // Hit
