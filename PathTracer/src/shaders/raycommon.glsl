@@ -18,6 +18,9 @@ const float FLT_MAX         = 3.402823466e+38F;         // max value
 
 const int DEPTH_INFINITE = 100000;
 
+const int LAST_EVENT_VOLUME = 1;
+const int LAST_EVENT_SURFACE = 2;
+
 struct hitPayload
 {
     vec3 HitValue;
@@ -27,6 +30,8 @@ struct hitPayload
     vec3 RayDirection;
     vec3 Weight;
     bool MissedAllGeometry;
+
+    uint LastEvent;
 
     bool InMedium;
     uint MediumID;

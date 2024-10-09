@@ -23,24 +23,22 @@ void main()
 	rayDir = Rotate(rayDir, vec3(0, 1, 0), -pcRay.EnvAzimuth);
 	vec2 uv = directionToSphericalEnvmap(rayDir);
 
-	if (payload.Depth == 0)
+	if (payload.LastEvent == LAST_EVENT_SURFACE || payload.Depth == 0)
 	{
 		color = texture(uEnvMap, uv).xyz;
 	}
 	else
 	{
-		color = texture(uEnvMap, uv).xyz;
+		color = vec3(0.0f); // The color in volumes is already accounted for with importance sampling
 	}
+		color = texture(uEnvMap, uv).xyz;
 #else
-	if (payload.Depth == 0)
+	if (payload.Depth == 0 || payload.LastEvent == LAST_EVENT_VOLUME)
 	{
 		color = vec3(0.0f);
 	}
 	else
 	{
-		rayDir = Rotate(rayDir, vec3(1, 0, 0), -pcRay.EnvAltitude + M_PI);
-		rayDir = Rotate(rayDir, vec3(0, 1, 0), -pcRay.EnvAzimuth);
-		vec2 uv = directionToSphericalEnvmap(rayDir);
 		color = texture(uEnvMap, uv).xyz;
 	}
 #endif

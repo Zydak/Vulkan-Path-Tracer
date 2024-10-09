@@ -195,6 +195,8 @@ void main()
             if (payload.MediumID == gl_InstanceCustomIndexEXT)
                 payload.InMedium = false;
         }
+        
+        payload.LastEvent = LAST_EVENT_VOLUME;
     }
 
     BSDFSampleData sampleData;
@@ -220,7 +222,7 @@ void main()
     if (canHit)
     {
         rayQueryEXT query;
-		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.0f, dirToLight, 10000.0f);
+		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.0001f, dirToLight, 10000.0f);
 		rayQueryProceedEXT(query);
 		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		{
@@ -246,7 +248,7 @@ void main()
     
                 float volumeWidth = length(hitPosFar - hitPosNear);
     
-                volumeAbsorption *= exp(-(1.0f - volume.Color) * volume.ScatteringCoefficient * volumeWidth);
+                volumeAbsorption *= exp(-volume.ScatteringCoefficient * volumeWidth) * volume.Color;
             }
     
             float PDF = 0.0f;
@@ -264,6 +266,8 @@ void main()
 
     vec3 offsetDir  = dot(payload.RayDirection, surface.Normal) > 0.0f ? surface.Normal : -surface.Normal;
     payload.RayOrigin = OffsetRay(worldPos, offsetDir);
+    
+    payload.LastEvent = LAST_EVENT_SURFACE;
 
     //payload.Weight = vec3(0.0f);
     //payload.HitValue = (surface.Normal + 1.0f) * 0.5f;
