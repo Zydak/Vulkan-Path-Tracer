@@ -26,11 +26,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![DragonHead](./Gallery/DragonHead.png)
 --------
-![Classroom](./Gallery/Classroom.png)
---------
 ![OceanAjax](./Gallery/OceanAjax.png)
---------
-![CornellBox](./Gallery/CornellBox.png)
 --------
 ![Mustang0](./Gallery/Mustang0.png)
 --------
