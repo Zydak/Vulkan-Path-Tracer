@@ -181,7 +181,7 @@ void Editor::Render()
 
 			// Denoiser
 			// step 1:
-			// First it checks whether it can upload data to cuda buffers using normal frame command buffer
+			// First it upload data to cuda buffers using normal frame command buffer
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
 				std::vector<Vulture::Image*> denoiserInput =
@@ -211,7 +211,7 @@ void Editor::Render()
 			// Denoiser
 			// step 2:
 			// After the first step is done it waits until all buffers are copied using WaitIdle()
-			// and when that's done it runs Optix denoiser in cuda and waits untill it's done (DenoiseImageBuffer())
+			// and when that's done it runs Optix denoiser in cuda and waits until it's done (DenoiseImageBuffer())
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
 				m_ImageDenoised = true;

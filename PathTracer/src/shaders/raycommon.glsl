@@ -146,6 +146,16 @@ struct HitData
     float HitDistance;
 };
 
+float BalanceHeuristic(float pdfA, float pdfB)
+{
+    return pdfA / (pdfA + pdfB);
+}
+
+float PowerHeuristic(float pdfA, float pdfB)
+{
+    return (pdfA * pdfA) / ((pdfA * pdfA) + (pdfB * pdfB));
+}
+
 void IntersectRayAABB(vec3 rayOrigin, vec3 rayDirection, AABB aabb, out vec3 hitPointNear, out vec3 hitPointFar) 
 {
     vec3 tMin = (aabb.Min - rayOrigin) / rayDirection;

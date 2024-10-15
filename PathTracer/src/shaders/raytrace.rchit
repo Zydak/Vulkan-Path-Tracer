@@ -225,7 +225,7 @@ void main()
     if (canHit)
     {
         rayQueryEXT query;
-		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.0001f, dirToLight, 10000.0f);
+		rayQueryInitializeEXT(query, uTopLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, worldPos, 0.01f, dirToLight, 10000.0f);
 		rayQueryProceedEXT(query);
 		if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
 		{
@@ -251,17 +251,16 @@ void main()
     
                 float volumeWidth = length(hitPosFar - hitPosNear);
     
-                volumeAbsorption *= exp(-volume.ScatteringCoefficient * volumeWidth) * volume.Color;
+                volumeAbsorption *= exp(-volume.ScatteringCoefficient * (1.0f - volume.Color) * volumeWidth);
             }
     
             float PDF = 0.0f;
             vec3 BSDF = vec3(0.0f);
             EvaluateBSDF(material, surface, dirToLight, -gl_WorldRayDirectionEXT, PDF, BSDF);
-    
-            const float misWeight = envColor.w / (envColor.w + (1.0f / PDF));
-            const vec3 w = (envColor.xyz / envColor.w) * misWeight;
-    
-            payload.HitValue += w * BSDF * volumeAbsorption;
+
+            float LightWeight = PowerHeuristic(envColor.w, PDF);
+
+            payload.HitValue += dot(surface.Normal, dirToLight) * envColor.rgb * BSDF * LightWeight / envColor.w * volumeAbsorption;
         }
     }
     

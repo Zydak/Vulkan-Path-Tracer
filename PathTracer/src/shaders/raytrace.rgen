@@ -280,6 +280,7 @@ void main()
                 {
                     float phase = EvaluateHenyeyGreenstein(finalG, payload.RayDirection, dirToLight);
     
+                    //hitValue += curWeight * phase * (envColor.xyz / envColor.w) * exp(-finalSigmaT * finalVolumeWidth) * BalanceHeuristic(envColor.w, phase);
                     hitValue += curWeight * phase * (envColor.xyz / envColor.w) * exp(-finalSigmaT * finalVolumeWidth);
                 }
 
@@ -290,6 +291,8 @@ void main()
             // scattering didn't occur, scatter on surface
             else
             {
+                payload.HitValue = vec3(0.0f);
+
                 traceRayEXT(
                     topLevelAS,        // acceleration structure
                     rayFlags,          // rayFlags

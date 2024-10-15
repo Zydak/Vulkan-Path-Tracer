@@ -31,7 +31,6 @@ void main()
 	{
 		color = vec3(0.0f); // The color in volumes is already accounted for with importance sampling
 	}
-		color = texture(uEnvMap, uv).xyz;
 #else
 	if (payload.Depth == 0 || payload.LastEvent == LAST_EVENT_VOLUME)
 	{
@@ -46,7 +45,7 @@ void main()
 	if (payload.Depth == 0)
 		payload.MissedAllGeometry = true;
 
-    payload.HitValue = color;
+    payload.HitValue += color;
 	payload.Depth = DEPTH_INFINITE;
 	payload.SurfaceAlbedo = color;
 	payload.SurfaceNormal = vec3(0.0f);

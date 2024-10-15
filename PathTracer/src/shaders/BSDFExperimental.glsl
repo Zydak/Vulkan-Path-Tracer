@@ -173,8 +173,6 @@ bool SampleBSDF(inout uint seed, inout BSDFSampleData data, in Material mat, in 
 		vec3 F = mix(mat.Color.xyz, vec3(1.0f), SchlickWeight(dot(V, H)));
 		data.BSDF = EvalReflection(mat, data.RayDir, V, H, F, data.PDF);
 	
-		mat.Anisotropy = 0.0f;
-
 		// Lookup table for energy compensation
 		float layer = ((mat.Anisotropy + 1.0f) / 2.0f) * 32.0f;
 		float energyCompensation = texture(uReflectionEnergyLookupTexture, vec3(V.z, mat.Roughness, layer)).r;
@@ -332,10 +330,10 @@ void EvaluateBSDF(in Material mat, in Surface surface, in vec3 Light, in vec3 Vi
 		// Dielectric
 		vec3 dielectricReflection = EvalReflection(mat, L, V, H, vec3(1.0f), tempPdf);
 		dielectricReflection = (1.0f + F * vec3(energyCompensation)) * dielectricReflection;
-
+		
 		BSDF += dielectricReflection * dieletricProbability;
 		PDF += tempPdf * dieletricProbability;
-
+		
 		// Glass
 		BSDF += dielectricReflection * glassProbability;
 		PDF += tempPdf * glassProbability;

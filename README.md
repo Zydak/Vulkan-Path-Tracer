@@ -1,8 +1,6 @@
 # Vulkan-Path-Tracer
 
-Physically based path tracer made from scratch in Vulkan using my framework [Vulture](https://github.com/Zydak/Vulture). For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses a simple energy conserving BSDF (more on that in [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md)) with Diffuse, Dielectric, Metallic and Glass lobes. Renders that you create can be easily saved as .png images. It also features a lot of post processing effects like bloom, tonemapping, and many more. It also uses Optix Denoiser for denoising.
-
-For more info on the project visit [Technical Overview](https://github.com/Zydak/Vulkan-Path-Tracer/blob/main/TechnicalOverview.md).
+Physically based path tracer made in Vulkan. For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be easily saved as .png images. It also features post processing effects like bloom, tonemapping. It also uses Optix Denoiser for denoising renders.
 
 # Running
 ## Windows Only
@@ -32,8 +30,6 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 --------
 ![Volume](./Gallery/NonUniform.png)
 --------
-![Monster](./Gallery/MonsterRough.png)
---------
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
 --------
@@ -53,7 +49,7 @@ For more info on the project visit [Technical Overview](https://github.com/Zydak
 - Anisotropy factor on metallic surface with roughness 0.5 ranging from 0 to 1.
 ![Anisotropy-](./Gallery/materialShowcase/Anisotropy-.png)
 
-- Index of refraction (IOR) factor ranging from 0 to 1. Changes the strength of specular highlights on dielectric surfaces.
+- Index of refraction (IOR) factor ranging from 1 to 3. Changes the strength of specular highlights on dielectric surfaces.
 ![specular](./Gallery/materialShowcase/specular.png)
 
 - Roughness factor on dielectric surface ranging from 0 to 1.
