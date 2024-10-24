@@ -28,6 +28,7 @@ globalIncludes =
     "%{wks.location}/Vulture/lib/Optix/include/",
     "%{wks.location}/Vulture/lib/lodepng/",
     "%{wks.location}/Vulture/lib/imNodeFlow/include/",
+    "%{wks.location}/Vulture/lib/slang/include/",
 }
 	
 include "Vulture"

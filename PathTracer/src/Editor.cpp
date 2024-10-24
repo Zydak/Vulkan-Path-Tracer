@@ -231,7 +231,7 @@ void Editor::Render()
 void Editor::CreateQuadPipeline()
 {
 	Vulture::Shader::CreateInfo vertexShaderInfo{};
-	vertexShaderInfo.Filepath = "src/shaders/Quad.vert";
+	vertexShaderInfo.Filepath = "src/shaders/helloWorld.slang";
 	vertexShaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
 	Vulture::Shader vertexShader(vertexShaderInfo);
 

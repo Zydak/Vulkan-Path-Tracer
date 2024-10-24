@@ -112,7 +112,7 @@ public:
 		float EnvAltitude = 0.0f;
 
 		std::string HitShaderPath = "src/shaders/raytrace.rchit";
-		std::string MissShaderPath = "src/shaders/raytrace.rmiss";
+		std::string MissShaderPath = "src/shaders/rtmiss.slang";
 		std::string RayGenShaderPath = "src/shaders/raytrace.rgen";
 	};
 

@@ -328,7 +328,7 @@ void PathTracer::CreateRayTracingPipeline()
 			return;
 
 		Vulture::Shader msShader;
-		if (!msShader.Init({ pathTracingSettings->Settings.MissShaderPath, VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
+		if (!msShader.Init({ "src/shaders/rtmiss.slang", VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
 			return;
 
 		info.RayGenShaders.push_back(&rgShader);
