@@ -2,7 +2,7 @@ import rtcommon;
 
 struct Input
 {
-    [[vk::location(0)]] HitPayload Payload;
+    [[vk::location(0)]] RtPayload Payload;
 }
 
 [[vk::binding(1, 1)]] Sampler2D uEnvironmentMap;
@@ -31,23 +31,9 @@ void main(inout Input input)
 
     int2 uv = int2(texCoords * float2(textureSize));
 
-#ifdef SHOW_SKYBOX
     color = uEnvironmentMap.Load( { uv.x, uv.y, 0 }).rgb;
-#else
-    if (input.Payload.Depth == 0)
-    {
-        color = float3(0.0f);
-    }
-    else
-    {
-        color = uEnvironmentMap.Load( { uv.x, uv.y, 0} ).rgb;
-    }
-#endif
 
-    if (input.Payload.Depth == 0)
-        input.Payload.MissedAllGeometry = true;
-
-    input.Payload.HitValue += color;
+    input.Payload.HitValue = color;
     input.Payload.Depth = DEPTH_INFINITE;
     input.Payload.SurfaceAlbedo = color;
     input.Payload.SurfaceNormal = float3(0.0f);

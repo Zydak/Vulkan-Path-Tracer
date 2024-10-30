@@ -320,11 +320,11 @@ void PathTracer::CreateRayTracingPipeline()
 			defines.push_back({ "FURNACE_TEST_MODE" });
 
 		Vulture::Shader rgShader;
-		if (!rgShader.Init({ pathTracingSettings->Settings.RayGenShaderPath, VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
+		if (!rgShader.Init({ "src/shaders/rgen.slang", VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
 			return;
 
 		Vulture::Shader htShader;
-		if (!htShader.Init({ pathTracingSettings->Settings.HitShaderPath, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
+		if (!htShader.Init({ "src/shaders/rchit.slang", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
 			return;
 
 		Vulture::Shader msShader;

@@ -80,12 +80,14 @@ void main()
 
     // Note that for normals gl_WorldToObjectEXT is used instead of gl_ObjectToWorldEXT. That's because normals have to 
     // be transformed using inverse of the transpose
-    vec3 worldNrm = vec3(normalize(cross(v1.Position.xyz - v0.Position.xyz, v2.Position.xyz - v0.Position.xyz) * gl_WorldToObjectEXT));
+    vec3 geometryNormal = vec3(normalize(cross(v1.Position.xyz - v0.Position.xyz, v2.Position.xyz - v0.Position.xyz) * gl_WorldToObjectEXT));
+    vec3 worldNrm = vec3(normalize(nrm) * gl_WorldToObjectEXT);
+    worldNrm = geometryNormal;
 
     const vec3 V = -gl_WorldRayDirectionEXT;
 
     Surface surface;
-    surface.GeoNormal = worldNrm;
+    surface.GeoNormal = geometryNormal;
     if (dot(worldNrm, V) < 0)
     {
         worldNrm = -worldNrm;
