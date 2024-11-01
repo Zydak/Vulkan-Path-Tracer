@@ -1,12 +1,13 @@
 module Ray;
 
 import rtcommon;
+import Payload;
 
 public struct Ray
 {
     float3 m_Origin = float3(0.0f);
     float3 m_Direction = float3(0.0f);
-    float3 m_Weight = 0.0f;
+    float3 m_Weight = 1.0f;
 
     public __init(float3 position, float3 direction)
     {
@@ -25,15 +26,20 @@ public struct Ray
         return rayDesc;
     }
 
-    public void Trace(RaytracingAccelerationStructure topLevelAS, uint flags, inout RtPayload payload)
+    [mutating]
+    public void Trace(RaytracingAccelerationStructure topLevelAS, uint flags, inout RTPayload payload)
     {
         payload.HitValue = float3(0.0f);
-        payload.Weight = float3(0.0f);
+        payload.Weight = float3(1.0f);
         payload.RayDirection = m_Direction;
 
         RayDesc rayDesc = GetRayDesc();
 
         TraceRay(topLevelAS, flags, 0xff, 0, 0, 0, rayDesc, payload);
+
+        m_Direction = payload.RayDirection;
+        m_Origin = payload.RayOrigin;
+        m_Weight *= payload.Weight;
     }
 
     public const inline float3 GetOrigin() { return m_Origin; }

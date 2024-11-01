@@ -1,8 +1,9 @@
 import rtcommon;
+import Payload;
 
 struct Input
 {
-    [[vk::location(0)]] RtPayload Payload;
+    [[vk::location(0)]] RTPayload Payload;
 }
 
 [[vk::binding(1, 1)]] Sampler2D uEnvironmentMap;
@@ -29,9 +30,7 @@ void main(inout Input input)
 
     float2 texCoords = SphericalToTexCoords(sphericalCoords.x, sphericalCoords.y);
 
-    int2 uv = int2(texCoords * float2(textureSize));
-
-    color = uEnvironmentMap.Load( { uv.x, uv.y, 0 }).rgb;
+    color = uEnvironmentMap.Sample( { texCoords.x, texCoords.y }, {0, 0}).rgb;
 
     input.Payload.HitValue = color;
     input.Payload.Depth = DEPTH_INFINITE;

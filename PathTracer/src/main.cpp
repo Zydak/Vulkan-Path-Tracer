@@ -80,11 +80,17 @@ Vulture::Application* Vulture::CreateApplication()
 	robustFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
 	robustFeatures.nullDescriptor = true;
 
+	VkPhysicalDeviceVulkan11Features vulkan11Features = {};
+	vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+	vulkan11Features.variablePointers = true;
+	vulkan11Features.variablePointersStorageBuffer = true;
+
 	// ------------------------
 	// Chain feature structures
 	// ------------------------
 
-	features.pNext = &robustFeatures;
+	features.pNext = &vulkan11Features;
+	vulkan11Features.pNext = &robustFeatures;
 	robustFeatures.pNext = &indexingFeatures;
 	indexingFeatures.pNext = &memoryPriorityFeatures;
 	memoryPriorityFeatures.pNext = &accelerationStructureFeatures;
@@ -120,6 +126,9 @@ Vulture::Application* Vulture::CreateApplication()
 	VL_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
 	VL_CHECK(rayQueryFeatures.rayQuery, "Ray query not supported!");
 	VL_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
+	VL_CHECK(robustFeatures.nullDescriptor, "nullDescriptor not supported!");
+	VL_CHECK(vulkan11Features.variablePointers, "variablePointers not supported!");
+	VL_CHECK(vulkan11Features.variablePointersStorageBuffer, "variablePointersStorageBuffer not supported!");
 
 	return app;
 }

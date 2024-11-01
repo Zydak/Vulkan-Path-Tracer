@@ -40,20 +40,6 @@ public enum LastEvent
     Surface
 };
 
-public struct RtPayload
-{
-    public float3 HitValue;
-    public float3 RayOrigin;
-    public float3 RayDirection;
-    public float3 Weight;
-
-    public float3 SurfaceAlbedo;
-    public float3 SurfaceNormal;
-
-    public uint Seed;
-    public uint Depth;
-};
-
 public struct GlobalUniform
 {
     public matrix<float, 4, 4> ViewProjectionMat;

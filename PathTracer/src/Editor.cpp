@@ -780,6 +780,10 @@ void Editor::ImGuiSceneEditor()
 		if (ImGui::SliderFloat("Specular Tint", (float*)&materialProps->SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
+		const float aspect = sqrt(1.0 - glm::sqrt(materialProps->Anisotropy) * 0.9);
+		materialProps->ax = glm::max(0.001f, materialProps->Roughness / aspect);
+		materialProps->ay = glm::max(0.001f, materialProps->Roughness * aspect);
+
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Density", (float*)&materialProps->MediumDensity, 0.0f, 2.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Anisotropy", (float*)&materialProps->MediumAnisotropy, -1.0f, 1.0f)) { valuesChanged = true; };

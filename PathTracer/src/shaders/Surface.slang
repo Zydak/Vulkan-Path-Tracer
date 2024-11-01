@@ -12,7 +12,7 @@ public struct Surface
     float3 m_Bitangent;
 
     [mutating]
-    public void Prepare(MeshAddress meshAddress, float2 barycentrics)
+    public void Prepare(MeshAddress meshAddress, float2 barycentrics, float anisotropyRotation)
     {
         const float3 barycentricCoords = float3(1.0f - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
 
@@ -37,7 +37,9 @@ public struct Surface
         const float3 pos = pos1 * barycentricCoords.x + pos2 * barycentricCoords.y + pos3 * barycentricCoords.z;
         m_WorldPos = mul(ObjectToWorld3x4(), float4(pos, 1.0)).xyz;
 
-        float3 normal = normalize(cross(pos2 - pos1, pos3 - pos1));
+        float3 normal = v1.Normal.xyz * barycentricCoords.x + v2.Normal.xyz * barycentricCoords.y + v3.Normal.xyz * barycentricCoords.z;
+        //float3 normal = normalize(cross(pos2 - pos1, pos3 - pos1));
+
         normal = normalize(mul(normal, WorldToObject()).xyz);
 
         float3 V = -WorldRayDirection();
@@ -50,6 +52,20 @@ public struct Surface
         m_Normal = normal;
 
         CalculateTangents(m_Normal, m_Tangent, m_Bitangent);
+
+        float rotation = anisotropyRotation / 360.0f * M_PI;
+        m_Tangent = m_Tangent * cos(rotation) + cross(m_Normal, m_Tangent) * sin(rotation) + m_Normal * dot(m_Normal, m_Tangent) * (1.0f - cos(rotation));
+        m_Bitangent = cross(m_Tangent, m_Normal);
+    }
+
+    public float3 TangentToWorld(float3 V)
+    {
+        return normalize(V.x * m_Tangent + V.y * m_Bitangent + V.z * m_Normal);
+    }
+
+    public float3 WorldToTangent(float3 V)
+    {
+        return normalize(float3(dot(V, m_Tangent), dot(V, m_Bitangent), dot(V, m_Normal)));
     }
 
     public inline float3 GetNormal() { return m_Normal; }
