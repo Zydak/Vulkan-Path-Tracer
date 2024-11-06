@@ -76,9 +76,7 @@ void Application::Init()
 	Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
 	modelAsset->CreateEntities(m_Scene);
 
-	//Vulture::Entity entity = m_Scene.CreateEntity();
-	//entity.AddComponent<ModelComponent>("assets/cornellBox.gltf").ModelHandle.WaitToLoad();
-	//entity.AddComponent<Vulture::TransformComponent>(Vulture::Transform(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 180.0f), glm::vec3(0.5f)));
+	modelAssetHandle.Unload();
 
 	Vulture::Serializer::SerializeScene<
 		PerspectiveCameraComponent,
@@ -90,6 +88,20 @@ void Application::Init()
 		Vulture::NameComponent,
 		Vulture::TransformComponent
 	>(m_Scene, "assets/scenes/CornellBox.ptscene");
+
+	// Unload everything
+	{
+		auto view = m_Scene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+		for (auto& entity : view)
+		{
+			auto [meshComp, materialComp] = m_Scene->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+
+			meshComp.AssetHandle.Unload();
+
+			if (materialComp.AssetHandle.DoesHandleExist())
+				materialComp.AssetHandle.Unload();
+		}
+	}
 
 	m_Scene->Destroy();
 
