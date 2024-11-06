@@ -1,5 +1,5 @@
 #pragma once
-#include "Vulture.h"
+#include "VulkanHelper.h"
 
 struct GlobalUbo
 {
@@ -26,7 +26,7 @@ struct PushConstantRay
 struct PushConstantGBuffer
 {
 	glm::mat4 Model;
-	Vulture::MaterialProperties Material;
+	VulkanHelper::MaterialProperties Material;
 };
 
 struct PushConstantDOF
@@ -57,20 +57,20 @@ public:
 	PathTracer& operator=(const PathTracer& other) = delete;
 	PathTracer& operator=(PathTracer&& other) noexcept = delete;
 
-	inline Vulture::Image* GetOutputImage() { return &m_PathTracingImage; };
-	inline Vulture::Image* GetGBufferAlbedo() { return &m_GBufferAlbedo; };
-	inline Vulture::Image* GetGBufferNormal() { return &m_GBufferNormal; };
+	inline VulkanHelper::Image* GetOutputImage() { return &m_PathTracingImage; };
+	inline VulkanHelper::Image* GetGBufferAlbedo() { return &m_GBufferAlbedo; };
+	inline VulkanHelper::Image* GetGBufferNormal() { return &m_GBufferNormal; };
 
 	void Resize(VkExtent2D newSize);
-	void SetScene(Vulture::Scene* scene);
+	void SetScene(VulkanHelper::Scene* scene);
 	bool Render();
 	void UpdateResources();
 
 	void ResetFrameAccumulation();
 	void RecreateRayTracingPipeline();
 
-	inline Vulture::Buffer* GetMaterialsBuffer() { return &m_RayTracingMaterialsBuffer; };
-	inline Vulture::Buffer* GetVolumesBuffer() { return &m_VolumesBuffer; };
+	inline VulkanHelper::Buffer* GetMaterialsBuffer() { return &m_RayTracingMaterialsBuffer; };
+	inline VulkanHelper::Buffer* GetVolumesBuffer() { return &m_VolumesBuffer; };
 
 	inline uint64_t GetSamplesAccumulated() { return m_CurrentSamplesPerPixel; };
 	inline uint64_t GetFrame() { return m_PushContantRayTrace.GetDataPtr()->frame; };
@@ -117,50 +117,50 @@ public:
 	};
 
 private:
-	Vulture::AccelerationStructure m_GeometryAS;
-	Vulture::AccelerationStructure m_VolumesAS;
-	Vulture::Scene* m_CurrentSceneRendered;
+	VulkanHelper::AccelerationStructure m_GeometryAS;
+	VulkanHelper::AccelerationStructure m_VolumesAS;
+	VulkanHelper::Scene* m_CurrentSceneRendered;
 	uint64_t m_CurrentSamplesPerPixel = 0;
 
 	// Output Image
-	Vulture::Image m_PathTracingImage;
+	VulkanHelper::Image m_PathTracingImage;
 	VkExtent2D m_ViewportSize = { 900, 900 };
 
 	// GBuffer
-	Vulture::Image m_GBufferAlbedo;
-	Vulture::Image m_GBufferNormal;
+	VulkanHelper::Image m_GBufferAlbedo;
+	VulkanHelper::Image m_GBufferNormal;
 
 	// Descriptor buffers
-	Vulture::Buffer m_GlobalSetBuffer;
-	Vulture::Buffer m_RayTracingSetBuffer;
-	Vulture::Buffer m_RayTracingMaterialsBuffer;
-	Vulture::Buffer m_RayTracingMeshesBuffer;
-	Vulture::Buffer m_RayTracingDoFBuffer;
-	Vulture::Buffer m_VolumesBuffer;
+	VulkanHelper::Buffer m_GlobalSetBuffer;
+	VulkanHelper::Buffer m_RayTracingSetBuffer;
+	VulkanHelper::Buffer m_RayTracingMaterialsBuffer;
+	VulkanHelper::Buffer m_RayTracingMeshesBuffer;
+	VulkanHelper::Buffer m_RayTracingDoFBuffer;
+	VulkanHelper::Buffer m_VolumesBuffer;
 
 	// Descriptors
-	Vulture::DescriptorSet m_RayTracingDescriptorSet;
-	Vulture::DescriptorSet m_GlobalDescriptorSets;
+	VulkanHelper::DescriptorSet m_RayTracingDescriptorSet;
+	VulkanHelper::DescriptorSet m_GlobalDescriptorSets;
 	
 	// Ray Tracing Pipeline
-	Vulture::Pipeline m_RtPipeline;
+	VulkanHelper::Pipeline m_RtPipeline;
 	bool m_RecreateRTPipeline = false;
 
 	// Shader Binding Table
-	Vulture::SBT m_SBT;
+	VulkanHelper::SBT m_SBT;
 
 	// Push Contants
-	Vulture::PushConstant<PushConstantGBuffer> m_PushContantGBuffer;
-	Vulture::PushConstant<PushConstantRay> m_PushContantRayTrace;
+	VulkanHelper::PushConstant<PushConstantGBuffer> m_PushContantGBuffer;
+	VulkanHelper::PushConstant<PushConstantRay> m_PushContantRayTrace;
 
 	// DOF
-	Vulture::Effect<PushConstantDOF> m_DOfVisualizer;
+	VulkanHelper::Effect<PushConstantDOF> m_DOfVisualizer;
 
 	// Lookup Table
 	std::vector<std::vector<float>> m_ReflectionEnergyLookupTable;
 	std::vector<std::vector<float>> m_RefractionEtaLessThan1EnergyLookupTable;
 	std::vector<std::vector<float>> m_RefractionEtaGreaterThan1EnergyLookupTable;
-	Vulture::Image m_ReflectionLookupTexture;
-	Vulture::Image m_RefractionLookupTextureEtaLessThan1;
-	Vulture::Image m_RefractionLookupTextureEtaGreaterThan1;
+	VulkanHelper::Image m_ReflectionLookupTexture;
+	VulkanHelper::Image m_RefractionLookupTextureEtaLessThan1;
+	VulkanHelper::Image m_RefractionLookupTextureEtaGreaterThan1;
 };

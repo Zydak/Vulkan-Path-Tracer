@@ -1,12 +1,12 @@
 #pragma once
 #include "pch.h"
-#include <Vulture.h>
+#include <VulkanHelper.h>
 #include "Editor.h"
 
-class Application : public Vulture::Application
+class Application : public VulkanHelper::Application
 {
 public:
-	Application(Vulture::ApplicationInfo appInfo);
+	Application(VulkanHelper::ApplicationInfo appInfo);
 	~Application();
 
 	void Destroy() override;
@@ -18,6 +18,6 @@ public:
 private:
 	void Init();
 
-	Vulture::Scene* m_Scene;
-	Vulture::Scope<Editor> m_Editor;
+	VulkanHelper::Scene* m_Scene;
+	VulkanHelper::Scope<Editor> m_Editor;
 };

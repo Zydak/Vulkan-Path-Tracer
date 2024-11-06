@@ -21,7 +21,7 @@ project "PathTracer"
 
 	links
 	{
-		"Vulture",
+		"Vulkan-Helper",
 	}
 
 	defines 

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Vulture.h"
+#include "VulkanHelper.h"
 
 class PerspectiveCameraComponent
 {
 public:
-	Vulture::PerspectiveCamera Camera{};
+	VulkanHelper::PerspectiveCamera Camera{};
 	bool MainCamera = false;
 
 	PerspectiveCameraComponent() = default;
@@ -18,17 +18,17 @@ public:
 
 	std::vector<char> Serialize()
 	{
-		return Vulture::Bytes::ToBytes(this, sizeof(PerspectiveCameraComponent));
+		return VulkanHelper::Bytes::ToBytes(this, sizeof(PerspectiveCameraComponent));
 	}
 
 	void Deserialize(const std::vector<char>& bytes)
 	{
-		PerspectiveCameraComponent comp = Vulture::Bytes::FromBytes<PerspectiveCameraComponent>(bytes);
-		memcpy(&Camera, &comp.Camera, sizeof(Vulture::PerspectiveCamera));
+		PerspectiveCameraComponent comp = VulkanHelper::Bytes::FromBytes<PerspectiveCameraComponent>(bytes);
+		memcpy(&Camera, &comp.Camera, sizeof(VulkanHelper::PerspectiveCamera));
 		memcpy(&MainCamera, &comp.MainCamera, sizeof(bool));
 	}
 
-	static PerspectiveCameraComponent* GetMainCamera(Vulture::Scene* scene)
+	static PerspectiveCameraComponent* GetMainCamera(VulkanHelper::Scene* scene)
 	{
 		auto cameraView = scene->GetRegistry().view<PerspectiveCameraComponent>();
 		PerspectiveCameraComponent* camComp = nullptr;
@@ -45,7 +45,7 @@ public:
 		return camComp;
 	}
 
-	static Vulture::Entity GetMainCameraEntity(Vulture::Scene* scene)
+	static VulkanHelper::Entity GetMainCameraEntity(VulkanHelper::Scene* scene)
 	{
 		auto cameraView = scene->GetRegistry().view<PerspectiveCameraComponent>();
 		for (auto& entity : cameraView)
@@ -65,7 +65,7 @@ public:
 class OrthographicCameraComponent
 {
 public:
-	Vulture::OrthographicCamera Camera{};
+	VulkanHelper::OrthographicCamera Camera{};
 	bool MainCamera = false;
 
 	OrthographicCameraComponent() = default;
@@ -78,17 +78,17 @@ public:
 
 	std::vector<char> Serialize()
 	{
-		return Vulture::Bytes::ToBytes(this, sizeof(OrthographicCameraComponent));
+		return VulkanHelper::Bytes::ToBytes(this, sizeof(OrthographicCameraComponent));
 	}
 
 	void Deserialize(const std::vector<char>& bytes)
 	{
-		OrthographicCameraComponent comp = Vulture::Bytes::FromBytes<OrthographicCameraComponent>(bytes);
-		memcpy(&Camera, &comp.Camera, sizeof(Vulture::OrthographicCamera));
+		OrthographicCameraComponent comp = VulkanHelper::Bytes::FromBytes<OrthographicCameraComponent>(bytes);
+		memcpy(&Camera, &comp.Camera, sizeof(VulkanHelper::OrthographicCamera));
 		memcpy(&MainCamera, &comp.MainCamera, sizeof(bool));
 	}
 
-	static OrthographicCameraComponent* GetMainCamera(Vulture::Scene* scene)
+	static OrthographicCameraComponent* GetMainCamera(VulkanHelper::Scene* scene)
 	{
 		auto cameraView = scene->GetRegistry().view<OrthographicCameraComponent>();
 		OrthographicCameraComponent* camComp = nullptr;
@@ -105,7 +105,7 @@ public:
 		return camComp;
 	}
 
-	static Vulture::Entity GetMainCameraEntity(Vulture::Scene* scene)
+	static VulkanHelper::Entity GetMainCameraEntity(VulkanHelper::Scene* scene)
 	{
 		auto cameraView = scene->GetRegistry().view<OrthographicCameraComponent>();
 		for (auto& entity : cameraView)
@@ -128,7 +128,7 @@ public:
 	SkyboxComponent() = default;
 	SkyboxComponent(const std::string& filepath)
 	{
-		ImageHandle = Vulture::AssetManager::LoadAsset(filepath);
+		ImageHandle = VulkanHelper::AssetManager::LoadAsset(filepath);
 	}
 
 	SkyboxComponent(SkyboxComponent&& other) noexcept
@@ -159,10 +159,10 @@ public:
 			path.push_back(bytes[i]);
 		}
 
-		ImageHandle = Vulture::AssetManager::LoadAsset(path);
+		ImageHandle = VulkanHelper::AssetManager::LoadAsset(path);
 	}
 
-	Vulture::AssetHandle ImageHandle;
+	VulkanHelper::AssetHandle ImageHandle;
 };
 
 class PathTracingSettingsComponent 

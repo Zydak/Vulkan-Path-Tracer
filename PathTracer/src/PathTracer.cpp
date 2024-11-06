@@ -12,7 +12,7 @@ void PathTracer::Init(VkExtent2D size)
 
 	BuildEnergyLookupTable();
 
-	Vulture::Image::CreateInfo info{};
+	VulkanHelper::Image::CreateInfo info{};
 	info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	info.Usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	info.Width = 32;
@@ -25,7 +25,7 @@ void PathTracer::Init(VkExtent2D size)
 	m_RefractionLookupTextureEtaLessThan1.Init(info);
 
 	VkCommandBuffer cmd;
-	Vulture::Device::BeginSingleTimeCommands(cmd, Vulture::Device::GetGraphicsCommandPool());
+	VulkanHelper::Device::BeginSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsCommandPool());
 
 	for (int i = 0; i < 32; i++)
 	{
@@ -42,9 +42,9 @@ void PathTracer::Init(VkExtent2D size)
 		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable[i].data(), cmd, i);
 	}
 
-	Vulture::Device::EndSingleTimeCommands(cmd, Vulture::Device::GetGraphicsQueue(), Vulture::Device::GetGraphicsCommandPool());
+	VulkanHelper::Device::EndSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsQueue(), VulkanHelper::Device::GetGraphicsCommandPool());
 
-	Vulture::Buffer::CreateInfo bufferInfo{};
+	VulkanHelper::Buffer::CreateInfo bufferInfo{};
 	bufferInfo.InstanceSize = 100 * sizeof(VolumeComponent);
 	bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	bufferInfo.UsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -54,14 +54,14 @@ void PathTracer::Init(VkExtent2D size)
 void PathTracer::Resize(VkExtent2D newSize)
 {
 	m_ViewportSize = newSize;
-	Vulture::Device::WaitIdle();
+	VulkanHelper::Device::WaitIdle();
 	ResetFrameAccumulation();
 
 	CreateFramebuffers();
 
 	// Update Ray tracing set
 	VkDescriptorImageInfo info = { 
-		Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), 
+		VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), 
 		m_PathTracingImage.GetImageView(), 
 		VK_IMAGE_LAYOUT_GENERAL 
 	};
@@ -74,7 +74,7 @@ void PathTracer::Resize(VkExtent2D newSize)
 	UpdateDescriptorSetsData();
 }
 
-void PathTracer::SetScene(Vulture::Scene* scene)
+void PathTracer::SetScene(VulkanHelper::Scene* scene)
 {
 	m_CurrentSceneRendered = scene;
 
@@ -103,7 +103,7 @@ void PathTracer::SetScene(Vulture::Scene* scene)
 	VL_CORE_ASSERT(skybox != nullptr, "There is no skybox in the scene!");
 
 	VkDescriptorImageInfo info = { 
-		Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+		VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 		skybox->ImageHandle.GetImage()->GetImageView(),
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL 
 	};
@@ -152,11 +152,11 @@ bool PathTracer::Render()
 		pathTracingSettings = &entity.AddComponent<PathTracingSettingsComponent>();
 	}
 
-	Vulture::Device::InsertLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Inserted label", { 0.0f, 1.0f, 0.0f, 1.0f }); // test
+	VulkanHelper::Device::InsertLabel(VulkanHelper::Renderer::GetCurrentCommandBuffer(), "Inserted label", { 0.0f, 1.0f, 0.0f, 1.0f }); // test
 
 	if (m_PathTracingImage.GetLayout() != VK_IMAGE_LAYOUT_GENERAL)
 	{
-		m_PathTracingImage.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
+		m_PathTracingImage.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 	}
 
 	int volumesCount = 0;
@@ -201,38 +201,38 @@ bool PathTracer::Render()
 		m_CurrentSamplesPerPixel += pathTracingSettings->Settings.SamplesPerFrame;
 	}
 
-	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
-	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, Vulture::Renderer::GetCurrentCommandBuffer());
+	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
+	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
-	Vulture::Device::BeginLabel(Vulture::Renderer::GetCurrentCommandBuffer(), "Ray Trace Pass", { 1.0f, 0.0f, 0.0f, 1.0f });
+	VulkanHelper::Device::BeginLabel(VulkanHelper::Renderer::GetCurrentCommandBuffer(), "Ray Trace Pass", { 1.0f, 0.0f, 0.0f, 1.0f });
 
-	m_RtPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
+	m_RtPipeline.Bind(VulkanHelper::Renderer::GetCurrentCommandBuffer());
 	m_RayTracingDescriptorSet.Bind(
 		0,
 		m_RtPipeline.GetPipelineLayout(),
 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-		Vulture::Renderer::GetCurrentCommandBuffer()
+		VulkanHelper::Renderer::GetCurrentCommandBuffer()
 	);
 	m_GlobalDescriptorSets.Bind(
 		1,
 		m_RtPipeline.GetPipelineLayout(),
 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-		Vulture::Renderer::GetCurrentCommandBuffer()
+		VulkanHelper::Renderer::GetCurrentCommandBuffer()
 	);
 
-	m_PushContantRayTrace.Push(m_RtPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
+	m_PushContantRayTrace.Push(m_RtPipeline.GetPipelineLayout(), VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
-	Vulture::Renderer::RayTrace(Vulture::Renderer::GetCurrentCommandBuffer(), &m_SBT, m_PathTracingImage.GetImageSize());
+	VulkanHelper::Renderer::RayTrace(VulkanHelper::Renderer::GetCurrentCommandBuffer(), &m_SBT, m_PathTracingImage.GetImageSize());
 	m_PushContantRayTrace.GetDataPtr()->frame++;
 
-	Vulture::Device::EndLabel(Vulture::Renderer::GetCurrentCommandBuffer());
+	VulkanHelper::Device::EndLabel(VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
 	if (pathTracingSettings->Settings.AutoDoF && m_PushContantRayTrace.GetDataPtr()->frame > 1)
 	{
 		memcpy(&pathTracingSettings->Settings.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
 	}
 
-	Vulture::PerspectiveCamera* cam = &PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera;
+	VulkanHelper::PerspectiveCamera* cam = &PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera;
 
 	if (pathTracingSettings->Settings.VisualizedDOF)
 	{
@@ -241,11 +241,11 @@ bool PathTracer::Render()
 		data->Far = cam->NearFar.y;
 		data->FocalPoint = pathTracingSettings->Settings.FocalLength;
 		data->VPInverse = glm::inverse(cam->GetProjView());
-		m_DOfVisualizer.Run(Vulture::Renderer::GetCurrentCommandBuffer());
+		m_DOfVisualizer.Run(VulkanHelper::Renderer::GetCurrentCommandBuffer());
 	}
 
-	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
-	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, Vulture::Renderer::GetCurrentCommandBuffer());
+	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
+	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
 	return true;
 }
@@ -272,17 +272,17 @@ void PathTracer::RecreateRayTracingPipeline()
 
 void PathTracer::CreateDescriptorSets()
 {
-	Vulture::Buffer::CreateInfo bufferInfo{};
+	VulkanHelper::Buffer::CreateInfo bufferInfo{};
 	bufferInfo.InstanceSize = sizeof(GlobalUbo);
 	bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	bufferInfo.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	m_GlobalSetBuffer.Init(bufferInfo);
 
-	Vulture::DescriptorSetLayout::Binding bin{ 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
-	Vulture::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
-	Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+	VulkanHelper::DescriptorSetLayout::Binding bin{ 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+	VulkanHelper::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+	VulkanHelper::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 
-	m_GlobalDescriptorSets.Init(&Vulture::Renderer::GetDescriptorPool(), { bin, bin1, bin2 }, &Vulture::Renderer::GetLinearSampler());
+	m_GlobalDescriptorSets.Init(&VulkanHelper::Renderer::GetDescriptorPool(), { bin, bin1, bin2 }, &VulkanHelper::Renderer::GetLinearSampler());
 	m_GlobalDescriptorSets.AddBuffer(0, m_GlobalSetBuffer.DescriptorInfo());
 
 	m_GlobalDescriptorSets.Build();
@@ -302,15 +302,15 @@ void PathTracer::CreateRayTracingPipeline()
 
 	ResetFrameAccumulation();
 	{
-		Vulture::PushConstant<PushConstantRay>::CreateInfo pushInfo{};
+		VulkanHelper::PushConstant<PushConstantRay>::CreateInfo pushInfo{};
 		pushInfo.Stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
 
 		m_PushContantRayTrace.Init(pushInfo);
 
-		Vulture::Pipeline::RayTracingCreateInfo info{};
+		VulkanHelper::Pipeline::RayTracingCreateInfo info{};
 		info.PushConstants = m_PushContantRayTrace.GetRangePtr();
 
-		std::vector<Vulture::Shader::Define> defines;
+		std::vector<VulkanHelper::Shader::Define> defines;
 		defines.reserve(3);
 		if (pathTracingSettings->Settings.UseCausticsSuppresion)
 			defines.push_back({ "USE_CAUSTICS_SUPPRESION" });
@@ -319,15 +319,15 @@ void PathTracer::CreateRayTracingPipeline()
 		if (pathTracingSettings->Settings.FurnaceTestMode)
 			defines.push_back({ "FURNACE_TEST_MODE" });
 
-		Vulture::Shader rgShader;
+		VulkanHelper::Shader rgShader;
 		if (!rgShader.Init({ "src/shaders/rgen.slang", VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
 			return;
 
-		Vulture::Shader htShader;
+		VulkanHelper::Shader htShader;
 		if (!htShader.Init({ "src/shaders/rchit.slang", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
 			return;
 
-		Vulture::Shader msShader;
+		VulkanHelper::Shader msShader;
 		if (!msShader.Init({ "src/shaders/rtmiss.slang", VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
 			return;
 
@@ -347,7 +347,7 @@ void PathTracer::CreateRayTracingPipeline()
 
 void PathTracer::CreateShaderBindingTable()
 {
-	Vulture::SBT::CreateInfo info{};
+	VulkanHelper::SBT::CreateInfo info{};
 	info.CallableCount = 0;
 	info.HitCount = 1;
 	info.MissCount = 1;
@@ -361,14 +361,14 @@ void PathTracer::CreateFramebuffers()
 {
 	// Path Tracing
 	{
-		Vulture::Image::CreateInfo info{};
+		VulkanHelper::Image::CreateInfo info{};
 		info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		info.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		info.Height = m_ViewportSize.height;
 		info.Width = m_ViewportSize.width;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		info.SamplerInfo = Vulture::SamplerInfo{};
+		info.SamplerInfo = VulkanHelper::SamplerInfo{};
 		info.DebugName = "Path Tracing Image";
 		m_PathTracingImage.Init(info);
 		m_PathTracingImage.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL);
@@ -376,14 +376,14 @@ void PathTracer::CreateFramebuffers()
 
 	// GBuffer
 	{
-		Vulture::Image::CreateInfo info{};
+		VulkanHelper::Image::CreateInfo info{};
 		info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		info.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
 		info.Height = m_ViewportSize.height;
 		info.Width = m_ViewportSize.width;
 		info.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		info.SamplerInfo = Vulture::SamplerInfo{};
+		info.SamplerInfo = VulkanHelper::SamplerInfo{};
 		info.DebugName = "GBufferAlbedo";
 		m_GBufferAlbedo.Init(info);
 		m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL);
@@ -396,7 +396,7 @@ void PathTracer::CreateFramebuffers()
 void PathTracer::CreateRayTracingDescriptorSets()
 {
 	{
-		Vulture::Buffer::CreateInfo bufferInfo{};
+		VulkanHelper::Buffer::CreateInfo bufferInfo{};
 		bufferInfo.InstanceSize = sizeof(MeshAdresses) * 50000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -404,15 +404,15 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	}
 
 	{
-		Vulture::Buffer::CreateInfo bufferInfo{};
-		bufferInfo.InstanceSize = sizeof(Vulture::MaterialProperties) * 50000; // TODO: dynamic amount of meshes
+		VulkanHelper::Buffer::CreateInfo bufferInfo{};
+		bufferInfo.InstanceSize = sizeof(VulkanHelper::MaterialProperties) * 50000; // TODO: dynamic amount of meshes
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		m_RayTracingMaterialsBuffer.Init(bufferInfo);
 	}
 
 	{
-		Vulture::Buffer::CreateInfo bufferInfo{};
+		VulkanHelper::Buffer::CreateInfo bufferInfo{};
 		bufferInfo.InstanceSize = sizeof(float);
 		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -423,7 +423,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	uint32_t texturesCount = 0;
 	{
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto view = reg.view<Vulture::MeshComponent>();
+		auto view = reg.view<VulkanHelper::MeshComponent>();
 		for (auto& entity : view)
 		{
 			texturesCount += 4; // Each mesh has 4 textures: albedo, normal, rough, metal
@@ -431,24 +431,24 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	}
 
 	{
-		Vulture::DescriptorSetLayout::Binding bin0{ 0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin3{ 3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin4{ 4, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR }; // / 4 because we only care about single texture type like Albedo and not all 4 of them
-		Vulture::DescriptorSetLayout::Binding bin5{ 5, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin6{ 6, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin7{ 7, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin8{ 8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin9{ 9, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin10{ 10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin11{ 11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin12{ 12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin13{ 13, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin14{ 14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
-		Vulture::DescriptorSetLayout::Binding bin15{ 15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin0{ 0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin1{ 1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin2{ 2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin3{ 3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin4{ 4, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR }; // / 4 because we only care about single texture type like Albedo and not all 4 of them
+		VulkanHelper::DescriptorSetLayout::Binding bin5{ 5, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin6{ 6, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin7{ 7, texturesCount / 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin8{ 8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin9{ 9, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin10{ 10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin11{ 11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin12{ 12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin13{ 13, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin14{ 14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
+		VulkanHelper::DescriptorSetLayout::Binding bin15{ 15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR };
 
-		m_RayTracingDescriptorSet.Init(&Vulture::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12, bin13, bin14, bin15 }, &Vulture::Renderer::GetLinearSampler());
+		m_RayTracingDescriptorSet.Init(&VulkanHelper::Renderer::GetDescriptorPool(), { bin0, bin1, bin2, bin3, bin4, bin5, bin6, bin7, bin8, bin9, bin10, bin11, bin12, bin13, bin14, bin15 }, &VulkanHelper::Renderer::GetLinearSampler());
 
 		VkAccelerationStructureKHR geometryTlas = m_GeometryAS.GetTlas().Accel;
 		VkAccelerationStructureKHR volumeTlas = m_VolumesAS.GetTlas().Accel;
@@ -464,41 +464,41 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.AddAccelerationStructure(0, geometryAsInfo);
 		m_RayTracingDescriptorSet.AddAccelerationStructure(13, volumeAsInfo);
 
-		m_RayTracingDescriptorSet.AddImageSampler(1, { Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
+		m_RayTracingDescriptorSet.AddImageSampler(1, { VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracingImage.GetImageView(), VK_IMAGE_LAYOUT_GENERAL });
 		m_RayTracingDescriptorSet.AddBuffer(2, m_RayTracingMeshesBuffer.DescriptorInfo());
 		m_RayTracingDescriptorSet.AddBuffer(3, m_RayTracingMaterialsBuffer.DescriptorInfo());
 
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto view = reg.view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+		auto view = reg.view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
 		for (auto& entity : view)
 		{
-			auto [meshComp, materialComp] = reg.get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
-			Vulture::MaterialTextures* materialTextures = &materialComp.AssetHandle.GetMaterial()->Textures;
+			auto [meshComp, materialComp] = reg.get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
+			VulkanHelper::MaterialTextures* materialTextures = &materialComp.AssetHandle.GetMaterial()->Textures;
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				4,
-				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 				materialTextures->AlbedoTexture.GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				5,
-				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 				materialTextures->NormalTexture.GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				6,
-				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 				materialTextures->RoughnessTexture.GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				7,
-				{ Vulture::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
+				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
 				materialTextures->MetallnessTexture.GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
@@ -508,35 +508,35 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 		m_RayTracingDescriptorSet.AddImageSampler(
 			9, 
-			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 				m_ReflectionLookupTexture.GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
 		m_RayTracingDescriptorSet.AddImageSampler(
 			10,
-			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 				m_RefractionLookupTextureEtaGreaterThan1.GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
 		m_RayTracingDescriptorSet.AddImageSampler(
 			11,
-			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 				m_RefractionLookupTextureEtaLessThan1.GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 		);
 
 		m_RayTracingDescriptorSet.AddImageSampler(
 			14,
-			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 				m_GBufferAlbedo.GetImageView(),
 				VK_IMAGE_LAYOUT_GENERAL }
 		);
 
 		m_RayTracingDescriptorSet.AddImageSampler(
 			15,
-			{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+			{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 				m_GBufferNormal.GetImageView(),
 				VK_IMAGE_LAYOUT_GENERAL }
 		);
@@ -546,20 +546,20 @@ void PathTracer::CreateRayTracingDescriptorSets()
 		m_RayTracingDescriptorSet.Build();
 	}
 
-	for (int i = 0; i < (int)Vulture::Renderer::GetMaxFramesInFlight(); i++)
+	for (int i = 0; i < (int)VulkanHelper::Renderer::GetMaxFramesInFlight(); i++)
 	{
 		std::vector<MeshAdresses> meshAddresses;
-		std::vector<Vulture::MaterialProperties> materials;
+		std::vector<VulkanHelper::MaterialProperties> materials;
 		auto& reg = m_CurrentSceneRendered->GetRegistry();
-		auto modelView = reg.view<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>();
+		auto modelView = reg.view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent, VulkanHelper::TransformComponent>();
 		uint32_t meshSizes = 0;
 		uint32_t materialSizes = 0;
 		for (auto& entity : modelView)
 		{
-			auto [meshComp, materialComp, transformComp] = reg.get<Vulture::MeshComponent, Vulture::MaterialComponent, Vulture::TransformComponent>(entity);
+			auto [meshComp, materialComp, transformComp] = reg.get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent, VulkanHelper::TransformComponent>(entity);
 
-			Vulture::Mesh* mesh = meshComp.AssetHandle.GetMesh();
-			Vulture::Material* material = materialComp.AssetHandle.GetMaterial();
+			VulkanHelper::Mesh* mesh = meshComp.AssetHandle.GetMesh();
+			VulkanHelper::Material* material = materialComp.AssetHandle.GetMaterial();
 
 			MeshAdresses adr{};
 			adr.VertexAddress = mesh->GetVertexBuffer()->GetDeviceAddress();
@@ -568,7 +568,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			materials.push_back(material->Properties);
 			meshAddresses.push_back(adr);
 			meshSizes += sizeof(MeshAdresses);
-			materialSizes += sizeof(Vulture::MaterialProperties);
+			materialSizes += sizeof(VulkanHelper::MaterialProperties);
 		}
 
 		VL_CORE_ASSERT(meshSizes, "No meshes found?");
@@ -586,21 +586,21 @@ void PathTracer::CreateRayTracingDescriptorSets()
 
 void PathTracer::CreateAccelerationStructure()
 {
-	Vulture::AccelerationStructure::CreateInfo infoGeometry{};
-	Vulture::AccelerationStructure::CreateInfo infoVolumes{};
+	VulkanHelper::AccelerationStructure::CreateInfo infoGeometry{};
+	VulkanHelper::AccelerationStructure::CreateInfo infoVolumes{};
 
-	auto view = m_CurrentSceneRendered->GetRegistry().view<Vulture::MeshComponent, Vulture::TransformComponent>();
+	auto view = m_CurrentSceneRendered->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::TransformComponent>();
 
 	for (auto& entity : view)
 	{
-		auto [meshComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<Vulture::MeshComponent, Vulture::TransformComponent>(entity);
-		Vulture::AccelerationStructure::Instance instance;
+		auto [meshComp, TransformComp] = m_CurrentSceneRendered->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::TransformComponent>(entity);
+		VulkanHelper::AccelerationStructure::Instance instance;
 		instance.transform = TransformComp.Transform.GetKhrMat();
 
-		Vulture::Mesh* mesh = meshComp.AssetHandle.GetMesh();
+		VulkanHelper::Mesh* mesh = meshComp.AssetHandle.GetMesh();
 		instance.mesh = mesh;
 
-		if (m_CurrentSceneRendered->GetRegistry().try_get<Vulture::MaterialComponent>(entity))
+		if (m_CurrentSceneRendered->GetRegistry().try_get<VulkanHelper::MaterialComponent>(entity))
 		{
 			infoGeometry.Instances.push_back(instance);
 		}
@@ -639,14 +639,14 @@ void PathTracer::UpdateDescriptorSetsData()
 
 	m_RayTracingDescriptorSet.UpdateImageSampler(
 		14,
-		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+		{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 			m_GBufferAlbedo.GetImageView(),
 			VK_IMAGE_LAYOUT_GENERAL }
 	);
 
 	m_RayTracingDescriptorSet.UpdateImageSampler(
 		15,
-		{ Vulture::Renderer::GetLinearSampler().GetSamplerHandle(),
+		{ VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
 			m_GBufferNormal.GetImageView(),
 			VK_IMAGE_LAYOUT_GENERAL }
 	);
@@ -894,7 +894,7 @@ void PathTracer::BuildEnergyLookupTable()
 	m_RefractionEtaGreaterThan1EnergyLookupTable.resize(32);
 	m_RefractionEtaLessThan1EnergyLookupTable.resize(32);
 
-	//Vulture::Timer timer;
+	//VulkanHelper::Timer timer;
 	//
 	//std::vector<std::future<float>> futures;
 	//for (int i = 0; i < 32; i++)

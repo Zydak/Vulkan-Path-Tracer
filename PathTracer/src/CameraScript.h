@@ -1,11 +1,11 @@
 #pragma once
-#include <Vulture.h>
+#include <VulkanHelper.h>
 #include "Components.h"
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/compatibility.hpp"
 
-class CameraScript : public Vulture::ScriptInterface
+class CameraScript : public VulkanHelper::ScriptInterface
 {
 public:
 	CameraScript() {}
@@ -42,42 +42,42 @@ public:
 			return;
 		}
 
-		glm::vec2 mousePosition = Vulture::Input::GetMousePosition();
-		if (Vulture::Input::IsMousePressed(0))
+		glm::vec2 mousePosition = VulkanHelper::Input::GetMousePosition();
+		if (VulkanHelper::Input::IsMousePressed(0))
 		{
 			// Translation
-			if (Vulture::Input::IsKeyPressed(VL_KEY_A))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_A))
 			{
 				cameraComponent.Camera.Translation += (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_D))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_D))
 			{
 				cameraComponent.Camera.Translation -= (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetRightVec();
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_W))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_W))
 			{
 				cameraComponent.Camera.Translation += (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetFrontVec();
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_S))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_S))
 			{
 				cameraComponent.Camera.Translation -= (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetFrontVec();
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_SPACE))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_SPACE))
 			{
 				cameraComponent.Camera.Translation += (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetUpVec();
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_LEFT_SHIFT))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_LEFT_SHIFT))
 			{
 				cameraComponent.Camera.Translation -= (float)deltaTime * m_MovementSpeed * cameraComponent.Camera.GetUpVec();
 			}
 
 			// Rotation
 			// Roll
-			if (Vulture::Input::IsKeyPressed(VL_KEY_Q))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_Q))
 			{
 				cameraComponent.Camera.AddRoll((float)deltaTime * m_RotationSpeed);
 			}
-			if (Vulture::Input::IsKeyPressed(VL_KEY_E))
+			if (VulkanHelper::Input::IsKeyPressed(VL_KEY_E))
 			{
 				cameraComponent.Camera.AddRoll(-(float)deltaTime * m_RotationSpeed);
 			}

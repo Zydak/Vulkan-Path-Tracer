@@ -1,12 +1,12 @@
 #define VL_ENTRY_POINT
 
-#include <Vulture.h>
+#include <VulkanHelper.h>
 #include "Application.h"
 
 // Create VL Entry point definition
-Vulture::Application* Vulture::CreateApplication()
+VulkanHelper::Application* VulkanHelper::CreateApplication()
 {
-	Vulture::ApplicationInfo appInfo;
+	VulkanHelper::ApplicationInfo appInfo;
 	appInfo.Name = "Path Tracer";
 	appInfo.WorkingDirectory = "";
 	appInfo.EnableRayTracingSupport = true;
@@ -112,7 +112,7 @@ Vulture::Application* Vulture::CreateApplication()
 
 	Application* app = new ::Application(appInfo);
 
-	vkGetPhysicalDeviceFeatures2(Vulture::Device::GetPhysicalDevice(), &features);
+	vkGetPhysicalDeviceFeatures2(VulkanHelper::Device::GetPhysicalDevice(), &features);
 
 	// Verify that all features are present
 	VL_CHECK(accelerationStructureFeatures.accelerationStructure, "acceleration structures not supported!");

@@ -5,7 +5,7 @@
 #include "PathTracer.h"
 #include "PostProcessor.h"
 
-class Vulture::Scene;
+class VulkanHelper::Scene;
 
 class Editor
 {
@@ -13,7 +13,7 @@ public:
 	void Init();
 	void Destroy();
 
-	void SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneHandle);
+	void SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHandle sceneHandle);
 
 	void Render();
 
@@ -50,8 +50,8 @@ private:
 
 	PathTracer m_PathTracer;
 	PostProcessor m_PostProcessor;
-	Vulture::Denoiser m_Denoiser;
-	Vulture::Image m_DenoisedImage;
+	VulkanHelper::Denoiser m_Denoiser;
+	VulkanHelper::Image m_DenoisedImage;
 	VkDescriptorSet m_PathTracerOutputImageSet = VK_NULL_HANDLE;
 	VkDescriptorSet m_DenoisedOutputImageSet = VK_NULL_HANDLE;
 
@@ -60,8 +60,8 @@ private:
 	VkDescriptorSet m_RasterizerNormalOutputImageSet = VK_NULL_HANDLE;
 
 	// Scene
-	Vulture::Scene** m_CurrentScene = nullptr; // ** because we have to change the pointer inside the Application, so we need a pointer to pointer
-	Vulture::AssetHandle m_SceneHandle;
+	VulkanHelper::Scene** m_CurrentScene = nullptr; // ** because we have to change the pointer inside the Application, so we need a pointer to pointer
+	VulkanHelper::AssetHandle m_SceneHandle;
 	// Model
 	bool m_ModelChanged = false;
 	std::string m_ChangedModelFilepath = "";
@@ -73,7 +73,7 @@ private:
 	std::string m_ChangedSkyboxFilepath = "";
 	void UpdateSkybox();
 
-	Vulture::Timer m_Timer;
+	VulkanHelper::Timer m_Timer;
 	float m_Time = 0;
 	bool m_ImGuiViewportResized = false;
 	bool m_ImageResized = false;
@@ -88,12 +88,12 @@ private:
 	bool m_ShowDenoisedImage = false;
 
 	// Viewport Rendering
-	Vulture::OrthographicCamera m_QuadCamera;
-	Vulture::Pipeline m_QuadPipeline;
-	Vulture::PushConstant<glm::mat4> m_QuadPush;
-	Vulture::Transform m_ImageQuadTransform;
-	Vulture::Framebuffer m_QuadRenderTarget;
-	Vulture::DescriptorSet m_QuadDescriptor;
+	VulkanHelper::OrthographicCamera m_QuadCamera;
+	VulkanHelper::Pipeline m_QuadPipeline;
+	VulkanHelper::PushConstant<glm::mat4> m_QuadPush;
+	VulkanHelper::Transform m_ImageQuadTransform;
+	VulkanHelper::Framebuffer m_QuadRenderTarget;
+	VulkanHelper::DescriptorSet m_QuadDescriptor;
 
 	bool m_PathTracerViewportVisible = true;
 };

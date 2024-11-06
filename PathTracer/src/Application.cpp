@@ -5,8 +5,8 @@
 
 #include "glm/glm/gtx/matrix_decompose.hpp"
 
-Application::Application(Vulture::ApplicationInfo appInfo)
-	: Vulture::Application(appInfo)
+Application::Application(VulkanHelper::ApplicationInfo appInfo)
+	: VulkanHelper::Application(appInfo)
 {
 	Init();
 	InitScripts();
@@ -21,7 +21,7 @@ void Application::Destroy()
 {
 	DestroyScripts();
 	m_Scene->Destroy();
-	Vulture::AssetManager::Destroy();
+	VulkanHelper::AssetManager::Destroy();
 
 	m_Editor.reset();
 }
@@ -53,48 +53,48 @@ void Application::Init()
 	m_Editor = std::make_unique<Editor>();
 	m_Editor->Init();
 
-	m_Scene = new Vulture::Scene();
+	m_Scene = new VulkanHelper::Scene();
 	m_Scene->Init();
 
 	// Add camera
-	Vulture::Entity camera = m_Scene->CreateEntity();
+	VulkanHelper::Entity camera = m_Scene->CreateEntity();
 	auto& camComp = camera.AddComponent<PerspectiveCameraComponent>();
 	camComp.MainCamera = true;
 	camComp.Camera.Translation.z = -16.0f;
 
-	auto& cameraScComponent = camera.AddComponent<Vulture::ScriptComponent>();
+	auto& cameraScComponent = camera.AddComponent<VulkanHelper::ScriptComponent>();
 	cameraScComponent.AddScript<CameraScript>();
 
 	// Load Initial Skybox
-	Vulture::Entity skyboxEntity = m_Scene->CreateEntity();
+	VulkanHelper::Entity skyboxEntity = m_Scene->CreateEntity();
 	skyboxEntity.AddComponent<SkyboxComponent>("assets/Black.hdr").ImageHandle.WaitToLoad();
 
 	// Load Initial model
-	Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset("assets/cornellBox.gltf");
+	VulkanHelper::AssetHandle modelAssetHandle = VulkanHelper::AssetManager::LoadAsset("assets/cornellBox.gltf");
 	modelAssetHandle.WaitToLoad();
 
-	Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
+	VulkanHelper::ModelAsset* modelAsset = (VulkanHelper::ModelAsset*)modelAssetHandle.GetAsset();
 	modelAsset->CreateEntities(m_Scene);
 
 	modelAssetHandle.Unload();
 
-	Vulture::Serializer::SerializeScene<
+	VulkanHelper::Serializer::SerializeScene<
 		PerspectiveCameraComponent,
 		OrthographicCameraComponent,
 		SkyboxComponent,
-		Vulture::ScriptComponent,
-		Vulture::MeshComponent,
-		Vulture::MaterialComponent,
-		Vulture::NameComponent,
-		Vulture::TransformComponent
+		VulkanHelper::ScriptComponent,
+		VulkanHelper::MeshComponent,
+		VulkanHelper::MaterialComponent,
+		VulkanHelper::NameComponent,
+		VulkanHelper::TransformComponent
 	>(m_Scene, "assets/scenes/CornellBox.ptscene");
 
 	// Unload everything
 	{
-		auto view = m_Scene->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+		auto view = m_Scene->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
 		for (auto& entity : view)
 		{
-			auto [meshComp, materialComp] = m_Scene->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+			auto [meshComp, materialComp] = m_Scene->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
 
 			meshComp.AssetHandle.Unload();
 
@@ -115,20 +115,20 @@ void Application::Init()
 	REGISTER_CLASS_IN_SERIALIZER(EditorSettingsComponent);
 	REGISTER_CLASS_IN_SERIALIZER(VolumeComponent);
 
-	Vulture::AssetHandle sceneHandle = Vulture::AssetManager::LoadSceneAsset<
+	VulkanHelper::AssetHandle sceneHandle = VulkanHelper::AssetManager::LoadSceneAsset<
 		PerspectiveCameraComponent,
 		OrthographicCameraComponent,
 		SkyboxComponent,
 		PathTracingSettingsComponent,
 		EditorSettingsComponent,
 		VolumeComponent,
-		Vulture::ScriptComponent,
-		Vulture::MeshComponent,
-		Vulture::MaterialComponent,
-		Vulture::NameComponent,
-		Vulture::TransformComponent,
-		Vulture::TonemapperSettingsComponent,
-		Vulture::BloomSettingsComponent
+		VulkanHelper::ScriptComponent,
+		VulkanHelper::MeshComponent,
+		VulkanHelper::MaterialComponent,
+		VulkanHelper::NameComponent,
+		VulkanHelper::TransformComponent,
+		VulkanHelper::TonemapperSettingsComponent,
+		VulkanHelper::BloomSettingsComponent
 	>("assets/scenes/CornellBox.ptscene");
 
 	sceneHandle.WaitToLoad();
@@ -136,18 +136,18 @@ void Application::Init()
 	m_Scene = sceneHandle.GetScene();
 
 	// Wait for every component to load
-	auto view = m_Scene->GetRegistry().view<Vulture::MeshComponent>();
+	auto view = m_Scene->GetRegistry().view<VulkanHelper::MeshComponent>();
 	for (auto& entity : view)
 	{
-		Vulture::MeshComponent* meshComp = &m_Scene->GetRegistry().get<Vulture::MeshComponent>(entity);
+		VulkanHelper::MeshComponent* meshComp = &m_Scene->GetRegistry().get<VulkanHelper::MeshComponent>(entity);
 		meshComp->AssetHandle.WaitToLoad();
 	}
 
-	auto view1 = m_Scene->GetRegistry().view<Vulture::MaterialComponent>();
+	auto view1 = m_Scene->GetRegistry().view<VulkanHelper::MaterialComponent>();
 	for (auto& entity : view1)
 	{
-		Vulture::MaterialComponent* matComp = &m_Scene->GetRegistry().get<Vulture::MaterialComponent>(entity);
-		Vulture::Material* mat = matComp->AssetHandle.GetMaterial();
+		VulkanHelper::MaterialComponent* matComp = &m_Scene->GetRegistry().get<VulkanHelper::MaterialComponent>(entity);
+		VulkanHelper::Material* mat = matComp->AssetHandle.GetMaterial();
 		mat->Textures.CreateSet();
 	}
 

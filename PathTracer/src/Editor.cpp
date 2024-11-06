@@ -4,18 +4,18 @@
 #include "CameraScript.h"
 #include "Components.h"
 
-#include "Vulture.h"
+#include "VulkanHelper.h"
 
 
 void Editor::Init()
 {
 	m_PathTracer.Init({ 900, 900 });
 	m_PostProcessor.Init(m_PathTracer.GetOutputImage());
-	Vulture::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
+	VulkanHelper::Renderer::SetImGuiFunction([this]() { RenderImGui(); });
 
-	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_QuadPush.Init({ VK_SHADER_STAGE_VERTEX_BIT });
 
@@ -26,14 +26,14 @@ void Editor::Init()
 	m_Denoiser.Init();
 	m_Denoiser.AllocateBuffers({ 900, 900 });
 
-	Vulture::Image::CreateInfo imageInfo{};
+	VulkanHelper::Image::CreateInfo imageInfo{};
 	imageInfo.Width = 900;
 	imageInfo.Height = 900;
 	imageInfo.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	imageInfo.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	imageInfo.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	imageInfo.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	imageInfo.SamplerInfo = Vulture::SamplerInfo{};
+	imageInfo.SamplerInfo = VulkanHelper::SamplerInfo{};
 	imageInfo.DebugName = "Denoised Image";
 	m_DenoisedImage.Init(imageInfo);
 }
@@ -43,7 +43,7 @@ void Editor::Destroy()
 
 }
 
-void Editor::SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneHandle)
+void Editor::SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHandle sceneHandle)
 {
 	m_CurrentScene = scene;
 	m_SceneHandle = sceneHandle;
@@ -69,11 +69,11 @@ void Editor::SetCurrentScene(Vulture::Scene** scene, Vulture::AssetHandle sceneH
 	// Get Vertex and index count
 	m_VertexCount = 0;
 	m_IndexCount = 0;
-	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MeshComponent>();
 	for (auto& entity : view)
 	{
-		Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity); // TODO: support more than one model
-		Vulture::Mesh* mesh = meshComp->AssetHandle.GetMesh();
+		VulkanHelper::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MeshComponent>(entity); // TODO: support more than one model
+		VulkanHelper::Mesh* mesh = meshComp->AssetHandle.GetMesh();
 		m_VertexCount += mesh->GetVertexCount();
 		m_IndexCount += mesh->GetIndexCount();
  	}
@@ -146,7 +146,7 @@ void Editor::Render()
 	}
 	else
 	{
-		if (Vulture::Renderer::BeginFrame())
+		if (VulkanHelper::Renderer::BeginFrame())
 		{
 			if (m_PathTracer.GetSamplesAccumulated() == 0) m_Time = 0.0f;
 			m_PathTracingFinished = !m_PathTracer.Render();
@@ -158,7 +158,7 @@ void Editor::Render()
 
 			RenderViewportImage();
 
-			Vulture::Renderer::ImGuiPass();
+			VulkanHelper::Renderer::ImGuiPass();
 
 			auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
 			PathTracingSettingsComponent* pathTracingSettings = nullptr;
@@ -176,7 +176,7 @@ void Editor::Render()
 			{
 				m_ReadyToSaveRender = false;
 				m_FileAlreadySaved = true;
-				Vulture::Renderer::SaveImageToFile("", m_PostProcessor.GetOutputImage());
+				VulkanHelper::Renderer::SaveImageToFile("", m_PostProcessor.GetOutputImage());
 			}
 
 			// Denoiser
@@ -184,14 +184,14 @@ void Editor::Render()
 			// First it upload data to cuda buffers using normal frame command buffer
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
-				std::vector<Vulture::Image*> denoiserInput =
+				std::vector<VulkanHelper::Image*> denoiserInput =
 				{
 					m_PathTracer.GetOutputImage(),
 					m_PathTracer.GetGBufferAlbedo(),
 					m_PathTracer.GetGBufferNormal()
 				};
 
-				m_Denoiser.ImageToBuffer(Vulture::Renderer::GetCurrentCommandBuffer(), denoiserInput);
+				m_Denoiser.ImageToBuffer(VulkanHelper::Renderer::GetCurrentCommandBuffer(), denoiserInput);
 			}
 
 			// step 3:
@@ -202,11 +202,11 @@ void Editor::Render()
 			// step 2 is run between frames, and step 3 is run on the second frame
 			if (m_PathTracingFinished && m_RenderToFile && m_ImageDenoised && !m_DenoisedImageReady)
 			{
-				m_Denoiser.BufferToImage(Vulture::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
+				m_Denoiser.BufferToImage(VulkanHelper::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
 				m_DenoisedImageReady = true;
 			}
 
-			Vulture::Renderer::EndFrame();
+			VulkanHelper::Renderer::EndFrame();
 			
 			// Denoiser
 			// step 2:
@@ -215,7 +215,7 @@ void Editor::Render()
 			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 			{
 				m_ImageDenoised = true;
-				Vulture::Device::WaitIdle();
+				VulkanHelper::Device::WaitIdle();
 				uint64_t x = UINT64_MAX;
 				m_Denoiser.DenoiseImageBuffer(x);
 			}
@@ -230,22 +230,22 @@ void Editor::Render()
 
 void Editor::CreateQuadPipeline()
 {
-	Vulture::Shader::CreateInfo vertexShaderInfo{};
+	VulkanHelper::Shader::CreateInfo vertexShaderInfo{};
 	vertexShaderInfo.Filepath = "src/shaders/helloWorld.slang";
 	vertexShaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
-	Vulture::Shader vertexShader(vertexShaderInfo);
+	VulkanHelper::Shader vertexShader(vertexShaderInfo);
 
-	Vulture::Shader::CreateInfo fragmentShaderInfo{};
+	VulkanHelper::Shader::CreateInfo fragmentShaderInfo{};
 	fragmentShaderInfo.Filepath = "src/shaders/Quad.frag";
 	fragmentShaderInfo.Type = VK_SHADER_STAGE_FRAGMENT_BIT;
-	Vulture::Shader fragmentShader(fragmentShaderInfo);
+	VulkanHelper::Shader fragmentShader(fragmentShaderInfo);
 
-	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } }; //-V826
-	Vulture::DescriptorSetLayout layout(bindings);
+	std::vector<VulkanHelper::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } }; //-V826
+	VulkanHelper::DescriptorSetLayout layout(bindings);
 
-	Vulture::Pipeline::GraphicsCreateInfo info{};
-	info.AttributeDesc = Vulture::Mesh::Vertex::GetAttributeDescriptions();
-	info.BindingDesc = Vulture::Mesh::Vertex::GetBindingDescriptions();
+	VulkanHelper::Pipeline::GraphicsCreateInfo info{};
+	info.AttributeDesc = VulkanHelper::Mesh::Vertex::GetAttributeDescriptions();
+	info.BindingDesc = VulkanHelper::Mesh::Vertex::GetBindingDescriptions();
 	info.debugName = "Quad Pipeline";
 	info.DescriptorSetLayouts = { layout.GetDescriptorSetLayoutHandle() };
 	info.Height = m_ViewportSize.height;
@@ -269,11 +269,11 @@ void Editor::CreateQuadRenderTarget()
 		dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		Vulture::Framebuffer::RenderPassCreateInfo renderPassInfo{};
+		VulkanHelper::Framebuffer::RenderPassCreateInfo renderPassInfo{};
 		renderPassInfo.FinalLayouts = { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 		renderPassInfo.Dependencies = { dependency };
-		Vulture::Framebuffer::CreateInfo info{};
-		info.AttachmentsFormats = { Vulture::FramebufferAttachment::ColorRGBA8 };
+		VulkanHelper::Framebuffer::CreateInfo info{};
+		info.AttachmentsFormats = { VulkanHelper::FramebufferAttachment::ColorRGBA8 };
 		info.Extent = { m_ViewportSize.width, m_ViewportSize.height };
 		info.RenderPassInfo = &renderPassInfo;
 		m_QuadRenderTarget.Init(info);
@@ -300,10 +300,10 @@ void Editor::RescaleQuad()
 
 void Editor::CreateQuadDescriptor()
 {
-	std::vector<Vulture::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
+	std::vector<VulkanHelper::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } };
 
-	m_QuadDescriptor.Init(&Vulture::Renderer::GetDescriptorPool(), bindings);
-	m_QuadDescriptor.AddImageSampler(0, { Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+	m_QuadDescriptor.Init(&VulkanHelper::Renderer::GetDescriptorPool(), bindings);
+	m_QuadDescriptor.AddImageSampler(0, { VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PostProcessor.GetOutputImage()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
 	m_QuadDescriptor.Build();
 }
 
@@ -315,17 +315,17 @@ void Editor::RenderViewportImage()
 
 	std::vector<VkClearValue> clearColors;
 	clearColors.push_back({ 0.1f, 0.1f, 0.1f, 1.0f });
-	m_QuadRenderTarget.Bind(Vulture::Renderer::GetCurrentCommandBuffer(), clearColors);
+	m_QuadRenderTarget.Bind(VulkanHelper::Renderer::GetCurrentCommandBuffer(), clearColors);
 
-	m_QuadPipeline.Bind(Vulture::Renderer::GetCurrentCommandBuffer());
+	m_QuadPipeline.Bind(VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
-	m_QuadPush.Push(m_QuadPipeline.GetPipelineLayout(), Vulture::Renderer::GetCurrentCommandBuffer());
-	m_QuadDescriptor.Bind(0, m_QuadPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, Vulture::Renderer::GetCurrentCommandBuffer());
+	m_QuadPush.Push(m_QuadPipeline.GetPipelineLayout(), VulkanHelper::Renderer::GetCurrentCommandBuffer());
+	m_QuadDescriptor.Bind(0, m_QuadPipeline.GetPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
-	Vulture::Renderer::GetQuadMesh().Bind(Vulture::Renderer::GetCurrentCommandBuffer());
-	Vulture::Renderer::GetQuadMesh().Draw(Vulture::Renderer::GetCurrentCommandBuffer(), 1, 0);
+	VulkanHelper::Renderer::GetQuadMesh().Bind(VulkanHelper::Renderer::GetCurrentCommandBuffer());
+	VulkanHelper::Renderer::GetQuadMesh().Draw(VulkanHelper::Renderer::GetCurrentCommandBuffer(), 1, 0);
 
-	m_QuadRenderTarget.Unbind(Vulture::Renderer::GetCurrentCommandBuffer());
+	m_QuadRenderTarget.Unbind(VulkanHelper::Renderer::GetCurrentCommandBuffer());
 }
 
 void Editor::RenderImGui()
@@ -349,9 +349,9 @@ void Editor::RenderImGui()
 
 void Editor::ImGuiRenderPathTracingViewport()
 {
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
+	VulkanHelper::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
 
-	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	VulkanHelper::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<VulkanHelper::ScriptComponent>(cameraEntity);
 	CameraScript* camScript = scComp ? scComp->GetScript<CameraScript>(0) : nullptr;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -388,9 +388,9 @@ void Editor::ImGuiRenderPathTracingViewport()
 
 void Editor::ImGuiRenderRasterizerViewport()
 {
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
+	VulkanHelper::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity(*m_CurrentScene);
 
-	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	VulkanHelper::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<VulkanHelper::ScriptComponent>(cameraEntity);
 	CameraScript* camScript = scComp ? scComp->GetScript<CameraScript>(0) : nullptr;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -727,13 +727,13 @@ void Editor::ImGuiSceneEditor()
 	ImGui::SeparatorText("Materials");
 
 	std::vector<std::string> materialNamesNonRepeated;
-	std::vector<Vulture::Material*> materialsNonRepeated;
+	std::vector<VulkanHelper::Material*> materialsNonRepeated;
 	std::vector<std::string> materialNamesAll;
 
-	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		Vulture::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity);
+		VulkanHelper::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MaterialComponent>(entity);
 		std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
 		materialNamesAll.push_back(name);
 
@@ -762,12 +762,12 @@ void Editor::ImGuiSceneEditor()
 	ImGui::SeparatorText("Material Values");
 	for (int i = 0; i < materialsNonRepeated.size(); i++)
 	{
-		Vulture::Material* material = materialsNonRepeated[i];
+		VulkanHelper::Material* material = materialsNonRepeated[i];
 
 		if (material->MaterialName != materialNamesNonRepeated[currentMaterialItem])
 			continue;
 
-		Vulture::MaterialProperties* materialProps = &material->Properties;
+		VulkanHelper::MaterialProperties* materialProps = &material->Properties;
 
 		bool valuesChanged = false;
 		if (ImGui::ColorEdit3("Albedo", (float*)&materialProps->Color)) { valuesChanged = true; };
@@ -796,7 +796,7 @@ void Editor::ImGuiSceneEditor()
 			int index = 0;
 			for (auto& entity1 : view)
 			{
-				Vulture::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity1);
+				VulkanHelper::MaterialComponent* materialComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MaterialComponent>(entity1);
 				std::string name = materialComp->AssetHandle.GetMaterial()->MaterialName;
 
 				if (material->MaterialName == name)
@@ -804,8 +804,8 @@ void Editor::ImGuiSceneEditor()
 					// Upload to GPU
 					m_PathTracer.GetMaterialsBuffer()->WriteToBuffer(
 						materialProps,
-						sizeof(Vulture::MaterialProperties),
-						sizeof(Vulture::MaterialProperties) * index
+						sizeof(VulkanHelper::MaterialProperties),
+						sizeof(VulkanHelper::MaterialProperties) * index
 					);
 				}
 				index++;
@@ -871,7 +871,7 @@ void Editor::ImGuiSceneEditor()
 
 	if (ImGui::Button("Add Volume"))
 	{
-		Vulture::Entity entity = (*m_CurrentScene)->CreateEntity();
+		VulkanHelper::Entity entity = (*m_CurrentScene)->CreateEntity();
 		auto& newComp = entity.AddComponent<VolumeComponent>();
 		volumes.push_back(newComp);
 		volumesCount++;
@@ -1005,12 +1005,12 @@ void Editor::ImGuiPostProcessingSettings()
 		return;
 	ImGui::Separator();
 
-	auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
-	Vulture::TonemapperSettingsComponent* tonemapSettings = nullptr;
+	auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::TonemapperSettingsComponent>();
+	VulkanHelper::TonemapperSettingsComponent* tonemapSettings = nullptr;
 	for (auto& entity : viewTonemap)
 	{
 		VL_CORE_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		tonemapSettings = &(*m_CurrentScene)->GetRegistry().get<Vulture::TonemapperSettingsComponent>(entity);
+		tonemapSettings = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::TonemapperSettingsComponent>(entity);
 	}
 
 	VL_CORE_ASSERT(tonemapSettings != nullptr, "Couldn't find post processor settings!");
@@ -1043,22 +1043,22 @@ void Editor::ImGuiPostProcessingSettings()
 	static int currentTonemapper = 0;
 	if (ImGui::ListBox("##Tonemappers", &currentTonemapper, tonemappers, IM_ARRAYSIZE(tonemappers), IM_ARRAYSIZE(tonemappers)))
 	{
-		tonemapSettings->Settings.Tonemapper = (Vulture::Tonemap::Tonemappers)currentTonemapper;
+		tonemapSettings->Settings.Tonemapper = (VulkanHelper::Tonemap::Tonemappers)currentTonemapper;
 	}
 
-	if (currentTonemapper == Vulture::Tonemap::Tonemappers::ReinchardExtended)
+	if (currentTonemapper == VulkanHelper::Tonemap::Tonemappers::ReinchardExtended)
 	{
 		ImGui::SliderFloat("White Point", &tonemapSettings->Settings.whitePointReinhard, 0.0f, 5.0f);
 	}
 
 	ImGui::Separator();
 
-	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
-	Vulture::BloomSettingsComponent* bloomSettings = nullptr;
+	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::BloomSettingsComponent>();
+	VulkanHelper::BloomSettingsComponent* bloomSettings = nullptr;
 	for (auto& entity : viewBloom)
 	{
 		VL_CORE_ASSERT(bloomSettings == nullptr, "Can't have more than one bloom settings inside a scene!");
-		bloomSettings = &(*m_CurrentScene)->GetRegistry().get<Vulture::BloomSettingsComponent>(entity);
+		bloomSettings = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::BloomSettingsComponent>(entity);
 	}
 	VL_CORE_ASSERT(bloomSettings != nullptr, "Couldn't find post bloom settings!");
 
@@ -1100,9 +1100,9 @@ void Editor::ImGuiCameraSettings()
 	if (!ImGui::CollapsingHeader("Camera Settings"))
 		return;
 
-	Vulture::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity((*m_CurrentScene));
+	VulkanHelper::Entity cameraEntity = PerspectiveCameraComponent::GetMainCameraEntity((*m_CurrentScene));
 
-	Vulture::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<Vulture::ScriptComponent>(cameraEntity);
+	VulkanHelper::ScriptComponent* scComp = (*m_CurrentScene)->GetRegistry().try_get<VulkanHelper::ScriptComponent>(cameraEntity);
 	PerspectiveCameraComponent* camComp = (*m_CurrentScene)->GetRegistry().try_get<PerspectiveCameraComponent>(cameraEntity);
 	CameraScript* camScript = nullptr;
 
@@ -1196,20 +1196,20 @@ void Editor::ImGuiSerializationSettings()
 		}
 		else
 		{
-			Vulture::Serializer::SerializeScene<
+			VulkanHelper::Serializer::SerializeScene<
 				PerspectiveCameraComponent,
 				OrthographicCameraComponent,
 				SkyboxComponent,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
 				VolumeComponent,
-				Vulture::ScriptComponent,
-				Vulture::MeshComponent,
-				Vulture::MaterialComponent,
-				Vulture::NameComponent,
-				Vulture::TransformComponent,
-				Vulture::TonemapperSettingsComponent,
-				Vulture::BloomSettingsComponent
+				VulkanHelper::ScriptComponent,
+				VulkanHelper::MeshComponent,
+				VulkanHelper::MaterialComponent,
+				VulkanHelper::NameComponent,
+				VulkanHelper::TransformComponent,
+				VulkanHelper::TonemapperSettingsComponent,
+				VulkanHelper::BloomSettingsComponent
 			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
 		}
 	}
@@ -1219,20 +1219,20 @@ void Editor::ImGuiSerializationSettings()
 		ImGui::Text("There already exist file with the same name.\nAre you sure you want to overwrite it?");
 		if (ImGui::Button("Yes"))
 		{
-			Vulture::Serializer::SerializeScene<
+			VulkanHelper::Serializer::SerializeScene<
 				PerspectiveCameraComponent,
 				OrthographicCameraComponent,
 				SkyboxComponent,
 				PathTracingSettingsComponent,
 				EditorSettingsComponent,
 				VolumeComponent,
-				Vulture::ScriptComponent,
-				Vulture::MeshComponent,
-				Vulture::MaterialComponent,
-				Vulture::NameComponent,
-				Vulture::TransformComponent,
-				Vulture::TonemapperSettingsComponent,
-				Vulture::BloomSettingsComponent
+				VulkanHelper::ScriptComponent,
+				VulkanHelper::MeshComponent,
+				VulkanHelper::MaterialComponent,
+				VulkanHelper::NameComponent,
+				VulkanHelper::TransformComponent,
+				VulkanHelper::TonemapperSettingsComponent,
+				VulkanHelper::BloomSettingsComponent
 			>(*m_CurrentScene, "assets/scenes/" + sceneNameStr + ".ptscene");
 			ImGui::CloseCurrentPopup();
 		}
@@ -1257,7 +1257,7 @@ void Editor::ImGuiRasterizerViewSettings()
 
 void Editor::Resize()
 {
-	Vulture::Device::WaitIdle();
+	VulkanHelper::Device::WaitIdle();
 
 	RescaleQuad();
 	CreateQuadRenderTarget();
@@ -1271,22 +1271,22 @@ void Editor::Resize()
 	m_QuadCamera.SetOrthographicMatrix({ -x, x, -y, y }, 0.1f, 100.0f);
 	m_QuadCamera.UpdateViewMatrix();
 
-	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(Vulture::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_PathTracerOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_QuadRenderTarget.GetImageView(0), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferAlbedo()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	m_RasterizerNormalOutputImageSet = ImGui_ImplVulkan_AddTexture(VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(), m_PathTracer.GetGBufferNormal()->GetImageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Editor::UpdateModel()
 {
-	Vulture::Device::WaitIdle();
+	VulkanHelper::Device::WaitIdle();
 
-	Vulture::AssetHandle newAssetHandle;
+	VulkanHelper::AssetHandle newAssetHandle;
 
 	// Unload current scene
-	auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent, Vulture::MaterialComponent>();
+	auto view = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
 	for (auto& entity : view)
 	{
-		auto [meshComp, materialComp] = (*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent, Vulture::MaterialComponent>(entity);
+		auto [meshComp, materialComp] = (*m_CurrentScene)->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
 		
 		// Unload everything
 		meshComp.AssetHandle.Unload();
@@ -1296,19 +1296,19 @@ void Editor::UpdateModel()
 		// Delete the entity
 		(*m_CurrentScene)->GetRegistry().destroy(entity);
 	}
-	Vulture::DeleteQueue::ClearQueue();
+	VulkanHelper::DeleteQueue::ClearQueue();
 
 	std::string extension = m_ChangedModelFilepath.substr(m_ChangedModelFilepath.find_last_of('.'));
 
 	if (extension == ".ptscene")
 	{
-		auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<Vulture::TonemapperSettingsComponent>();
+		auto viewTonemap = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::TonemapperSettingsComponent>();
 		for (auto& entity : viewTonemap)
 		{
 			(*m_CurrentScene)->GetRegistry().destroy(entity);
 		}
 
-		auto viewBloom = (*m_CurrentScene)->GetRegistry().view<Vulture::BloomSettingsComponent>();
+		auto viewBloom = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::BloomSettingsComponent>();
 		for (auto& entity : viewBloom)
 		{
 			(*m_CurrentScene)->GetRegistry().destroy(entity);
@@ -1329,38 +1329,38 @@ void Editor::UpdateModel()
 		// Reload entire scene asset
 		m_SceneHandle.Unload();
 
-		m_SceneHandle = Vulture::AssetManager::LoadSceneAsset<
+		m_SceneHandle = VulkanHelper::AssetManager::LoadSceneAsset<
 			PerspectiveCameraComponent,
 			OrthographicCameraComponent,
 			SkyboxComponent,
 			PathTracingSettingsComponent,
 			EditorSettingsComponent,
 			VolumeComponent,
-			Vulture::ScriptComponent,
-			Vulture::MeshComponent,
-			Vulture::MaterialComponent,
-			Vulture::NameComponent,
-			Vulture::TransformComponent,
-			Vulture::TonemapperSettingsComponent,
-			Vulture::BloomSettingsComponent
+			VulkanHelper::ScriptComponent,
+			VulkanHelper::MeshComponent,
+			VulkanHelper::MaterialComponent,
+			VulkanHelper::NameComponent,
+			VulkanHelper::TransformComponent,
+			VulkanHelper::TonemapperSettingsComponent,
+			VulkanHelper::BloomSettingsComponent
 		>(m_ChangedModelFilepath);
 
 		m_SceneHandle.WaitToLoad();
 		*m_CurrentScene = m_SceneHandle.GetScene();
 
 		// Wait for every component to load
-		auto view = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+		auto view = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MeshComponent>();
 		for (auto& entity : view)
 		{
-			Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity);
+			VulkanHelper::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MeshComponent>(entity);
 			meshComp->AssetHandle.WaitToLoad();
 		}
 
-		auto view1 = (*m_CurrentScene)->GetRegistry().view<Vulture::MaterialComponent>();
+		auto view1 = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MaterialComponent>();
 		for (auto& entity : view1)
 		{
-			Vulture::MaterialComponent* matComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MaterialComponent>(entity);
-			Vulture::Material* mat = matComp->AssetHandle.GetMaterial();
+			VulkanHelper::MaterialComponent* matComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MaterialComponent>(entity);
+			VulkanHelper::Material* mat = matComp->AssetHandle.GetMaterial();
 			mat->Textures.CreateSet();
 		}
 
@@ -1379,10 +1379,10 @@ void Editor::UpdateModel()
 		// Reload only mesh components so that camera and rest of the components are unaffected
 
 		// Load new one
-		Vulture::AssetHandle modelAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedModelFilepath);
+		VulkanHelper::AssetHandle modelAssetHandle = VulkanHelper::AssetManager::LoadAsset(m_ChangedModelFilepath);
 		modelAssetHandle.WaitToLoad();
 
-		Vulture::ModelAsset* modelAsset = (Vulture::ModelAsset*)modelAssetHandle.GetAsset();
+		VulkanHelper::ModelAsset* modelAsset = (VulkanHelper::ModelAsset*)modelAssetHandle.GetAsset();
 		modelAsset->CreateEntities((*m_CurrentScene));
 		modelAssetHandle.Unload(); // Unload the model asset since it's only references to mesh data
 	}
@@ -1394,11 +1394,11 @@ void Editor::UpdateModel()
 	// Get index and vertex count
 	m_VertexCount = 0;
 	m_IndexCount = 0;
-	auto viewMesh = (*m_CurrentScene)->GetRegistry().view<Vulture::MeshComponent>();
+	auto viewMesh = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::MeshComponent>();
 	for (auto& entity : viewMesh)
 	{
-		Vulture::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<Vulture::MeshComponent>(entity); // TODO: support more than one model
-		Vulture::Mesh* mesh = meshComp->AssetHandle.GetMesh();
+		VulkanHelper::MeshComponent* meshComp = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::MeshComponent>(entity); // TODO: support more than one model
+		VulkanHelper::Mesh* mesh = meshComp->AssetHandle.GetMesh();
 		m_VertexCount += mesh->GetVertexCount();
 		m_IndexCount += mesh->GetIndexCount();
 	}
@@ -1406,16 +1406,16 @@ void Editor::UpdateModel()
 
 void Editor::UpdateSkybox()
 {
-	Vulture::Device::WaitIdle();
+	VulkanHelper::Device::WaitIdle();
 
-	Vulture::AssetHandle newAssetHandle;
+	VulkanHelper::AssetHandle newAssetHandle;
 	auto view = (*m_CurrentScene)->GetRegistry().view<SkyboxComponent>();
 	for (auto& entity : view)
 	{
 		SkyboxComponent* skyboxComp = &(*m_CurrentScene)->GetRegistry().get<SkyboxComponent>(entity); // TODO: support more than one model
 		skyboxComp->ImageHandle.Unload();
 
-		newAssetHandle = Vulture::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
+		newAssetHandle = VulkanHelper::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
 		skyboxComp->ImageHandle = newAssetHandle;
 		break;
 	}
