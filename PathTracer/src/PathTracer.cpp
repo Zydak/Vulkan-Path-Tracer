@@ -478,28 +478,28 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			m_RayTracingDescriptorSet.AddImageSampler(
 				4,
 				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-				materialTextures->AlbedoTexture.GetImage()->GetImageView(),
+				materialTextures->GetAlbedo().GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				5,
 				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-				materialTextures->NormalTexture.GetImage()->GetImageView(),
+				materialTextures->GetNormal().GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				6,
 				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-				materialTextures->RoughnessTexture.GetImage()->GetImageView(),
+				materialTextures->GetRoughness().GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 
 			m_RayTracingDescriptorSet.AddImageSampler(
 				7,
 				{ VulkanHelper::Renderer::GetLinearRepeatSampler().GetSamplerHandle(),
-				materialTextures->MetallnessTexture.GetImage()->GetImageView(),
+				materialTextures->GetMetallness().GetImage()->GetImageView(),
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
 			);
 		}

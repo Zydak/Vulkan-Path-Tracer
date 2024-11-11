@@ -1,6 +1,6 @@
 # Vulkan-Path-Tracer
 
-Physically based path tracer made in Vulkan. For ray tracing it utilizes Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be easily saved as .png images. It also features post processing effects like bloom, tonemapping. It also uses Optix Denoiser for denoising renders.
+Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be saved as png images. It also features post processing effects and a denoiser.
 
 # Running
 ## Windows Only

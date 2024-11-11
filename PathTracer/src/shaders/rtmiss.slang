@@ -30,7 +30,7 @@ void main(inout Input input)
 
     float2 texCoords = SphericalToTexCoords(sphericalCoords.x, sphericalCoords.y);
 
-    color = uEnvironmentMap.Sample( { texCoords.x, texCoords.y }, {0, 0}).rgb;
+    color = uEnvironmentMap.SampleLevel( { texCoords.x, texCoords.y }, 0).rgb;
 
     input.Payload.HitValue = color;
     input.Payload.Depth = DEPTH_INFINITE;

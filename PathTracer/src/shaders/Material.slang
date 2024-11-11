@@ -76,7 +76,7 @@ public struct Material
 
         // Energy Compensation
         float layer = ((Anisotropy + 1.0f) / 2.0f) * 32.0f;
-        float energyCompensation = uReflectionEnergyLookupTexture.Sample( { V.z, Roughness, layer }, { 0, 0 }).r;
+        float energyCompensation = uReflectionEnergyLookupTexture.SampleLevel( { V.z, Roughness, layer }, 0).r;
         BSDF = (1.0f + F * float3(energyCompensation)) * BSDF;
 
         return BSDF;
