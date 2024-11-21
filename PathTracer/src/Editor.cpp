@@ -23,8 +23,11 @@ void Editor::Init()
 	CreateQuadPipeline();
 	CreateQuadDescriptor();
 
-	m_Denoiser.Init();
-	m_Denoiser.AllocateBuffers({ 900, 900 });
+	if (VulkanHelper::Device::GetVendor() == VulkanHelper::Vendor::NVIDIA)
+	{
+		m_Denoiser.Init();
+		m_Denoiser.AllocateBuffers({ 900, 900 });
+	}
 
 	VulkanHelper::Image::CreateInfo imageInfo{};
 	imageInfo.Width = 900;
@@ -132,7 +135,9 @@ void Editor::Render()
 			editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
 		}
 
-		m_Denoiser.AllocateBuffers({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
+		if (VulkanHelper::Device::GetVendor() == VulkanHelper::Vendor::NVIDIA)
+			m_Denoiser.AllocateBuffers({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
+
 		m_DenoisedImage.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
 		m_PathTracer.Resize({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
 
@@ -179,47 +184,53 @@ void Editor::Render()
 				VulkanHelper::Renderer::SaveImageToFile("", m_PostProcessor.GetOutputImage());
 			}
 
-			// Denoiser
-			// step 1:
-			// First it upload data to cuda buffers using normal frame command buffer
-			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
+			if (VulkanHelper::Device::GetVendor() == VulkanHelper::Vendor::NVIDIA)
 			{
-				std::vector<VulkanHelper::Image*> denoiserInput =
+				// Denoiser
+				// step 1:
+				// First it upload data to cuda buffers using normal frame command buffer
+				if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
 				{
-					m_PathTracer.GetOutputImage(),
-					m_PathTracer.GetGBufferAlbedo(),
-					m_PathTracer.GetGBufferNormal()
-				};
+					std::vector<VulkanHelper::Image*> denoiserInput =
+					{
+						m_PathTracer.GetOutputImage(),
+						m_PathTracer.GetGBufferAlbedo(),
+						m_PathTracer.GetGBufferNormal()
+					};
 
-				m_Denoiser.ImageToBuffer(VulkanHelper::Renderer::GetCurrentCommandBuffer(), denoiserInput);
+					m_Denoiser.ImageToBuffer(VulkanHelper::Renderer::GetCurrentCommandBuffer(), denoiserInput);
+				}
+
+				// step 3:
+				// When m_ImageDenoised is set to true and it hasn't been copied already (m_DenoisedImageReady)
+				// it copies the data from cuda buffers into m_DenoisedImage
+				// 
+				// This way you have to wait 2 frames for denoising, step 1 is run on the first frame,
+				// step 2 is run between frames, and step 3 is run on the second frame
+				if (m_PathTracingFinished && m_RenderToFile && m_ImageDenoised && !m_DenoisedImageReady)
+				{
+					m_Denoiser.BufferToImage(VulkanHelper::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
+					m_DenoisedImageReady = true;
+				}
+
+				VulkanHelper::Renderer::EndFrame();
+
+				// Denoiser
+				// step 2:
+				// After the first step is done it waits until all buffers are copied using WaitIdle()
+				// and when that's done it runs Optix denoiser in cuda and waits until it's done (DenoiseImageBuffer())
+				if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
+				{
+					m_ImageDenoised = true;
+					VulkanHelper::Device::WaitIdle();
+					uint64_t x = UINT64_MAX;
+					m_Denoiser.DenoiseImageBuffer(x);
+				}
 			}
-
-			// step 3:
-			// When m_ImageDenoised is set to true and it hasn't been copied already (m_DenoisedImageReady)
-			// it copies the data from cuda buffers into m_DenoisedImage
-			// 
-			// This way you have to wait 2 frames for denoising, step 1 is run on the first frame,
-			// step 2 is run between frames, and step 3 is run on the second frame
-			if (m_PathTracingFinished && m_RenderToFile && m_ImageDenoised && !m_DenoisedImageReady)
+			else
 			{
-				m_Denoiser.BufferToImage(VulkanHelper::Renderer::GetCurrentCommandBuffer(), &m_DenoisedImage);
-				m_DenoisedImageReady = true;
+				VulkanHelper::Renderer::EndFrame();
 			}
-
-			VulkanHelper::Renderer::EndFrame();
-			
-			// Denoiser
-			// step 2:
-			// After the first step is done it waits until all buffers are copied using WaitIdle()
-			// and when that's done it runs Optix denoiser in cuda and waits until it's done (DenoiseImageBuffer())
-			if (m_PathTracingFinished && m_RenderToFile && !m_ImageDenoised)
-			{
-				m_ImageDenoised = true;
-				VulkanHelper::Device::WaitIdle();
-				uint64_t x = UINT64_MAX;
-				m_Denoiser.DenoiseImageBuffer(x);
-			}
-
 		}
 		else
 		{
@@ -528,7 +539,18 @@ void Editor::ImGuiRenderingToFileSettings()
 		}
 
 		bool showDenoisedPrev = m_ShowDenoisedImage;
-		ImGui::Checkbox("Show Denoised Image", &m_ShowDenoisedImage);
+
+		if (VulkanHelper::Device::GetVendor() == VulkanHelper::Vendor::NVIDIA)
+			ImGui::Checkbox("Show Denoised Image", &m_ShowDenoisedImage);
+		else
+		{
+			ImGui::BeginDisabled();
+			ImGui::Checkbox("Show Denoised Image", &m_ShowDenoisedImage);
+			ImGui::EndDisabled();
+
+			m_ShowDenoisedImage = false;
+			ImGui::Text("Sorry but you need NVIDIA GPU to run the denoiser :(");
+		}
 
 		if (showDenoisedPrev != m_ShowDenoisedImage)
 		{
