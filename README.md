@@ -13,7 +13,7 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
 - Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Shaderc.zip)
-- Unzip and copy Shaderc libraries into `Vulture/lib/shaderc/`.
+- Unzip and copy Shaderc libraries into `VulkanHelper/lib/shaderc/`.
 - Run `setup.bat` in main directory.
 - Open generated solution in Visual Studio.
 

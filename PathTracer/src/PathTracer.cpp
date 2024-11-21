@@ -320,15 +320,15 @@ void PathTracer::CreateRayTracingPipeline()
 			defines.push_back({ "FURNACE_TEST_MODE" });
 
 		VulkanHelper::Shader rgShader;
-		if (!rgShader.Init({ "src/shaders/rgen.slang", VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
+		if (!rgShader.Init({ "src/shaders/raytrace.rgen", VK_SHADER_STAGE_RAYGEN_BIT_KHR, defines }))
 			return;
 
 		VulkanHelper::Shader htShader;
-		if (!htShader.Init({ "src/shaders/rchit.slang", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
+		if (!htShader.Init({ "src/shaders/raytrace.rchit", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, defines }))
 			return;
 
 		VulkanHelper::Shader msShader;
-		if (!msShader.Init({ "src/shaders/rtmiss.slang", VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
+		if (!msShader.Init({ "src/shaders/raytrace.rmiss", VK_SHADER_STAGE_MISS_BIT_KHR, defines }))
 			return;
 
 		info.RayGenShaders.push_back(&rgShader);

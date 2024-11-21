@@ -10,8 +10,6 @@ struct Input
 
 [[vk::push_constant]] PushConstant push;
 
-[require(spvImageQuery)]
-[require(spvSparseResidency)]
 [shader("miss")]
 void main(inout Input input)
 {

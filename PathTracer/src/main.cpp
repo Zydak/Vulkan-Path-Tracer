@@ -12,6 +12,7 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	appInfo.EnableRayTracingSupport = true;
 	appInfo.DeviceExtensions = 
 	{
+		VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
