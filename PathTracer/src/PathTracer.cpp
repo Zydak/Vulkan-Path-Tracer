@@ -229,6 +229,7 @@ bool PathTracer::Render()
 
 	if (pathTracingSettings->Settings.AutoDoF && m_PushContantRayTrace.GetDataPtr()->frame > 1)
 	{
+		m_RayTracingDoFBuffer.Flush();
 		memcpy(&pathTracingSettings->Settings.FocalLength, m_RayTracingDoFBuffer.GetMappedMemory(), sizeof(float));
 	}
 
@@ -414,7 +415,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 	{
 		VulkanHelper::Buffer::CreateInfo bufferInfo{};
 		bufferInfo.InstanceSize = sizeof(float);
-		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		bufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		bufferInfo.UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		m_RayTracingDoFBuffer.Init(bufferInfo);
 		m_RayTracingDoFBuffer.Map();

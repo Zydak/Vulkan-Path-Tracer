@@ -26,7 +26,8 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	appInfo.OptionalExtensions =
 	{
 		VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
-		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME
+		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
+		VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME
 	};
 
 	VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
@@ -86,6 +87,10 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	vulkan11Features.variablePointers = true;
 	vulkan11Features.variablePointersStorageBuffer = true;
 
+	VkPhysicalDeviceCoherentMemoryFeaturesAMD amdFeatures = {};
+	amdFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
+	amdFeatures.deviceCoherentMemory = true;
+
 	// ------------------------
 	// Chain feature structures
 	// ------------------------
@@ -103,7 +108,8 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	hostQueryResetFeatures.pNext = &timelineSemaphoreFeatures;
 	timelineSemaphoreFeatures.pNext = &synchronization2Features;
 	synchronization2Features.pNext = &rayQueryFeatures;
-	rayQueryFeatures.pNext = nullptr;
+	rayQueryFeatures.pNext = &amdFeatures;
+	amdFeatures.pNext = nullptr;
 
 	appInfo.Features = features;
 	appInfo.UseMemoryAddress = true;
@@ -125,11 +131,12 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	VL_CHECK(timelineSemaphoreFeatures.timelineSemaphore, "Timeline semaphore not supported!");
 	VL_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
 	VL_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
-	VL_CHECK(rayQueryFeatures.rayQuery, "Ray query not supported!");
 	VL_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
 	VL_CHECK(robustFeatures.nullDescriptor, "nullDescriptor not supported!");
 	VL_CHECK(vulkan11Features.variablePointers, "variablePointers not supported!");
 	VL_CHECK(vulkan11Features.variablePointersStorageBuffer, "variablePointersStorageBuffer not supported!");
+	VL_CHECK(rayQueryFeatures.rayQuery, "rayQuery not supported!");
+	VL_CHECK(amdFeatures.deviceCoherentMemory, "deviceCoherentMemory not supported!");
 
 	return app;
 }
