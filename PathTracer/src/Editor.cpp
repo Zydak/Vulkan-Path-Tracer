@@ -569,87 +569,11 @@ void Editor::ImGuiShaderSettings()
 	if (!ImGui::CollapsingHeader("Shader Settings"))
 		return;
 
-	std::vector<std::string> shadersStr;
-	std::vector<const char*> shadersCStr;
-
-	int fileCount = 0;
-	for (const auto& entry : std::filesystem::directory_iterator("src/shaders/"))
+	if (ImGui::Button("Reload Shaders"))
 	{
-		if (entry.is_regular_file() && (entry.path().extension() == ".rchit" || entry.path().extension() == ".rmiss" || entry.path().extension() == ".rgen"))
-		{
-			fileCount++;
-		}
-	}
-
-	shadersStr.reserve(fileCount);
-	shadersCStr.reserve(fileCount);
-
-	int i = 0;
-	for (const auto& entry : std::filesystem::directory_iterator("src/shaders/"))
-	{
-		if (entry.is_regular_file() && (entry.path().extension() == ".rchit" || entry.path().extension() == ".rmiss" || entry.path().extension() == ".rgen"))
-		{
-			shadersStr.emplace_back(entry.path().string());
-			shadersCStr.emplace_back(shadersStr[i].c_str());
-			i++;
-		}
-	}
-
-	static int selectedShaderIndex = 0;
-	static VkShaderStageFlagBits selectedShaderType = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
-	ImGui::Text("Available Shaders");
-	ImGui::PushID("Available Shaders");
-	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-	if (ImGui::ListBox("", &selectedShaderIndex, shadersCStr.data(), (int)shadersCStr.size(), shadersCStr.size() > 10 ? 10 : (int)shadersCStr.size()))
-	{
-		std::string extension = shadersStr[selectedShaderIndex].substr(shadersStr[selectedShaderIndex].find_last_of('.') + 1);
-		if (extension == "rchit")
-			selectedShaderType = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-		else if (extension == "rmiss")
-			selectedShaderType = VK_SHADER_STAGE_MISS_BIT_KHR;
-		else if (extension == "rgen")
-			selectedShaderType = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-	}
-	ImGui::PopID();
-
-	if (shadersStr.empty())
-	{
-		ImGui::Button("Load Shader");
-		return;
-	}
-
-	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
-
-	if (ImGui::Button("Load Shader"))
-	{
-		if (selectedShaderType == VK_SHADER_STAGE_RAYGEN_BIT_KHR)
-			pathTracingSettings->Settings.RayGenShaderPath = shadersStr[selectedShaderIndex];
-		else if (selectedShaderType == VK_SHADER_STAGE_MISS_BIT_KHR)
-			pathTracingSettings->Settings.MissShaderPath = shadersStr[selectedShaderIndex];
-		else if (selectedShaderType == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
-			pathTracingSettings->Settings.HitShaderPath = shadersStr[selectedShaderIndex];
-
 		m_PathTracer.RecreateRayTracingPipeline();
 		m_PathTracer.ResetFrameAccumulation();
 	}
-
-	std::vector<const char*> loadedShaderPaths = { pathTracingSettings->Settings.RayGenShaderPath.c_str(), pathTracingSettings->Settings.MissShaderPath.c_str(), pathTracingSettings->Settings.HitShaderPath.c_str() };
-
-	ImGui::Separator();
-
-	ImGui::Text("Currently Loaded Shaders");
-
-	int selectedLoadedShaderIndex = -1;
-	ImGui::PushID("Currently Loaded Shaders");
-	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-	ImGui::ListBox("", &selectedLoadedShaderIndex, loadedShaderPaths.data(), (int)loadedShaderPaths.size(), (int)loadedShaderPaths.size());
-	ImGui::PopID();
 }
 
 void Editor::ImGuiInfoHeader(bool resetButton)

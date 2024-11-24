@@ -32,6 +32,7 @@ public struct Ray
         payload.HitValue = float3(0.0f);
         payload.Weight = float3(1.0f);
         payload.RayDirection = m_Direction;
+        payload.RayOrigin = m_Origin;
 
         RayDesc rayDesc = GetRayDesc();
 

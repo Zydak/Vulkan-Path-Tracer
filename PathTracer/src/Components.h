@@ -179,75 +179,17 @@ public:
 	{
 		std::vector<char> vec;
 
-		vec.resize(sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3);
+		vec.resize(sizeof(PathTracer::DrawInfo));
 
-		memcpy(vec.data(), &Settings, sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3);
-
-		for (int i = 0; i < Settings.HitShaderPath.size(); i++)
-		{
-			vec.push_back(Settings.HitShaderPath[i]);
-		}
-		vec.push_back('\0');
-
-		for (int i = 0; i < Settings.MissShaderPath.size(); i++)
-		{
-			vec.push_back(Settings.MissShaderPath[i]);
-		}
-		vec.push_back('\0');
-
-		for (int i = 0; i < Settings.RayGenShaderPath.size(); i++)
-		{
-			vec.push_back(Settings.RayGenShaderPath[i]);
-		}
-		vec.push_back('\0');
+		memcpy(vec.data(), &Settings, sizeof(PathTracer::DrawInfo));
 
 		return vec;
 	}
 
 	void Deserialize(const std::vector<char>& bytes)
 	{
-		memcpy(&Settings, bytes.data(), sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3);
-		int currentPos = sizeof(PathTracer::DrawInfo) - sizeof(std::string) * 3;
-
-		std::string hitPath;
-		while (true)
-		{
-			char ch = bytes[currentPos];
-			currentPos++;
-
-			if (ch == '\0')
-				break;
-			else
-				hitPath.push_back(ch);
-		}
-
-		std::string missPath;
-		while (true)
-		{
-			char ch = bytes[currentPos];
-			currentPos++;
-
-			if (ch == '\0')
-				break;
-			else
-				missPath.push_back(ch);
-		}
-
-		std::string rayGenPath;
-		while (true)
-		{
-			char ch = bytes[currentPos];
-			currentPos++;
-
-			if (ch == '\0')
-				break;
-			else
-				rayGenPath.push_back(ch);
-		}
-
-		Settings.HitShaderPath		= std::move(hitPath);
-		Settings.MissShaderPath		= std::move(missPath);
-		Settings.RayGenShaderPath	= std::move(rayGenPath);
+		memcpy(&Settings, bytes.data(), sizeof(PathTracer::DrawInfo));
+		int currentPos = sizeof(PathTracer::DrawInfo);
 	}
 
 	PathTracer::DrawInfo Settings{};

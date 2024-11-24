@@ -29,7 +29,7 @@ public struct PushConstant
 
     public float FocalLenght;
     public float DoFStrenght;
-    public float AliasingJitter;
+    public float AAstrength;
     public float CausticsLuminance;
     public int VolumesCount;
 };

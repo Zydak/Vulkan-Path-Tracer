@@ -52,59 +52,59 @@ void Application::Init()
 	m_Editor = std::make_unique<Editor>();
 	m_Editor->Init();
 
-	m_Scene = new VulkanHelper::Scene();
-	m_Scene->Init();
-
-	// Add camera
-	VulkanHelper::Entity camera = m_Scene->CreateEntity();
-	auto& camComp = camera.AddComponent<PerspectiveCameraComponent>();
-	camComp.MainCamera = true;
-	camComp.Camera.Translation.z = -16.0f;
-
-	auto& cameraScComponent = camera.AddComponent<VulkanHelper::ScriptComponent>();
-	cameraScComponent.AddScript<CameraScript>();
-
-	// Load Initial Skybox
-	VulkanHelper::Entity skyboxEntity = m_Scene->CreateEntity();
-	skyboxEntity.AddComponent<SkyboxComponent>("assets/Black.hdr").ImageHandle.WaitToLoad();
-
-	// Load Initial model
-	VulkanHelper::AssetHandle modelAssetHandle = VulkanHelper::AssetManager::LoadAsset("assets/cornellBox.gltf");
-	modelAssetHandle.WaitToLoad();
-
-	VulkanHelper::ModelAsset* modelAsset = (VulkanHelper::ModelAsset*)modelAssetHandle.GetAsset();
-	modelAsset->CreateEntities(m_Scene);
-
-	modelAssetHandle.Unload();
-
-	VulkanHelper::Serializer::SerializeScene<
-		PerspectiveCameraComponent,
-		OrthographicCameraComponent,
-		SkyboxComponent,
-		VulkanHelper::ScriptComponent,
-		VulkanHelper::MeshComponent,
-		VulkanHelper::MaterialComponent,
-		VulkanHelper::NameComponent,
-		VulkanHelper::TransformComponent
-	>(m_Scene, "assets/scenes/CornellBox.ptscene");
-
-	// Unload everything
-	{
-		auto view = m_Scene->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
-		for (auto& entity : view)
-		{
-			auto [meshComp, materialComp] = m_Scene->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
-
-			meshComp.AssetHandle.Unload();
-
-			if (materialComp.AssetHandle.DoesHandleExist())
-				materialComp.AssetHandle.Unload();
-		}
-	}
-
-	m_Scene->Destroy();
-
-	delete m_Scene;
+	//m_Scene = new VulkanHelper::Scene();
+	//m_Scene->Init();
+	//
+	//// Add camera
+	//VulkanHelper::Entity camera = m_Scene->CreateEntity();
+	//auto& camComp = camera.AddComponent<PerspectiveCameraComponent>();
+	//camComp.MainCamera = true;
+	//camComp.Camera.Translation.z = -16.0f;
+	//
+	//auto& cameraScComponent = camera.AddComponent<VulkanHelper::ScriptComponent>();
+	//cameraScComponent.AddScript<CameraScript>();
+	//
+	//// Load Initial Skybox
+	//VulkanHelper::Entity skyboxEntity = m_Scene->CreateEntity();
+	//skyboxEntity.AddComponent<SkyboxComponent>("assets/drackenstein_quarry_4k.hdr").ImageHandle.WaitToLoad();
+	//
+	//// Load Initial model
+	//VulkanHelper::AssetHandle modelAssetHandle = VulkanHelper::AssetManager::LoadAsset("assets/cornellBox.gltf");
+	//modelAssetHandle.WaitToLoad();
+	//
+	//VulkanHelper::ModelAsset* modelAsset = (VulkanHelper::ModelAsset*)modelAssetHandle.GetAsset();
+	//modelAsset->CreateEntities(m_Scene);
+	//
+	//modelAssetHandle.Unload();
+	//
+	//VulkanHelper::Serializer::SerializeScene<
+	//	PerspectiveCameraComponent,
+	//	OrthographicCameraComponent,
+	//	SkyboxComponent,
+	//	VulkanHelper::ScriptComponent,
+	//	VulkanHelper::MeshComponent,
+	//	VulkanHelper::MaterialComponent,
+	//	VulkanHelper::NameComponent,
+	//	VulkanHelper::TransformComponent
+	//>(m_Scene, "assets/scenes/CornellBox.ptscene");
+	//
+	//// Unload everything
+	//{
+	//	auto view = m_Scene->GetRegistry().view<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>();
+	//	for (auto& entity : view)
+	//	{
+	//		auto [meshComp, materialComp] = m_Scene->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
+	//
+	//		meshComp.AssetHandle.Unload();
+	//
+	//		if (materialComp.AssetHandle.DoesHandleExist())
+	//			materialComp.AssetHandle.Unload();
+	//	}
+	//}
+	//
+	//m_Scene->Destroy();
+	//
+	//delete m_Scene;
 
 	REGISTER_CLASS_IN_SERIALIZER(PerspectiveCameraComponent);
 	REGISTER_CLASS_IN_SERIALIZER(OrthographicCameraComponent);

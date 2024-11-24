@@ -32,7 +32,7 @@ layout(buffer_reference, scalar) buffer Indices { int i[]; };
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT uTopLevelAS;
 layout(set = 0, binding = 2, scalar) buffer MeshAdressesUbo { MeshAdresses uMeshAdresses[]; };
-layout(set = 0, binding = 3, scalar) buffer MaterialsUbo { MaterialLoad uMaterials[]; };
+layout(set = 0, binding = 3) buffer MaterialsUbo { MaterialLoad uMaterials[]; };
 layout(set = 0, binding = 4) uniform sampler2D uAlbedoTextures[];
 layout(set = 0, binding = 5) uniform sampler2D uNormalTextures[];
 layout(set = 0, binding = 6) uniform sampler2D uRoghnessTextures[];
@@ -82,7 +82,7 @@ void main()
     // be transformed using inverse of the transpose
     vec3 geometryNormal = vec3(normalize(cross(v1.Position.xyz - v0.Position.xyz, v2.Position.xyz - v0.Position.xyz) * gl_WorldToObjectEXT));
     vec3 worldNrm = vec3(normalize(nrm) * gl_WorldToObjectEXT);
-    worldNrm = geometryNormal;
+    worldNrm = worldNrm;
 
     const vec3 V = -gl_WorldRayDirectionEXT;
 

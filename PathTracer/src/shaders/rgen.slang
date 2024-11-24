@@ -22,9 +22,6 @@ void main()
 
     Camera camera = Camera(uUniformBuffer.ViewInverse, uUniformBuffer.ProjInverse);
 
-    const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5, 0.5);
-    const float2 inUV = pixelCenter / float2(LaunchSize.xy);
-
     RTPayload payload = RTPayload();
     payload.Sampler = Sampler(LaunchID.y + LaunchSize.x * LaunchID.x + getRealtimeClock().x);
 
@@ -37,6 +34,13 @@ void main()
         payload.HitValue = float3(0.0f);
         payload.Weight = float3(1.0f);
         payload.Depth = 0;
+        payload.InMedium = false;
+
+        // Random float2 from -0.5 to 0.5
+        const float2 antiAliasingJitter = (payload.Sampler.UniformFloat2() - 0.5f) * push.AAstrength;
+
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5, 0.5) + antiAliasingJitter;
+        const float2 inUV = pixelCenter / float2(LaunchSize.xy);
 
         Ray ray = camera.GetRay(inUV * 2.0 - 1.0);
 
@@ -59,6 +63,16 @@ void main()
                 break;
             weight /= p;
         }
+
+        // Eliminate caustics
+#ifdef USE_CAUSTICS_SUPPRESION
+        const float maxLuminance = push.CausticsLuminance;
+        float lum = dot(hitValue, float3(0.212671f, 0.715160f, 0.072169f));
+        if (lum > maxLuminance)
+        {
+            hitValue *= maxLuminance / lum;
+        }
+#endif
 
         finalValue += hitValue;
     }

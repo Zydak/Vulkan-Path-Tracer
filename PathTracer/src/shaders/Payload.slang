@@ -16,5 +16,10 @@ public struct RTPayload
     public Sampler Sampler;
     public uint Depth = 0;
 
+    public bool InMedium = false;
+    public float MediumDensity = 0.0;
+    public float MediumAnisotropy = 1.0;
+    public float3 MediumColor = float3(1.0);
+
     public __init() {}
 };

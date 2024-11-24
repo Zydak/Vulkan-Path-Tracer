@@ -8,11 +8,12 @@ public struct Surface
     float2 m_TexCoords;
 
     float3 m_Normal;
+    float3 m_GeometryNormal;
     float3 m_Tangent;
     float3 m_Bitangent;
 
     [mutating]
-    public void Prepare(MeshAddress meshAddress, float2 barycentrics, float anisotropyRotation)
+    public void Prepare(MeshAddress meshAddress, float2 barycentrics, Sampler2D normalTexture)
     {
         const float3 barycentricCoords = float3(1.0f - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
 
@@ -38,22 +39,34 @@ public struct Surface
         m_WorldPos = mul(ObjectToWorld3x4(), float4(pos, 1.0)).xyz;
 
         float3 normal = v1.Normal.xyz * barycentricCoords.x + v2.Normal.xyz * barycentricCoords.y + v3.Normal.xyz * barycentricCoords.z;
-        //float3 normal = normalize(cross(pos2 - pos1, pos3 - pos1));
+        //m_GeometryNormal = normalize(cross(pos2 - pos1, pos3 - pos1));
 
         normal = normalize(mul(normal, WorldToObject()).xyz);
-
-        float3 V = -WorldRayDirection();
-        
-        if (dot(V, normal) < 0.0f)
-        {
-            normal = -normal;
-        }
+        m_GeometryNormal = normal;
 
         m_Normal = normal;
-
         CalculateTangents(m_Normal, m_Tangent, m_Bitangent);
 
-        float rotation = anisotropyRotation / 360.0f * M_PI;
+        float3 V = -WorldRayDirection();
+        if (dot(V, m_Normal) < 0.0f)
+        {
+            m_Normal = -m_Normal;
+        }
+
+        // Normal map
+        float3 normalMapVal = normalTexture.SampleLevel(m_TexCoords, 0).rgb;
+        normalMapVal = normalMapVal * 2.0f - 1.0f;
+
+        normalMapVal = TangentToWorld(normalMapVal);
+        m_Normal = normalize(normalMapVal);
+
+        CalculateTangents(m_Normal, m_Tangent, m_Bitangent);
+    }
+
+    [mutating]
+    public void RotateTangents(float rotation)
+    {
+        float rotation = rotation;
         m_Tangent = m_Tangent * cos(rotation) + cross(m_Normal, m_Tangent) * sin(rotation) + m_Normal * dot(m_Normal, m_Tangent) * (1.0f - cos(rotation));
         m_Bitangent = cross(m_Tangent, m_Normal);
     }
@@ -69,6 +82,7 @@ public struct Surface
     }
 
     public inline float3 GetNormal() { return m_Normal; }
+    public inline float3 GetGeometryNormal() { return m_GeometryNormal; }
     public inline float3 GetTangent() { return m_Tangent; }
     public inline float3 GetBitangent() { return m_Bitangent; }
     public inline float3 GetWorldPos() { return m_WorldPos; }
