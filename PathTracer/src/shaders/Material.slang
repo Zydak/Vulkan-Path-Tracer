@@ -68,7 +68,7 @@ public struct Material
         MediumColor = material.MediumColor;
 
         Metallic = material.Metallic;
-        Roughness = material.Roughness;
+        Roughness = material.Roughness * material.Roughness * material.Roughness * material.Roughness;
         SpecularTint = material.SpecularTint;
 
         Ior = max(material.Ior, 1.000001);

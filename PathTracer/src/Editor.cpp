@@ -938,9 +938,8 @@ void Editor::ImGuiPathTracingSettings()
 	if (ImGui::SliderInt("Samples Per Frame",	&pathTracingSettings->Settings.SamplesPerFrame, 1, 40)) {  }
 	
 	if (ImGui::Checkbox(   "Auto Focal Length",	&pathTracingSettings->Settings.AutoDoF)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::Checkbox(   "Visualize DOF",		&pathTracingSettings->Settings.VisualizedDOF)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("Focal Length",		&pathTracingSettings->Settings.FocalLength, 1.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
-	if (ImGui::SliderFloat("DoF Strength",		&pathTracingSettings->Settings.DOFStrength, 0.0f, 100.0f)) { m_PathTracer.ResetFrameAccumulation(); }
+	if (ImGui::SliderFloat("DoF Strength",		&pathTracingSettings->Settings.DOFStrength, 0.0f, 2.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	if (ImGui::SliderFloat("Anti Aliasing Strength", &pathTracingSettings->Settings.AliasingJitterStr, 0.0f, 2.0f)) { m_PathTracer.ResetFrameAccumulation(); }
 	ImGui::Separator();
 }

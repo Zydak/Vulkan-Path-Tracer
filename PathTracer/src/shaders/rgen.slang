@@ -10,6 +10,7 @@ import Sampler;
 [[vk::image_format("rgba32f")]]
 [[vk::binding(1, 0)]] RWTexture2D<float4> uImage;
 [[vk::binding(0, 1)]] ConstantBuffer<GlobalUniform> uUniformBuffer;
+[[vk::binding(8, 0)]] RWStructuredBuffer<float> uDof;
 
 [[vk::push_constant]] PushConstant push;
 
@@ -19,6 +20,25 @@ void main()
     Film film = Film(uImage);
     uint3 LaunchID = DispatchRaysIndex();
     uint3 LaunchSize = DispatchRaysDimensions();
+
+    if (LaunchID.x == (LaunchSize.x / 2) && LaunchID.y == (LaunchSize.y / 2))
+    {
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5);
+        const float2 inUV = pixelCenter / float2(LaunchSize.xy);
+        float2 d = inUV * 2.0 - 1.0;
+
+        float4 origin = mul(float4(0, 0, 0, 1), uUniformBuffer.ViewInverse);
+        float4 target = mul(float4(d.x, d.y, 1, 1), uUniformBuffer.ProjInverse);
+        float3 direction = mul(float4(normalize(target.xyz), 0.0f), uUniformBuffer.ViewInverse).xyz;
+
+        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin.xyz, 0.0001, direction, 1000000);
+        query.Proceed();
+        if (query.CommittedStatus() != COMMITTED_NOTHING)
+        {
+            uDof[0] = query.CommittedRayT();
+        }
+    }
 
     Camera camera = Camera(uUniformBuffer.ViewInverse, uUniformBuffer.ProjInverse);
 
@@ -42,7 +62,7 @@ void main()
         const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5, 0.5) + antiAliasingJitter;
         const float2 inUV = pixelCenter / float2(LaunchSize.xy);
 
-        Ray ray = camera.GetRay(inUV * 2.0 - 1.0);
+        Ray ray = camera.GetRay(push.FocalLenght, push.DoFStrenght, payload.Sampler, inUV * 2.0 - 1.0);
 
         for (; payload.Depth < push.MaxDepth; payload.Depth++)
         {

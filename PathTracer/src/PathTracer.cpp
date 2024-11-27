@@ -235,16 +235,6 @@ bool PathTracer::Render()
 
 	VulkanHelper::PerspectiveCamera* cam = &PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered)->Camera;
 
-	if (pathTracingSettings->Settings.VisualizedDOF)
-	{
-		auto data = m_DOfVisualizer.GetPush().GetDataPtr();
-		data->Near = cam->NearFar.x;
-		data->Far = cam->NearFar.y;
-		data->FocalPoint = pathTracingSettings->Settings.FocalLength;
-		data->VPInverse = glm::inverse(cam->GetProjView());
-		m_DOfVisualizer.Run(VulkanHelper::Renderer::GetCurrentCommandBuffer());
-	}
-
 	m_GBufferNormal.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 	m_GBufferAlbedo.TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VulkanHelper::Renderer::GetCurrentCommandBuffer());
 
