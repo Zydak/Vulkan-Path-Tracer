@@ -24,6 +24,19 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 --------
 ![DragonHead](./Gallery/DragonHead.png)
 --------
+<p align="center">
+  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
+  <img src="./Gallery/Graphics/Original.png" alt="Original" />
+</p>
+
+--------
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
+  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
+</p>
+
+--------
 ![OceanAjax](./Gallery/OceanAjax.png)
 --------
 ![Mustang0](./Gallery/Mustang0.png)
@@ -69,11 +82,6 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 
 # List Of Features
 - Energy Conserving BSSRDF.
-<p align="center">
-  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
-  <img src="./Gallery/Graphics/Original.png" alt="Original" />
-</p>
-
 - HDR Environment Maps
 - Environment map MIS
 - Complex Materials
