@@ -2,6 +2,8 @@
 #include "Components.h"
 #include <glm/gtc/random.hpp>
 
+#include "EnergyLossCalculator.h"
+
 void PathTracer::Init(VkExtent2D size)
 {
 	m_ViewportSize = size;
@@ -21,25 +23,29 @@ void PathTracer::Init(VkExtent2D size)
 	info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	info.LayerCount = 32;
 	m_ReflectionLookupTexture.Init(info);
-	m_RefractionLookupTextureEtaGreaterThan1.Init(info);
-	m_RefractionLookupTextureEtaLessThan1.Init(info);
 
 	VkCommandBuffer cmd;
 	VulkanHelper::Device::BeginSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsCommandPool());
 
 	for (int i = 0; i < 32; i++)
 	{
-		m_ReflectionLookupTexture.WritePixels(m_ReflectionEnergyLookupTable[i].data(), cmd, i);
+		m_ReflectionLookupTexture.WritePixels(m_ReflectionEnergyLookupTable.data() + 32 * 32 * i, cmd, i);
 	}
 
-	for (int i = 0; i < 32; i++)
+	info.Width = 256;
+	info.Height = 64;
+	info.LayerCount = 64;
+	m_RefractionLookupTextureEtaGreaterThan1.Init(info);
+	m_RefractionLookupTextureEtaLessThan1.Init(info);
+
+	for (int i = 0; i < 64; i++)
 	{
-		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable[i].data(), cmd, i);
+		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable.data() + 256 * 64 * i, cmd, i);
 	}
 
-	for (int i = 0; i < 32; i++)
+	for (int i = 0; i < 64; i++)
 	{
-		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable[i].data(), cmd, i);
+		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable.data() + 256 * 64 * i, cmd, i);
 	}
 
 	VulkanHelper::Device::EndSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsQueue(), VulkanHelper::Device::GetGraphicsCommandPool());
@@ -649,247 +655,75 @@ void PathTracer::UpdateDescriptorSetsData()
 	);
 }
 
-float Lambda(glm::vec3 V, float ax, float ay)
-{
-	float Vx2 = V.x * V.x;
-	float Vy2 = V.y * V.y;
-	float Vz2 = V.z * V.z;
-
-	float ax2 = ax * ax;
-	float ay2 = ay * ay;
-
-	float nominator = -1.0f + glm::sqrt(1.0f + (ax2 * Vx2 + ay2 * Vy2) / Vz2);
-
-	return nominator / 2.0f;
-}
-
-float GGXSmithAnisotropic(glm::vec3 V, float ax, float ay)
-{
-	return 1.0f / (1.0f + Lambda(V, ax, ay));
-}
-
-glm::vec3 GGXSampleAnisotopic(glm::vec3 Ve, float ax, float ay, float u1, float u2)
-{
-	glm::vec3 Vh = glm::normalize(glm::vec3(ax * Ve.x, ay * Ve.y, Ve.z));
-
-	float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-	glm::vec3 T1 = lensq > 0 ? glm::vec3(-Vh.y, Vh.x, 0) * glm::inversesqrt(lensq) : glm::vec3(1, 0, 0);
-	glm::vec3 T2 = glm::cross(Vh, T1);
-
-	float r = glm::sqrt(u1);
-	float phi = 2.0f * glm::pi<float>() * u2;
-	float t1 = r * glm::cos(phi);
-	float t2 = r * glm::sin(phi);
-	float s = 0.5f * (1.0f + Vh.z);
-	t2 = (1.0f - s) * glm::sqrt(1.0f - t1 * t1) + s * t2;
-
-	glm::vec3 Nh = t1 * T1 + t2 * T2 + glm::sqrt(glm::max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
-
-	glm::vec3 Ne = normalize(glm::vec3(ax * Nh.x, ay * Nh.y, glm::max(0.0f, Nh.z)));
-
-	return Ne;
-}
-
-float GGXDistributionAnisotropic(glm::vec3 H, float ax, float ay)
-{
-	float Hx2 = H.x * H.x;
-	float Hy2 = H.y * H.y;
-	float Hz2 = H.z * H.z;
-
-	float ax2 = ax * ax;
-	float ay2 = ay * ay;
-
-	return 1.0f / (float(M_PI) * ax * ay * glm::pow(Hx2 / ax2 + Hy2 / ay2 + Hz2, 2.0f));
-}
-
-float EvalReflection(glm::vec3 L, glm::vec3 V, glm::vec3 H, float F, float ax, float ay)
-{
-	// BRDF = D * F * GV * GL / (4.0f * NdotV * NdotL) * NdotL
-	// 
-	// PDF is VNDF / jacobian of reflect()
-	// PDF = (GV * VdotH * D / NdotV) / (4.0f * VdotH)
-	//
-	// Fr = BRDF / PDF
-	//
-	// If we expand it we get
-	// 
-	//      D * F * GV * GL * 4.0f * NdotV * NdotL * VdotH
-	// Fr = ----------------------------------------------
-	//          4.0f * NdotL * VdotH * NdotV * GV * D
-	//
-	// almost everything cancels out and we're only left with F * GL.
-
-	float LdotH = glm::max(0.0f, dot(L, H));
-	float VdotH = glm::max(0.0f, dot(V, H));
-
-	float D = GGXDistributionAnisotropic(H, ax, ay);
-
-	float GV = GGXSmithAnisotropic(V, ax, ay);
-	float GL = GGXSmithAnisotropic(L, ax, ay);
-	float G = GV * GL;
-
-	//pdf = 1.0f;
-	//vec3 bsdf = F * GL;
-
-	float pdf = (GV * D) / (4.0f * V.z);
-	float bsdf = D * F * GV * GL / (4.0f * V.z);
-
-	return bsdf / pdf;
-}
-
-float BRDF(glm::vec3 V, float F, float ax, float ay)
-{
-	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
-
-	glm::vec3 L = glm::normalize(glm::reflect(-V, H));
-
-	if (L.z < 0.0f)
-		return 0.0f;
-
-	return EvalReflection(L, V, H, F, ax, ay);
-}
-
-float EvalDielectricRefraction(float ax, float ay, float eta, glm::vec3 L, glm::vec3 V, glm::vec3 H, float F)
-{
-	float VdotH = abs(dot(V, H));
-	float LdotH = abs(dot(L, H));
-
-	float D = GGXDistributionAnisotropic(H, ax, ay);
-	float GV = GGXSmithAnisotropic(V, ax, ay);
-	float GL = GGXSmithAnisotropic(L, ax, ay);
-	float G = GV * GL;
-
-	float denominator = (LdotH + eta * VdotH);
-	float denominator2 = denominator * denominator;
-	float eta2 = eta * eta;
-
-	float jacobian = (eta2 * LdotH) / denominator2;
-
-	float pdf = (GV * VdotH * D / V.z) * jacobian;
-	float bsdf = ((1.0f - F) * D * G * eta2 / denominator2) * (VdotH * LdotH / abs(V.z));
-
-	return bsdf / pdf;
-}
-
-float DielectricFresnel(float VdotH, float eta)
-{
-	float cosThetaI = VdotH;
-	float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
-
-	// Total internal reflection
-	if (sinThetaTSq > 1.0f)
-		return 1.0f;
-
-	float cosThetaT = glm::sqrt(glm::max(1.0f - sinThetaTSq, 0.0f));
-
-	float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
-	float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
-
-	return 0.5f * (rs * rs + rp * rp);
-}
-
-float BSDF(glm::vec3 V, float ax, float ay, float IOR, bool AboveTheSurface)
-{
-	glm::vec3 H = GGXSampleAnisotopic(V, ax, ay, glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
-
-	float rand = glm::linearRand(0.0f, 1.0f);
-	float eta;
-
-	if (AboveTheSurface)
-		eta = IOR;
-	else
-		eta = (1.0f / IOR);
-
-	glm::vec3 L = glm::normalize(glm::refract(-V, H, eta));
-	if (glm::isnan(L.x) || glm::isnan(L.y) || glm::isnan(L.z))
-		return 1.0f;
-
-	if (L.z > 0.0f)
-		return 0.0f;
-
-	float F = DielectricFresnel(glm::abs(glm::dot(V, H)), eta);
-
-	float bsdf = 0.0f;
-	//bsdf += BRDF(V, F, ax, ay);
-	bsdf += EvalDielectricRefraction(ax, ay, eta, L, V, H, 0.0f);
-
-	return bsdf;
-}
-
-static float AccumulateBRDF(float roughness, float viewCosine, float anisotropy)
-{
-	float ax, ay;
-	const float aspect = glm::sqrt(1.0f - glm::sqrt(anisotropy) * 0.9f);
-	ax = glm::max(0.001f, roughness / aspect);
-	ay = glm::max(0.001f, roughness * aspect);
-
-	int sampleCount = 10'000;
-	float totalEnergy = 0.0f;
-
-	for (int i = 0; i < sampleCount; i++)
-	{
-		// Generate random view dir
-		float xyMagnitudeSquared = 1.0f - viewCosine * viewCosine;
-		float phiV = glm::linearRand(0.0f, glm::two_pi<float>());
-		float x = glm::sqrt(xyMagnitudeSquared) * glm::cos(phiV);
-		float y = glm::sqrt(xyMagnitudeSquared) * glm::sin(phiV);
-
-		// leave z as viewCosine
-		float z = viewCosine;
-
-		glm::vec3 V(x, y, z);
-		V = glm::normalize(V);
-
-		float brdf = BRDF(V, 1.0f, ax, ay);
-
-		totalEnergy += brdf;
-	}
-
-	return totalEnergy / sampleCount;
-}
-
-static float AccumulateBSDF(float roughness, float viewCosine, float ior, bool AboveTheSurface)
-{
-	float ax = roughness;
-	float ay = roughness;
-
-	int sampleCount = 100'000;
-	float totalEnergy = 0.0f;
-
-	for (int i = 0; i < sampleCount; i++)
-	{
-		// Generate random view dir
-		float xyMagnitudeSquared = 1.0f - viewCosine * viewCosine;
-		float phiV = glm::linearRand(0.0f, glm::two_pi<float>());
-		float x = glm::sqrt(xyMagnitudeSquared) * glm::cos(phiV);
-		float y = glm::sqrt(xyMagnitudeSquared) * glm::sin(phiV);
-
-		// leave z as viewCosine
-		float z = viewCosine;
-
-		glm::vec3 V(x, y, z);
-		V = glm::normalize(V);
-
-		float bsdf = BSDF(V, ax, ay, ior, AboveTheSurface);
-
-		if (glm::isnan(bsdf) || glm::isinf(bsdf) || bsdf != bsdf)
-			totalEnergy += 1.0f;
-		else
-			totalEnergy += bsdf;
-	}
-
-	return totalEnergy / sampleCount;
-}
-
 void PathTracer::BuildEnergyLookupTable()
 {
 	m_ReflectionEnergyLookupTable.clear();
 	m_RefractionEtaGreaterThan1EnergyLookupTable.clear();
 	m_RefractionEtaLessThan1EnergyLookupTable.clear();
 
-	m_ReflectionEnergyLookupTable.resize(32);
-	m_RefractionEtaGreaterThan1EnergyLookupTable.resize(32);
-	m_RefractionEtaLessThan1EnergyLookupTable.resize(32);
+	EnergyLossCalculator calculator;
+
+	if (!std::filesystem::exists("assets/lookupTables/ReflectionLookup"))
+	{
+		// If file doesn't exists compute new values
+		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLoss({ 32, 32, 32 }, 100'000));
+		std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
+		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+
+		ostream.write((char*)m_ReflectionEnergyLookupTable.data(), m_ReflectionEnergyLookupTable.size() * 4);
+	}
+	else
+	{
+		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
+		std::ifstream istream("assets/lookupTables/ReflectionLookup", std::ios_base::binary);
+		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+
+		m_ReflectionEnergyLookupTable.resize(32 * 32 * 32);
+
+		istream.read((char*)m_ReflectionEnergyLookupTable.data(), m_ReflectionEnergyLookupTable.size() * 4);
+	}
+
+	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaGreaterThan1"))
+	{
+		// If file doesn't exists compute new values
+		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, true));
+		std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
+		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+
+		ostream.write((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
+	}
+	else
+	{
+		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
+		std::ifstream istream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary);
+		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+
+		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(256 * 64 * 64);
+
+		istream.read((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
+	}
+
+
+	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaLessThan1"))
+	{
+		// If file doesn't exists compute new values
+		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, false));
+		std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
+		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+
+		ostream.write((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
+	}
+	else
+	{
+		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
+		std::ifstream istream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary);
+		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+
+		m_RefractionEtaLessThan1EnergyLookupTable.resize(256 * 64 * 64);
+
+		istream.read((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
+	}
+
 
 	//VulkanHelper::Timer timer;
 	//
@@ -997,62 +831,5 @@ void PathTracer::BuildEnergyLookupTable()
 	//
 	//VL_INFO("Generating both refraction tables took {}s", timer.ElapsedSeconds());
 	//
-	//// Cache the result since it's literally the same every time
-	//{
-	//	std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
-	//	VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
-	//
-	//	for (int i = 0; i < 32; i++)
-	//	{
-	//		ostream.write((char*)m_RefractionEtaLessThan1EnergyLookupTable[i].data(), 32 * 32 * 4);
-	//	}
-	//}
-	//{
-	//	std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
-	//	VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
-	//
-	//	for (int i = 0; i < 32; i++)
-	//	{
-	//		ostream.write((char*)m_RefractionEtaGreaterThan1EnergyLookupTable[i].data(), 32 * 32 * 4);
-	//	}
-	//}
-
-	{
-		// Just read the cached table as recalculating it every time is quite slow even with multi threading
-		std::ifstream istream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
-
-		for (int i = 0; i < 32; i++)
-		{
-			m_RefractionEtaLessThan1EnergyLookupTable[i].resize(32 * 32);
-
-			istream.read((char*)m_RefractionEtaLessThan1EnergyLookupTable[i].data(), 32 * 32 * 4);
-		}
-	}
-
-	{
-		// Just read the cached table as recalculating it every time is quite slow even with multi threading
-		std::ifstream istream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
-
-		for (int i = 0; i < 32; i++)
-		{
-			m_RefractionEtaGreaterThan1EnergyLookupTable[i].resize(32 * 32);
-
-			istream.read((char*)m_RefractionEtaGreaterThan1EnergyLookupTable[i].data(), 32 * 32 * 4);
-		}
-	}
-
-	{
-		// Just read the cached table as recalculating it every time is quite slow even with multi threading
-		std::ifstream istream("assets/lookupTables/ReflectionLookup", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
-
-		for (int i = 0; i < 32; i++)
-		{
-			m_ReflectionEnergyLookupTable[i].resize(32 * 32);
-
-			istream.read((char*)m_ReflectionEnergyLookupTable[i].data(), 32 * 32 * 4);
-		}
-	}
+	// Cache the result since it's literally the same every time
 }

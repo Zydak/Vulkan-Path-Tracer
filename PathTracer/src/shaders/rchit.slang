@@ -47,6 +47,14 @@ void main(inout Input input, in float2 attribs)
 
     bool hitFromTheInside = material.Eta > 1.0f;
 
+    if (input.Payload.GBufferPass)
+    {
+        input.Payload.GBufferColor = material.Color.xyz;
+        input.Payload.GBufferNormal = surface.GetNormal();
+    
+        return;
+    }
+
     // Medium
 
     if (input.Payload.InMedium)
@@ -126,6 +134,12 @@ void main(inout Input input, in float2 attribs)
     }
 
     if (!refracted && sample.L.z <= 0.0f)
+        input.Payload.Depth = DEPTH_INFINITE;
+
+    if (refracted && sample.L.z >= 0.0f)
+        input.Payload.Depth = DEPTH_INFINITE;
+
+    if (sample.PDF <= 0.0f)
         input.Payload.Depth = DEPTH_INFINITE;
 
     input.Payload.RayDirection = surface.TangentToWorld(sample.L);

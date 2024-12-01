@@ -153,9 +153,9 @@ private:
 	VulkanHelper::Effect<PushConstantDOF> m_DOfVisualizer;
 
 	// Lookup Table
-	std::vector<std::vector<float>> m_ReflectionEnergyLookupTable;
-	std::vector<std::vector<float>> m_RefractionEtaLessThan1EnergyLookupTable;
-	std::vector<std::vector<float>> m_RefractionEtaGreaterThan1EnergyLookupTable;
+	std::vector<float> m_ReflectionEnergyLookupTable;
+	std::vector<float> m_RefractionEtaLessThan1EnergyLookupTable;
+	std::vector<float> m_RefractionEtaGreaterThan1EnergyLookupTable;
 	VulkanHelper::Image m_ReflectionLookupTexture;
 	VulkanHelper::Image m_RefractionLookupTextureEtaLessThan1;
 	VulkanHelper::Image m_RefractionLookupTextureEtaGreaterThan1;

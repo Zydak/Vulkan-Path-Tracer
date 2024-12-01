@@ -12,6 +12,9 @@ import Sampler;
 [[vk::binding(0, 1)]] ConstantBuffer<GlobalUniform> uUniformBuffer;
 [[vk::binding(8, 0)]] RWStructuredBuffer<float> uDof;
 
+[[vk::binding(14, 0)]] RWTexture2D<float4> uGBufferAlbedo;
+[[vk::binding(15, 0)]] RWTexture2D<float4> uGBufferNormal;
+
 [[vk::push_constant]] PushConstant push;
 
 [shader("raygeneration")]
@@ -43,7 +46,9 @@ void main()
     Camera camera = Camera(uUniformBuffer.ViewInverse, uUniformBuffer.ProjInverse);
 
     RTPayload payload = RTPayload();
+    payload.GBufferPass = false;
     payload.Sampler = Sampler(LaunchID.y + LaunchSize.x * LaunchID.x + getRealtimeClock().x);
+
 
     float3 finalValue = 0.0f;
     for (int i = 0; i < push.SamplesPerFrame; i++)
@@ -99,4 +104,31 @@ void main()
     finalValue /= push.SamplesPerFrame;
 
     film.WritePixel(LaunchID.xy, float4(finalValue, 1.0f), push.Frame);
+
+    if (push.Frame == 0)
+    {
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5);
+        const float2 inUV = pixelCenter / float2(LaunchSize.xy);
+        float2 d = inUV * 2.0 - 1.0;
+
+        float4 origin = mul(float4(0, 0, 0, 1), uUniformBuffer.ViewInverse);
+        float4 target = mul(float4(d.x, d.y, 1, 1), uUniformBuffer.ProjInverse);
+        float3 direction = mul(float4(normalize(target.xyz), 0.0f), uUniformBuffer.ViewInverse).xyz;
+
+        RayDesc rayDesc;
+        rayDesc.TMin = 0.001;
+        rayDesc.TMax = 10000.0;
+        rayDesc.Origin = origin.xyz;
+        rayDesc.Direction = direction;
+
+        RTPayload payload1 = RTPayload();
+        payload1.GBufferPass = true;
+        payload1.RayOrigin = origin.xyz;
+        payload1.RayDirection = direction;
+
+        TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0, 0, 0, rayDesc, payload1);
+
+        uGBufferAlbedo[LaunchID.xy] = float4(payload1.GBufferColor, 1.0f);
+        uGBufferNormal[LaunchID.xy] = float4((payload1.GBufferNormal + 1.0f) * 0.5f, 1.0f);
+    }
 }

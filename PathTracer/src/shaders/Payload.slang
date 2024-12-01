@@ -21,5 +21,9 @@ public struct RTPayload
     public float MediumAnisotropy = 1.0;
     public float3 MediumColor = float3(1.0);
 
+    public float3 GBufferColor = float3(0.0f);
+    public float3 GBufferNormal = float3(0.0f);
+    public bool GBufferPass = false;
+
     public __init() {}
 };
