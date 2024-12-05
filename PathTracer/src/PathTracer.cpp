@@ -87,7 +87,6 @@ void PathTracer::SetScene(VulkanHelper::Scene* scene)
 	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
 	for (auto& entity : viewPathTracing)
 	{
-		VL_CORE_ASSERT(m_PathTracingSettings == 0, "Can't have more than one tonemap settings inside a scene!");
 		m_PathTracingSettings = VulkanHelper::Entity(entity, m_CurrentSceneRendered);
 	}
 

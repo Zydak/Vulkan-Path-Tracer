@@ -46,4 +46,11 @@ public struct Ray
     public const inline float3 GetOrigin() { return m_Origin; }
     public const inline float3 GetDirection() { return m_Direction; }
     public const inline float3 GetWeight() { return m_Weight; }
+
+    [mutating]
+    public inline void SetOrigin(float3 val) { m_Origin = val; }
+    [mutating]
+    public inline void SetDirection(float3 val) { m_Direction = val; }
+    [mutating]
+    public inline void SetWeight(float3 val) { m_Weight = val; }
 }

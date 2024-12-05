@@ -114,4 +114,31 @@ public struct Sampler
 
         return scatteredDir;
     }
+
+    [mutating]
+    public float3 SampleHenyeyGreenstein(float3 incidentDir, float G)
+    {
+        float2 rand = UniformFloat2();
+        float cosTheta;
+        if (abs(G) < 1e-5) {
+            cosTheta = 2.0 * rand.x - 1.0f;
+        }
+        else {
+            float sqrTerm = (1.0 - G * G) / (1.0 - G + 2.0 * G * rand.x);
+            cosTheta = (1.0 + G * G - sqrTerm * sqrTerm) / (2.0 * G);
+        }
+
+        float phi = 2.0 * M_PI * rand.y;
+
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+        float3 tangent;
+        float3 bitangent;
+        CalculateTangents(incidentDir, tangent, bitangent);
+
+        float3 scatteredDir = TangentToWorld(tangent, bitangent, incidentDir, newDir);
+
+        return scatteredDir;
+    }
 }

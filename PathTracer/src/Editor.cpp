@@ -54,7 +54,6 @@ void Editor::SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHan
 	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
 	for (auto& entity : viewEditor)
 	{
-		VL_CORE_ASSERT(m_EditorSettings == 0, "Can't have more than one tonemap settings inside a scene!");
 		m_EditorSettings = VulkanHelper::Entity(entity, *m_CurrentScene);
 	}
 
@@ -68,7 +67,6 @@ void Editor::SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHan
 	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
 	for (auto& entity : viewPathTracing)
 	{
-		VL_CORE_ASSERT(m_PathTracingSettings == 0, "Can't have more than one tonemap settings inside a scene!");
 		m_PathTracingSettings = VulkanHelper::Entity(entity, *m_CurrentScene);
 	}
 
@@ -228,7 +226,7 @@ void Editor::Render()
 void Editor::CreateQuadPipeline()
 {
 	VulkanHelper::Shader::CreateInfo vertexShaderInfo{};
-	vertexShaderInfo.Filepath = "src/shaders/helloWorld.slang";
+	vertexShaderInfo.Filepath = "src/shaders/Quad.vert";
 	vertexShaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
 	VulkanHelper::Shader vertexShader(vertexShaderInfo);
 

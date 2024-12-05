@@ -109,3 +109,28 @@ public void CalculateTangents(in float3 N, out float3 T, out float3 B)
     T = normalize(cross(up, N));
     B = cross(N, T);
 }
+
+public bool VectorEqual(in float2 v, in float value)
+{
+    return v.x == value && v.y == value;
+}
+
+public bool VectorEqual(in float3 v, in float value)
+{
+    return v.x == value && v.y == value && v.z == value;
+}
+
+public bool VectorEqual(in float4 v, in float value)
+{
+    return v.x == value && v.y == value && v.z == value && v.w == value;
+}
+
+public float3 TangentToWorld(float3 tangent, float3 bitangent, float3 normal, float3 V)
+{
+    return normalize(V.x * tangent + V.y * bitangent + V.z * normal);
+}
+
+public float3 WorldToTangent(float3 tangent, float3 bitangent, float3 normal, float3 V)
+{
+    return normalize(float3(dot(V, tangent), dot(V, bitangent), dot(V, normal)));
+}
