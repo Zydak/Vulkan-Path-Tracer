@@ -62,23 +62,27 @@ private:
 	// Scene
 	VulkanHelper::Scene** m_CurrentScene = nullptr; // ** because we have to change the pointer inside the Application, so we need a pointer to pointer
 	VulkanHelper::AssetHandle m_SceneHandle;
+
+	VulkanHelper::Entity m_PathTracingSettings{};
+	VulkanHelper::Entity m_EditorSettings{};
+
 	// Model
 	bool m_ModelChanged = false;
 	std::string m_ChangedModelFilepath = "";
 	void UpdateModel();
 	uint64_t m_VertexCount = 0;
 	uint64_t m_IndexCount = 0;
+
 	// Skybox
 	bool m_SkyboxChanged = false;
 	std::string m_ChangedSkyboxFilepath = "";
 	void UpdateSkybox();
 
+	// Timer
 	VulkanHelper::Timer m_Timer;
 	float m_Time = 0;
-	bool m_ImGuiViewportResized = false;
-	bool m_ImageResized = false;
-	VkExtent2D m_ViewportSize = {900, 900};
 
+	// State
 	bool m_RenderToFile = false;
 	bool m_PathTracingFinished = false;
 	bool m_ReadyToSaveRender = false;
@@ -86,6 +90,9 @@ private:
 	bool m_ImageDenoised = false;
 	bool m_DenoisedImageReady = false;
 	bool m_ShowDenoisedImage = false;
+	bool m_ImGuiViewportResized = false;
+	bool m_ImageResized = false;
+	VkExtent2D m_ViewportSize = { 900, 900 };
 
 	// Viewport Rendering
 	VulkanHelper::OrthographicCamera m_QuadCamera;

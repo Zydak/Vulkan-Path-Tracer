@@ -52,18 +52,31 @@ void Editor::SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHan
 	m_SceneHandle = sceneHandle;
 
 	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
-	EditorSettingsComponent* editorSettings = nullptr;
 	for (auto& entity : viewEditor)
 	{
-		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
+		VL_CORE_ASSERT(m_EditorSettings == 0, "Can't have more than one tonemap settings inside a scene!");
+		m_EditorSettings = VulkanHelper::Entity(entity, *m_CurrentScene);
 	}
 
 	// No settings found, create one
-	if (editorSettings == nullptr)
+	if (m_EditorSettings == 0)
 	{
-		auto entity = (*m_CurrentScene)->CreateEntity();
-		editorSettings = &entity.AddComponent<EditorSettingsComponent>();
+		m_EditorSettings = (*m_CurrentScene)->CreateEntity();
+		m_EditorSettings.AddComponent<EditorSettingsComponent>();
+	}
+
+	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
+	for (auto& entity : viewPathTracing)
+	{
+		VL_CORE_ASSERT(m_PathTracingSettings == 0, "Can't have more than one tonemap settings inside a scene!");
+		m_PathTracingSettings = VulkanHelper::Entity(entity, *m_CurrentScene);
+	}
+
+	// No settings found, create one
+	if (m_PathTracingSettings == 0)
+	{
+		m_PathTracingSettings = (*m_CurrentScene)->CreateEntity();
+		m_PathTracingSettings.AddComponent<PathTracingSettingsComponent>();
 	}
 
 	m_PathTracer.SetScene(*scene);
@@ -98,20 +111,7 @@ void Editor::Render()
 
 	m_PathTracer.UpdateResources();
 
-	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
-	EditorSettingsComponent* editorSettings = nullptr;
-	for (auto& entity : viewEditor)
-	{
-		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
-	}
-
-	// No settings found, create one
-	if (editorSettings == nullptr)
-	{
-		auto entity = (*m_CurrentScene)->CreateEntity();
-		editorSettings = &entity.AddComponent<EditorSettingsComponent>();
-	}
+	EditorSettingsComponent* editorSettings = &m_EditorSettings.GetComponent<EditorSettingsComponent>();
 
 	static VkOffset2D prevSize = { 900, 900 };
 	if (prevSize.x != editorSettings->ImageSize.x || prevSize.y != editorSettings->ImageSize.y)
@@ -127,14 +127,6 @@ void Editor::Render()
 	}
 	if (m_ImageResized)
 	{
-		auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
-		EditorSettingsComponent* editorSettings = nullptr;
-		for (auto& entity : viewEditor)
-		{
-			VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-			editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
-		}
-
 		if (VulkanHelper::Device::GetVendor() == VulkanHelper::Vendor::NVIDIA)
 			m_Denoiser.AllocateBuffers({ (uint32_t)editorSettings->ImageSize.x, (uint32_t)editorSettings->ImageSize.y });
 
@@ -165,13 +157,7 @@ void Editor::Render()
 
 			VulkanHelper::Renderer::ImGuiPass();
 
-			auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-			PathTracingSettingsComponent* pathTracingSettings = nullptr;
-			for (auto& entity : viewPathTracing)
-			{
-				VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-				pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
-			}
+			PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 			VL_CORE_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
 
@@ -421,13 +407,7 @@ void Editor::ImGuiRenderRasterizerViewport()
 
 	m_ViewportSize = { viewportWidth, viewportHeight };
 
-	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
-	EditorSettingsComponent* editorSettings = nullptr;
-	for (auto& entity : viewEditor)
-	{
-		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
-	}
+	EditorSettingsComponent* editorSettings = &m_EditorSettings.GetComponent<EditorSettingsComponent>();
 
 	VL_CORE_ASSERT(editorSettings != nullptr, "Can't find editor settings");
 
@@ -487,14 +467,7 @@ void Editor::ImGuiRenderingToFileSettings()
 
 	ImGuiPostProcessingSettings();
 
-	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
-	VL_CORE_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
+	PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 	ImGui::Text("%d / %d samples accumulated", m_PathTracer.GetSamplesAccumulated(), pathTracingSettings->Settings.TotalSamplesPerPixel);
 
@@ -853,13 +826,7 @@ void Editor::ImGuiEnvMapSettings()
 
 	ImGui::Separator();
 
-	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
+	PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 	if (ImGui::SliderFloat("Azimuth", &pathTracingSettings->Settings.EnvAzimuth, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
 	if (ImGui::SliderFloat("Altitude", &pathTracingSettings->Settings.EnvAltitude, 0.0f, 360.0f)) { m_PathTracer.ResetFrameAccumulation(); };
@@ -912,13 +879,7 @@ void Editor::ImGuiPathTracingSettings()
 
 	ImGui::Separator();
 
-	auto viewPathTracing = (*m_CurrentScene)->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &(*m_CurrentScene)->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
+	PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 	if (ImGui::Checkbox("Suppress Caustics", &pathTracingSettings->Settings.UseCausticsSuppresion))
 		m_PathTracer.RecreateRayTracingPipeline();

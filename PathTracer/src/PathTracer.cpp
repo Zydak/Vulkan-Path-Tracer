@@ -85,18 +85,17 @@ void PathTracer::SetScene(VulkanHelper::Scene* scene)
 	m_CurrentSceneRendered = scene;
 
 	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
 	for (auto& entity : viewPathTracing)
 	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
+		VL_CORE_ASSERT(m_PathTracingSettings == 0, "Can't have more than one tonemap settings inside a scene!");
+		m_PathTracingSettings = VulkanHelper::Entity(entity, m_CurrentSceneRendered);
 	}
 
 	// No settings found, create one
-	if (pathTracingSettings == nullptr)
+	if (m_PathTracingSettings == 0)
 	{
-		auto entity = m_CurrentSceneRendered->CreateEntity();
-		pathTracingSettings = &entity.AddComponent<PathTracingSettingsComponent>();
+		m_PathTracingSettings = m_CurrentSceneRendered->CreateEntity();
+		m_PathTracingSettings.AddComponent<PathTracingSettingsComponent>();
 	}
 
 	auto view = scene->GetRegistry().view<SkyboxComponent>();
@@ -143,20 +142,7 @@ void PathTracer::SetScene(VulkanHelper::Scene* scene)
 
 bool PathTracer::Render()
 {
-	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_CORE_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
-
-	// No settings found, create one
-	if (pathTracingSettings == nullptr)
-	{
-		auto entity = m_CurrentSceneRendered->CreateEntity();
-		pathTracingSettings = &entity.AddComponent<PathTracingSettingsComponent>();
-	}
+	PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 	VulkanHelper::Device::InsertLabel(VulkanHelper::Renderer::GetCurrentCommandBuffer(), "Inserted label", { 0.0f, 1.0f, 0.0f, 1.0f }); // test
 
@@ -287,15 +273,7 @@ void PathTracer::CreateDescriptorSets()
 
 void PathTracer::CreateRayTracingPipeline()
 {
-	auto viewPathTracing = m_CurrentSceneRendered->GetRegistry().view<PathTracingSettingsComponent>();
-	PathTracingSettingsComponent* pathTracingSettings = nullptr;
-	for (auto& entity : viewPathTracing)
-	{
-		VL_ASSERT(pathTracingSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
-		pathTracingSettings = &m_CurrentSceneRendered->GetRegistry().get<PathTracingSettingsComponent>(entity);
-	}
-
-	VL_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
+	PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
 	ResetFrameAccumulation();
 	{
@@ -667,6 +645,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// If file doesn't exists compute new values
 		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLoss({ 32, 32, 32 }, 100'000));
+
 		std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 
@@ -687,6 +666,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// If file doesn't exists compute new values
 		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, true));
+
 		std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 
@@ -708,6 +688,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// If file doesn't exists compute new values
 		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, false));
+
 		std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 
@@ -723,113 +704,4 @@ void PathTracer::BuildEnergyLookupTable()
 
 		istream.read((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
 	}
-
-
-	//VulkanHelper::Timer timer;
-	//
-	//std::vector<std::future<float>> futures;
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			float viewCosine = glm::clamp((float(v + 1)) / 32.0f, 0.0001f, 0.9999f);
-	//			float roughness = glm::clamp((float(r + 1)) / 32.0f, 0.0001f, 0.9999f);
-	//			float anisotropy = 0.0f;
-	//
-	//			futures.push_back(std::async(std::launch::async, AccumulateBRDF, roughness, viewCosine, anisotropy));
-	//		}
-	//	}
-	//}
-	// 
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			float roughness = glm::max((float(r)) / 32.0f, 0.0001f);
-	//			float viewCosine = glm::max((float(v)) / 32.0f, 0.0001f);
-	//			float IOR = 1.0f + glm::max((float(i)) / 32.0f, 0.0001f);
-	//
-	//			futures.push_back(std::async(std::launch::async, AccumulateBSDF, roughness, viewCosine, IOR, true));
-	//		}
-	//	}
-	//}
-	//
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			float roughness = glm::max((float(r)) / 32.0f, 0.0001f);
-	//			float viewCosine = glm::max((float(v)) / 32.0f, 0.0001f);
-	//			float IOR = 1.0f + glm::max((float(i)) / 32.0f, 0.0001f);
-	//
-	//			futures.push_back(std::async(std::launch::async, AccumulateBSDF, roughness, viewCosine, IOR, false));
-	//		}
-	//	}
-	//}
-	// 
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			int index = v + 32 * r + 32 * 32 * i;
-	//			futures[index].wait();
-	//			float totalEnergy = futures[index].get();
-	//
-	//			//if (totalEnergy > 0)
-	//			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
-	//
-	//			m_ReflectionEnergyLookupTable[i].push_back(totalEnergy);
-	//		}
-	//	}
-	//}
-	//
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			int index = v + 32 * r + 32 * 32 * (i + 32);
-	//			futures[index].wait();
-	//			float totalEnergy = futures[index].get();
-	//
-	//			//if (totalEnergy >= 0)
-	//			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
-	//
-	//			m_RefractionEtaGreaterThan1EnergyLookupTable[i].push_back(totalEnergy);
-	//		}
-	//	}
-	//	VL_TRACE("IOR {} done", i);
-	//}
-	//
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	for (int r = 0; r < 32; r++)
-	//	{
-	//		for (int v = 0; v < 32; v++)
-	//		{
-	//			int index = v + 32 * r + 32 * 32 * (i + 64);
-	//			futures[index].wait();
-	//			float totalEnergy = futures[index].get();
-	//
-	//			//if (totalEnergy >= 0)
-	//			//	totalEnergy = (1.0f - totalEnergy) / (totalEnergy);
-	//
-	//			m_RefractionEtaLessThan1EnergyLookupTable[i].push_back(totalEnergy);
-	//		}
-	//	}
-	//	VL_TRACE("IOR {} done", i);
-	//}
-	//
-	//VL_INFO("Generating both refraction tables took {}s", timer.ElapsedSeconds());
-	//
-	// Cache the result since it's literally the same every time
 }

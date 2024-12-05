@@ -2,12 +2,6 @@
 
 Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be saved as png images. It also features post processing effects and a denoiser.
 
-# Running
-## Windows Only
-- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
-- Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0-alpha/PathTracer.zip) from Releases.
-- Unzip and run `PathTracer/PathTracer/PathTracer.exe`.
-
 # Building
 ## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
@@ -23,19 +17,6 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 ![Bistro](./Gallery/Bistro.png)
 --------
 ![DragonHead](./Gallery/DragonHead.png)
---------
-<p align="center">
-  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
-  <img src="./Gallery/Graphics/Original.png" alt="Original" />
-</p>
-
---------
-
-<p align="center">
-  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
-  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
-</p>
-
 --------
 ![OceanAjax](./Gallery/OceanAjax.png)
 --------
@@ -82,6 +63,16 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 
 # List Of Features
 - Energy Conserving BSSRDF.
+
+<p align="center">
+  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
+  <img src="./Gallery/Graphics/Original.png" alt="Original" />
+</p>
+<p align="center">
+  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
+  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
+</p>
+
 - HDR Environment Maps
 - Environment map MIS
 - Complex Materials

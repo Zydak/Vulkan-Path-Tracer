@@ -113,6 +113,7 @@ public:
 	};
 
 private:
+	VulkanHelper::Entity m_PathTracingSettings{};
 	VulkanHelper::AccelerationStructure m_GeometryAS;
 	VulkanHelper::AccelerationStructure m_VolumesAS;
 	VulkanHelper::Scene* m_CurrentSceneRendered;

@@ -216,14 +216,18 @@ public struct Material
             energyCompensation = 0.8f;
         else if (renormalizedRoughness >= 0.75f && renormalizedRoughness < 0.8f && energyCompensation != 0 && energyCompensation < 0.7f)
             energyCompensation = 0.7f;
-        else if (renormalizedRoughness >= 0.8f && renormalizedRoughness < 0.9f && energyCompensation != 0 && energyCompensation < 0.65f)
+        else if (renormalizedRoughness >= 0.8f && renormalizedRoughness < 0.85f && energyCompensation != 0 && energyCompensation < 0.65f)
+            energyCompensation = 0.65f;
+        else if (renormalizedRoughness >= 0.85f && renormalizedRoughness < 0.875f && energyCompensation != 0 && energyCompensation < 0.6f)
             energyCompensation = 0.6f;
-        else if (renormalizedRoughness >= 0.9f && renormalizedRoughness < 0.95f && energyCompensation != 0 && energyCompensation < 0.4f)
+        else if (renormalizedRoughness >= 0.875f && renormalizedRoughness < 0.9f && energyCompensation != 0 && energyCompensation < 0.5f)
+            energyCompensation = 0.55f;
+        else if (renormalizedRoughness >= 0.9f && renormalizedRoughness < 0.95f && energyCompensation != 0 && energyCompensation < 0.5f)
+            energyCompensation = 0.5f;
+        else if (renormalizedRoughness >= 0.95f && renormalizedRoughness < 0.97f && energyCompensation != 0 && energyCompensation < 0.4f)
             energyCompensation = 0.4f;
-        else if (renormalizedRoughness >= 0.95f && renormalizedRoughness < 0.97f && energyCompensation != 0 && energyCompensation < 0.3f)
+        else if (renormalizedRoughness >= 0.97f && renormalizedRoughness <= 1.0f && energyCompensation != 0 && energyCompensation < 0.3f)
             energyCompensation = 0.3f;
-        else if (renormalizedRoughness >= 0.97f && renormalizedRoughness <= 1.0f && energyCompensation != 0 && energyCompensation < 0.2f)
-            energyCompensation = 0.2f;
 
         if (energyCompensation > 0)
         {

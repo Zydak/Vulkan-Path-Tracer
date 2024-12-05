@@ -30,8 +30,16 @@ void main(inout Input input)
 
     color = uEnvironmentMap.SampleLevel( { texCoords.x, texCoords.y }, 0).rgb;
 
+#ifdef SHOW_SKYBOX
     input.Payload.HitValue = color;
+#else
+    if (input.Payload.Depth == 0)
+        input.Payload.HitValue = float3(0.0f);
+    else
+        input.Payload.HitValue = color;
+#endif
     input.Payload.Depth = DEPTH_INFINITE;
-    input.Payload.SurfaceAlbedo = color;
-    input.Payload.SurfaceNormal = float3(0.0f);
+
+    input.Payload.GBufferColor = color;
+    input.Payload.GBufferNormal = float3(0.0f);
 }
