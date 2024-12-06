@@ -167,6 +167,9 @@ void main()
                 // Scattered on surface
                 ray.Trace(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, payload);
 
+                if (payload.Depth == DEPTH_INFINITE && VectorEqual(payload.Weight, -1.0))
+                    continue;
+
                 weight *= payload.Weight;
                 hitValue += payload.HitValue * weight;
             }

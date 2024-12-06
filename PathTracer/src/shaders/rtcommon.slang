@@ -34,6 +34,12 @@ public struct PushConstant
     public int VolumesCount;
 };
 
+public struct EnvAccel
+{
+    public uint Alias;
+    public float Importance;
+};
+
 public enum LastEvent
 {
     Volume,
@@ -133,4 +139,14 @@ public float3 TangentToWorld(float3 tangent, float3 bitangent, float3 normal, fl
 public float3 WorldToTangent(float3 tangent, float3 bitangent, float3 normal, float3 V)
 {
     return normalize(float3(dot(V, tangent), dot(V, bitangent), dot(V, normal)));
+}
+
+public float PowerHeuristic(float pdfA, float pdfB)
+{
+    return (pdfA * pdfA) / ((pdfA * pdfA) + (pdfB * pdfB));
+}
+
+public float ChangeRange(float x, float2 currentRange, float2 newRange)
+{
+    return newRange.x + (x - currentRange.x) * (newRange.y - newRange.x) / (currentRange.y - currentRange.x);
 }

@@ -73,6 +73,7 @@ public struct Material
         Metallic = material.Metallic;
         // Roughness = Roughness^4 for better feel, linear roughness sucks
         Roughness = material.Roughness * material.Roughness * material.Roughness * material.Roughness;
+        //Roughness = material.Roughness;
         SpecularTint = material.SpecularTint;
 
         Ior = max(material.Ior, 1.000001);
@@ -180,7 +181,7 @@ public struct Material
 
         // Energy Compensation
         float energyCompensation;
-        float renormalizedRoughness = pow(Roughness, 1.0f / 4.0f);
+        float renormalizedRoughness = Roughness;
         float layer = pow((Ior - 1.0f) / 2.0f, 1.0f / 4.0f) * 63.0f;
         float layerFrac = fract(layer);
         if (Eta > 1.0f)
@@ -208,44 +209,53 @@ public struct Material
         // No idea how to fix them properly since none of the papers even mentions this problem. I've spent a couple of days 
         // trying to find the issue but I had no luck so here goes a cheat fix. It's not perfect but I guess better this 
         // than nothing. After playing a bit with different values that's the best fit I could find.
-        if (renormalizedRoughness >= 0.0f && renormalizedRoughness < 0.4f && energyCompensation != 0 && energyCompensation < 0.9f)
-            energyCompensation = 0.0f;
-        else if (renormalizedRoughness >= 0.4f && renormalizedRoughness < 0.7f && energyCompensation != 0 && energyCompensation < 0.9f)
-            energyCompensation = 0.9f;
-        else if (renormalizedRoughness >= 0.7f && renormalizedRoughness < 0.75f && energyCompensation != 0 && energyCompensation < 0.8f)
-            energyCompensation = 0.8f;
-        else if (renormalizedRoughness >= 0.75f && renormalizedRoughness < 0.8f && energyCompensation != 0 && energyCompensation < 0.7f)
-            energyCompensation = 0.7f;
-        else if (renormalizedRoughness >= 0.8f && renormalizedRoughness < 0.85f && energyCompensation != 0 && energyCompensation < 0.65f)
-            energyCompensation = 0.65f;
-        else if (renormalizedRoughness >= 0.85f && renormalizedRoughness < 0.875f && energyCompensation != 0 && energyCompensation < 0.6f)
-            energyCompensation = 0.6f;
-        else if (renormalizedRoughness >= 0.875f && renormalizedRoughness < 0.9f && energyCompensation != 0 && energyCompensation < 0.5f)
-            energyCompensation = 0.55f;
-        else if (renormalizedRoughness >= 0.9f && renormalizedRoughness < 0.95f && energyCompensation != 0 && energyCompensation < 0.5f)
-            energyCompensation = 0.5f;
-        else if (renormalizedRoughness >= 0.95f && renormalizedRoughness < 0.97f && energyCompensation != 0 && energyCompensation < 0.4f)
-            energyCompensation = 0.4f;
-        else if (renormalizedRoughness >= 0.97f && renormalizedRoughness <= 1.0f && energyCompensation != 0 && energyCompensation < 0.3f)
-            energyCompensation = 0.3f;
-
-        if (energyCompensation > 0)
-        {
-            energyCompensation = (1.0f - energyCompensation) / energyCompensation;
-            BSDF = (1.0f + (1.0f - F) * float3(energyCompensation)) * BSDF;
-        }
+        //if (renormalizedRoughness >= 0.0f && renormalizedRoughness < 0.4f && energyCompensation != 0 && energyCompensation < 0.9f)
+        //    energyCompensation = 0.0f;
+        //else if (renormalizedRoughness >= 0.4f && renormalizedRoughness < 0.7f && energyCompensation != 0 && energyCompensation < 0.9f)
+        //    energyCompensation = 0.9f;
+        //else if (renormalizedRoughness >= 0.7f && renormalizedRoughness < 0.75f && energyCompensation != 0 && energyCompensation < 0.8f)
+        //    energyCompensation = 0.8f;
+        //else if (renormalizedRoughness >= 0.75f && renormalizedRoughness < 0.8f && energyCompensation != 0 && energyCompensation < 0.7f)
+        //    energyCompensation = 0.7f;
+        //else if (renormalizedRoughness >= 0.8f && renormalizedRoughness < 0.85f && energyCompensation != 0 && energyCompensation < 0.65f)
+        //    energyCompensation = 0.65f;
+        //else if (renormalizedRoughness >= 0.85f && renormalizedRoughness < 0.875f && energyCompensation != 0 && energyCompensation < 0.6f)
+        //    energyCompensation = 0.6f;
+        //else if (renormalizedRoughness >= 0.875f && renormalizedRoughness < 0.9f && energyCompensation != 0 && energyCompensation < 0.5f)
+        //    energyCompensation = 0.55f;
+        //else if (renormalizedRoughness >= 0.9f && renormalizedRoughness < 0.95f && energyCompensation != 0 && energyCompensation < 0.5f)
+        //    energyCompensation = 0.5f;
+        //else if (renormalizedRoughness >= 0.95f && renormalizedRoughness < 0.97f && energyCompensation != 0 && energyCompensation < 0.4f)
+        //    energyCompensation = 0.4f;
+        //else if (renormalizedRoughness >= 0.97f && renormalizedRoughness <= 1.0f && energyCompensation != 0 && energyCompensation < 0.3f)
+        //    energyCompensation = 0.3f;
 
         //if (energyCompensation > 0)
-        //    BSDF = BSDF / energyCompensation;
+        //{
+        //    energyCompensation = (1.0f - energyCompensation) / energyCompensation;
+        //    BSDF = (1.0f + (1.0f - F) * float3(energyCompensation)) * BSDF;
+        //}
+
+        //float newIor = (Ior - 1.0f) / 2.0f;
+        float newIor = ChangeRange(Ior, { 1, 3 }, { 0, 1 });
+        energyCompensation -= energyCompensation * 0.5f * max(smoothstep(-0.1, 1.0, renormalizedRoughness), 0.0) * max(1.1 * newIor, 1.0) * pow(smoothstep(0, 1, newIor), 1.0 / 4.0);
+
+        if (energyCompensation > 0)
+            BSDF = BSDF / energyCompensation;
+        else
+        {
+            BSDF = 1.0f;
+            PDF = 1.0f;
+        }
 
         return BSDF;
     }
 
-    public BSDFSample SampleGlass(inout Sampler sampler, in float3 V, out bool refracted)
+    public BSDFSample SampleGlass(inout Sampler sampler, in float3 V, out bool refracted, out float F)
     {
         float3 H = GGXSampleAnisotopic(V, sampler);
 
-        float F = DielectricFresnel(abs(dot(V, H)), Eta);
+        F = DielectricFresnel(abs(dot(V, H)), Eta);
 
         float x1 = sampler.UniformFloat();
 
@@ -256,7 +266,7 @@ public struct Material
         {
             // Reflect
             refracted = false;
-
+        
             L = normalize(reflect(-V, H));
             BSDF = EvaluateDielectricReflection(V, L, F, PDF);
         }
@@ -267,11 +277,14 @@ public struct Material
 
             L = normalize(refract(-V, H, Eta));
 
-            if (isnan(L.x) || isnan(L.y) || isnan(L.z) || isinf(L.x) || isinf(L.y) || isinf(L.z))
-                return { 0, 0, 0 };
-
             BSDF = EvaluateDielectricRefraction(V, L, F, PDF);
         }
+
+        if (isnan(L.x) || isnan(L.y) || isnan(L.z) || isinf(L.x) || isinf(L.y) || isinf(BSDF.z))
+            return { 0, 0, 0 };
+
+        if (isnan(BSDF.x) || isnan(BSDF.y) || isnan(BSDF.z) || isinf(BSDF.x) || isinf(BSDF.y) || isinf(BSDF.z))
+            return { 0, 0, 0 };
 
         return { L, BSDF, PDF };
     }

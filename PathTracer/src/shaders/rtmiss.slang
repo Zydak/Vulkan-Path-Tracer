@@ -16,9 +16,9 @@ void main(inout Input input)
     float3 rayDir = input.Payload.RayDirection;
     float3 color;
     rayDir = Rotate(rayDir, float3(1, 0, 0), M_PI_2);
-
+    
     rayDir = Rotate(rayDir, float3(0, 0, 1), push.EnvAzimuth);
-    rayDir = Rotate(rayDir, float3(1, 0, 0), push.EnvAltitude);
+    rayDir = Rotate(rayDir, float3(0, 1, 0), push.EnvAltitude);
 
     uint2 textureSize;
     uint mipLevels;

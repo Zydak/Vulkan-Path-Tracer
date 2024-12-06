@@ -37,6 +37,19 @@ public struct Sampler
 
         return float2(x1, x2);
     }
+
+    [mutating]
+    public float3 UniformFloat3()
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x3 = float(hash) / float(UINT_MAX);
+
+        return float3(x1, x2, x3);
+    }
     
     [mutating]
     public float UniformFloat(float a, float b)
@@ -56,6 +69,19 @@ public struct Sampler
         float x2 = float(hash) / float(UINT_MAX);
 
         return (float2(x1, x2) * (b - a)) + a;
+    }
+
+    [mutating]
+    public float3 UniformFloat3(float a, float b)
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x3 = float(hash) / float(UINT_MAX);
+
+        return (float3(x1, x2, x3) * (b - a)) + a;
     }
 
     [mutating]
@@ -140,5 +166,70 @@ public struct Sampler
         float3 scatteredDir = TangentToWorld(tangent, bitangent, incidentDir, newDir);
 
         return scatteredDir;
+    }
+
+    [mutating]
+    public void SampleImportanceEnvMap(in Sampler2D hdrTexture, in StructuredBuffer<EnvAccel> uAccels, float azimuth, float altitude, out float3 toLight, out float4 outValue)
+    {
+        // Uniformly pick a texel index idx in the environment map
+        float3 xi = UniformFloat3();
+
+        uint width;
+        uint height;
+        hdrTexture.GetDimensions(width, height);
+
+        uint size = width * height;
+        uint idx = min(uint(xi.x * float(size)), size - 1);
+
+        // Fetch the sampling data for that texel, containing the importance and the texel alias
+        EnvAccel sample_data = uAccels[idx];
+
+        uint envIdx;
+
+        if (xi.y < sample_data.Importance)
+        {
+            // If the random variable is lower than the importance, we directly pick
+            // this texel, and renormalize the random variable for later use.
+            envIdx = idx;
+            xi.y /= sample_data.Importance;
+        }
+        else
+        {
+            // Otherwise we pick the alias of the texel and renormalize the random variable
+            envIdx = sample_data.Alias;
+            xi.y = (xi.y - sample_data.Importance) / (1.0f - sample_data.Importance);
+        }
+
+        // Compute the 2D integer coordinates of the texel
+        const uint px = envIdx % width;
+        uint py = envIdx / width;
+
+        // Uniformly sample the solid angle subtended by the pixel.
+        // Generate both the UV for texture lookup and a direction in spherical coordinates
+        const float u = float(px + xi.y) / float(width);
+        const float phi = u * (2.0f * M_PI) - M_PI;
+        float sin_phi = sin(phi);
+        float cos_phi = cos(phi);
+
+        const float step_theta = M_PI / float(height);
+        const float theta0 = float(py) * step_theta;
+        const float cos_theta = cos(theta0) * (1.0f - xi.z) + cos(theta0 + step_theta) * xi.z;
+        const float theta = acos(cos_theta);
+        const float sin_theta = sin(theta);
+        const float v = theta * M_1_OVER_PI;
+
+        // Convert to a light direction vector in Cartesian coordinates
+        toLight = normalize( SphericalToDirection(M_PI - theta, phi));//float3(cos_phi * sin_theta, cos_theta, sin_phi * sin_theta);
+
+        // toLight = Rotate(toLight, float3(1, 0, 0), M_PI_4 / 2.0);
+        // toLight = Rotate(toLight, float3(0, 0, 1), -M_PI_2);
+
+        toLight = Rotate(toLight, float3(0, 1, 0), -altitude);
+        toLight = Rotate(toLight, float3(0, 0, 1), -azimuth);
+
+        toLight = Rotate(toLight, float3(1, 0, 0), -M_PI_2);
+
+        // Lookup the environment value using computed uvs
+        outValue = hdrTexture.SampleLevel( SphericalToTexCoords(M_PI - theta, phi), 0);
     }
 }

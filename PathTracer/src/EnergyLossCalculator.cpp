@@ -119,7 +119,7 @@ std::vector<float> EnergyLossCalculator::CalculateRefractionEnergyLoss(glm::dvec
 
 				double viewCosine = glm::clamp(glm::pow((double(v)) / double(tableSize.x), 2.5), 0.0001, 0.9999);
 				double roughness = glm::clamp((double(r)) / double(tableSize.y), 0.0001, 1.0);
-				double IOR = 1.0 + glm::clamp(glm::pow((double(i)) / double(tableSize.y), 4.0) * 2.0, 0.0001, 3.0);
+				double IOR = 1.0 + glm::clamp(glm::pow((double(i)) / double(tableSize.z), 4.0) * 2.0, 0.0001, 2.0);
 
 				threadPool.PushTask(PoolFunctionRefract, &table, index, sampleCount, roughness, viewCosine, IOR, AboveTheSurface);
 			}
@@ -341,17 +341,12 @@ double EnergyLossCalculator::SampleRefraction(glm::dvec3 V, double ax, double ay
 	H = glm::normalize(H);
 	glm::dvec3 L = glm::normalize(glm::refract(-V, H, eta));
 	if (glm::isnan(L.x) || glm::isnan(L.y) || glm::isnan(L.z))
-		return 0.0f;
-
-	bool reflect = L.z > 0.0;
+		return 1.0f;
 
 	double F = DielectricFresnel(glm::abs(glm::dot(V, H)), eta);
 
 	double bsdf;
-	if (reflect)
-		bsdf = EvalReflection(L, V, H, F, ax, ay);
-	else
-		bsdf = EvalRefraction(ax, ay, eta, L, V, H, (1.0f - F));
+	bsdf = EvalRefraction(ax, ay, eta, L, V, H, (1.0f - F));
 
 	return bsdf;
 }
@@ -382,7 +377,7 @@ double EnergyLossCalculator::AccumulateRefraction(uint32_t sampleCount, double r
 		double bsdf = SampleRefraction(V, ax, ay, ior, AboveTheSurface);
 
 		if (glm::isnan(bsdf) || glm::isinf(bsdf) || bsdf != bsdf)
-			totalEnergy += 0.0;
+			totalEnergy += 1.0;
 		else
 			totalEnergy += bsdf;
 	}

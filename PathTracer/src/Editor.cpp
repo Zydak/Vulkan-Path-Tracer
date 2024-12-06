@@ -1291,8 +1291,7 @@ void Editor::UpdateModel()
 		modelAssetHandle.Unload(); // Unload the model asset since it's only references to mesh data
 	}
 
-	m_PathTracer.SetScene((*m_CurrentScene));
-	m_PostProcessor.SetScene(*m_CurrentScene);
+	SetCurrentScene(m_CurrentScene, m_SceneHandle);
 	m_PathTracer.ResetFrameAccumulation();
 
 	// Get index and vertex count

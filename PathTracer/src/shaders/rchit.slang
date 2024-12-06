@@ -9,7 +9,10 @@ struct Input
     [[vk::location(0)]] RTPayload Payload;
 }
 
-[[vk::push_constant]] PushConstant push;
+[[vk::binding(0, 0)]] RaytracingAccelerationStructure uTopLevelAS;
+
+[[vk::binding(1, 1)]] Sampler2D uEnvironmentMap;
+[[vk::binding(2, 1)]] StructuredBuffer<EnvAccel> uAccels;
 
 [[vk::binding(2, 0)]]
 StructuredBuffer<MeshAddress> uMeshAddresses;
@@ -21,6 +24,8 @@ StructuredBuffer<CPUMaterial, Std430DataLayout> uMaterials;
 [[vk::binding(5, 0)]] Sampler2D uNormalTextures[];
 [[vk::binding(6, 0)]] Sampler2D uRoghnessTextures[];
 [[vk::binding(7, 0)]] Sampler2D uMetallnessTextures[];
+
+[[vk::push_constant]] PushConstant push;
 
 [shader("closesthit")]
 void main(inout Input input, in float2 attribs)
@@ -84,6 +89,28 @@ void main(inout Input input, in float2 attribs)
         }
     }
 
+    // Direct Lighting of the surface
+
+    float3 dirToLight;
+    float4 envColor; // w = pdf
+    input.Payload.Sampler.SampleImportanceEnvMap(uEnvironmentMap, uAccels, push.EnvAzimuth, push.EnvAltitude, dirToLight, envColor);
+
+    float3 BSDFSurfaceToLight;
+    float PDFSurfaceToLight;
+
+    bool canHit = dot(dirToLight, surface.GetNormal()) > 0.0f;
+
+    if (canHit)
+    {
+        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, surface.GetWorldPos(), 0.0001, dirToLight, 1000000);
+        query.Proceed();
+        if (query.CommittedStatus() != COMMITTED_NOTHING)
+        {
+            canHit = false;
+        }
+    }
+
     float F0 = (1.0f - material.Eta) / (1.0f + material.Eta);
     F0 *= F0;
 
@@ -105,18 +132,27 @@ void main(inout Input input, in float2 attribs)
     if (x1 < diffuseProbability)
     {
         sample = material.SampleDiffuse(input.Payload.Sampler, V);
+        BSDFSurfaceToLight = material.EvaluateDiffuse(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
     else if (x1 < metallicProbability + diffuseProbability)
     {
         sample = material.SampleMetallic(input.Payload.Sampler, V);
+        BSDFSurfaceToLight = material.EvaluateMetallic(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
     else if (x1 < diffuseProbability + metallicProbability + dielectricProbability)
     {
         sample = material.SampleDielectric(input.Payload.Sampler, V);
+        BSDFSurfaceToLight = material.EvaluateDielectricReflection(V, surface.WorldToTangent(dirToLight), 1.0, PDFSurfaceToLight);
     }
     else if (x1 <= diffuseProbability + metallicProbability + dielectricProbability + glassProbability)
     {
-        sample = material.SampleGlass(input.Payload.Sampler, V, refracted);
+        float F;
+        sample = material.SampleGlass(input.Payload.Sampler, V, refracted, F);
+
+        if (refracted)
+            BSDFSurfaceToLight = material.EvaluateDielectricRefraction(V, surface.WorldToTangent(dirToLight), F, PDFSurfaceToLight);
+        else
+            BSDFSurfaceToLight = material.EvaluateDielectricReflection(V, surface.WorldToTangent(dirToLight), F, PDFSurfaceToLight);
 
         if (refracted && hitFromTheInside)
         {
@@ -134,18 +170,37 @@ void main(inout Input input, in float2 attribs)
     }
 
     if (!refracted && sample.L.z <= 0.0f)
+    {
+        input.Payload.Weight = float3(-1.0);
         input.Payload.Depth = DEPTH_INFINITE;
+        return;
+    }
 
     if (refracted && sample.L.z >= 0.0f)
+    {
+        input.Payload.Weight = float3(-1.0);
         input.Payload.Depth = DEPTH_INFINITE;
+        return;
+    }
 
     if (sample.PDF <= 0.0f)
+    {
+        input.Payload.Weight = float3(-1.0);
         input.Payload.Depth = DEPTH_INFINITE;
+        return;
+    }
 
     input.Payload.RayDirection = surface.TangentToWorld(sample.L);
     input.Payload.RayOrigin = surface.GetWorldPos();
     input.Payload.Weight *= sample.BSDF / sample.PDF;
     input.Payload.HitValue = material.EmissiveColor.rgb * material.EmissiveColor.a;
+
+    if (canHit)
+    {
+        float lightWeight = PowerHeuristic(envColor.w, PDFSurfaceToLight);
+
+        input.Payload.HitValue += dot(surface.GetNormal(), dirToLight) * (envColor.rgb / envColor.w) * BSDFSurfaceToLight * lightWeight;
+    }
 
     //input.Payload.HitValue = (surface.GetNormal() + float3(1.0f)) * float3(0.5f);
 }
