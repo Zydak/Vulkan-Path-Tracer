@@ -3,13 +3,13 @@ import Sampler;
 
 public struct AABB
 {
-    public float3 Min;
-    public float3 Max;
+    public float4 Min;
+    public float4 Max;
 
     public void IntersectRay(in float3 rayOrigin, in float3 rayDirection, out float3 hitPointNear, out float3 hitPointFar)
     {
-        float3 tMin = (Min - rayOrigin) / rayDirection;
-        float3 tMax = (Max - rayOrigin) / rayDirection;
+        float3 tMin = (Min.xyz - rayOrigin) / rayDirection;
+        float3 tMax = (Max.xyz - rayOrigin) / rayDirection;
 
         float3 t1 = min(tMin, tMax);
         float3 t2 = max(tMin, tMax);
@@ -46,12 +46,18 @@ public struct AABB
 public struct Volume
 {
     public AABB Aabb;
-    public float3 Color;
+    public float4 Color;
     public float ScatteringCoefficient;
     public float G;
 
     public float SampleScatterDistance(inout Sampler sampler)
     {
         return -log(sampler.UniformFloat()) / ScatteringCoefficient;
+    }
+
+    public float EvaluateHenyeyGreenstein(float3 V, float3 L)
+    {
+        // return 1.0f / (2.0f);
+        return (1.0f / (4.0f * M_PI)) * ((1.0f - G * G) / pow(1.0f + G * G - 2.0f * G * dot(V, L), 1.5f));
     }
 };

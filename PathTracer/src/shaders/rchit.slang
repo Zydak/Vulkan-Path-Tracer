@@ -3,6 +3,7 @@ import Sampler;
 import Surface;
 import Payload;
 import Material;
+import Volume;
 
 struct Input
 {
@@ -24,6 +25,8 @@ StructuredBuffer<CPUMaterial, Std430DataLayout> uMaterials;
 [[vk::binding(5, 0)]] Sampler2D uNormalTextures[];
 [[vk::binding(6, 0)]] Sampler2D uRoghnessTextures[];
 [[vk::binding(7, 0)]] Sampler2D uMetallnessTextures[];
+
+[[vk::binding(12, 0)]] StructuredBuffer<Volume> uVolumes;
 
 [[vk::push_constant]] PushConstant push;
 
@@ -199,7 +202,30 @@ void main(inout Input input, in float2 attribs)
     {
         float lightWeight = PowerHeuristic(envColor.w, PDFSurfaceToLight);
 
-        input.Payload.HitValue += dot(surface.GetNormal(), dirToLight) * (envColor.rgb / envColor.w) * BSDFSurfaceToLight * lightWeight;
+        float3 volumeAbsorption = float3(1.0f);
+        // Iterate through all volumes
+        for (int i = 0; i < push.VolumesCount; i++)
+        {
+            Volume volume = uVolumes[i];
+
+            // Check collision positions with volume
+            float3 hitPosNear;
+            float3 hitPosFar;
+            volume.Aabb.IntersectRay(surface.GetWorldPos(), dirToLight, hitPosNear, hitPosFar);
+
+            bool isInside = volume.Aabb.IsInsideAABB(surface.GetWorldPos());
+            if (isInside)
+                hitPosNear = surface.GetWorldPos();
+
+            if (VectorEqual(hitPosNear, FLT_MAX) || VectorEqual(hitPosFar, FLT_MAX))
+                continue;
+
+            float volumeWidth = length(hitPosFar - hitPosNear);
+
+            volumeAbsorption *= exp(-volume.ScatteringCoefficient * volumeWidth);
+        }
+
+        input.Payload.HitValue += volumeAbsorption * dot(surface.GetNormal(), dirToLight) * (envColor.rgb / envColor.w) * BSDFSurfaceToLight * lightWeight;
     }
 
     //input.Payload.HitValue = (surface.GetNormal() + float3(1.0f)) * float3(0.5f);

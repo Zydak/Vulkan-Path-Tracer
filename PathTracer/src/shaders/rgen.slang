@@ -6,6 +6,9 @@ import Payload;
 import Sampler;
 import Volume;
 
+[[vk::binding(1, 1)]] Sampler2D uEnvironmentMap;
+[[vk::binding(2, 1)]] StructuredBuffer<EnvAccel> uAccels;
+
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure uTopLevelAS;
 [[vk::binding(0, 1)]] ConstantBuffer<GlobalUniform> uUniformBuffer;
 
@@ -13,14 +16,14 @@ import Volume;
 [[vk::binding(1, 0)]] RWTexture2D<float4> uImage;
 [[vk::binding(8, 0)]] RWStructuredBuffer<float> uDof;
 
-[[vk::binding(12, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
+[[vk::binding(12, 0)]] StructuredBuffer<Volume> uVolumes;
 
 [[vk::binding(14, 0)]] RWTexture2D<float4> uGBufferAlbedo;
 [[vk::binding(15, 0)]] RWTexture2D<float4> uGBufferNormal;
 
 [[vk::push_constant]] PushConstant push;
 
-void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float closestScatterDistance, out Volume finalVolume)
+void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float outClosestScatterDistance, out float outPathLengthThroughVolume, out Volume outFinalVolume)
 {
     float closestGeometry = -1.0;
     if (push.VolumesCount > 0)
@@ -34,7 +37,7 @@ void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float 
         }
     }
 
-    closestScatterDistance = FLT_MAX;
+    outClosestScatterDistance = FLT_MAX;
     for (int v = 0; v < push.VolumesCount; v++)
     {
         float3 hitPosNear;
@@ -81,10 +84,11 @@ void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float 
 
                 if (scatterDistance < pathLengthThroughVolume && pathLengthThroughVolume > 0.0)
                 {
-                    if (scatterDistanceFromCamera < closestScatterDistance)
+                    if (scatterDistanceFromCamera < outClosestScatterDistance)
                     {
-                        closestScatterDistance = scatterDistanceFromCamera;
-                        finalVolume = volume;
+                        outPathLengthThroughVolume = pathLengthThroughVolume;
+                        outClosestScatterDistance = scatterDistanceFromCamera;
+                        outFinalVolume = volume;
                     }
                 }
             }
@@ -150,16 +154,59 @@ void main()
         {
             // Check for volumes intersections which are done separately from the geometry because of rt pipeline limitations
             // e.g. inability to check whether you're inside the object or not
-            float closestVolumeScatter;
+            float volumeScatter;
+            float pathLengthThroughVolume;
             Volume volume;
-            EnumerateThroughVolumes(ray, payload.Sampler, closestVolumeScatter, volume);
+            EnumerateThroughVolumes(ray, payload.Sampler, volumeScatter, pathLengthThroughVolume, volume);
 
-            if (closestVolumeScatter < FLT_MAX)
+            if (volumeScatter < FLT_MAX)
             {
                 // Scattered inside the volume
-                weight *= volume.Color;
+                weight *= volume.Color.rgb;
+                ray.SetOrigin(ray.GetOrigin() + ray.GetDirection() * volumeScatter);
 
-                ray.SetOrigin(ray.GetOrigin() + ray.GetDirection() * closestVolumeScatter);
+                // MIS
+                {
+                    float3 dirToLight;
+                    float4 envColor; // w = pdf
+                    payload.Sampler.SampleImportanceEnvMap(uEnvironmentMap, uAccels, push.EnvAzimuth, push.EnvAltitude, dirToLight, envColor);
+                
+                    bool canHit = true;
+                    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+                    query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, ray.GetOrigin(), 0.0001, dirToLight, 1000000);
+                    query.Proceed();
+                    if (query.CommittedStatus() != COMMITTED_NOTHING)
+                    {
+                        canHit = false;
+                    }
+                
+                    if (canHit)
+                    {
+                        float3 volumeAbsorption = float3(1.0f);
+                        // Iterate through all volumes
+                        for (int i = 0; i < push.VolumesCount; i++)
+                        {
+                            Volume volume1 = uVolumes[i];
+
+                            // Check collision positions with volume
+                            float3 hitPosNear;
+                            float3 hitPosFar;
+                            volume1.Aabb.IntersectRay(ray.GetOrigin(), dirToLight, hitPosNear, hitPosFar);
+
+                            bool isInside = volume1.Aabb.IsInsideAABB(ray.GetOrigin());
+                            if (isInside)
+                                hitPosNear = ray.GetOrigin();
+
+                            float volumeWidth = length(hitPosFar - hitPosNear);
+
+                            volumeAbsorption *= exp(-volume1.ScatteringCoefficient * volumeWidth);
+                        }
+
+                        float phase = volume.EvaluateHenyeyGreenstein(payload.RayDirection, dirToLight);
+
+                        hitValue += volumeAbsorption * weight * phase * (envColor.xyz / envColor.w) * exp(-volume.ScatteringCoefficient * pathLengthThroughVolume);
+                    }
+                }
                 ray.SetDirection(payload.Sampler.SampleHenyeyGreenstein(ray.GetDirection(), volume.G));
             }
             else

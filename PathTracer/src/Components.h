@@ -240,8 +240,8 @@ public:
 		return false;
 	}
 
-	glm::vec3 A;
-	glm::vec3 B;
+	glm::vec4 A; // vec4 for the alignment
+	glm::vec4 B;
 };
 
 class VolumeComponent 
@@ -300,8 +300,10 @@ public:
 		memcpy(this, bytes.data(), sizeof(VolumeComponent));
 	}
 	
-	AABB AABB = { glm::vec3{-1.0f}, glm::vec3{1.0f} };
-	glm::vec3 Color = glm::vec3(1.0f);
+	AABB AABB = { glm::vec4{-1.0f}, glm::vec4{1.0f} };
+	glm::vec4 Color = glm::vec4(1.0f);
 	float ScatteringCoefficient = 10.0f;
 	float G = 0.0f;
+
+	glm::vec2 padding;
 };
