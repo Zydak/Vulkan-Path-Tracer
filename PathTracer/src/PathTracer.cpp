@@ -32,20 +32,20 @@ void PathTracer::Init(VkExtent2D size)
 		m_ReflectionLookupTexture.WritePixels(m_ReflectionEnergyLookupTable.data() + 32 * 32 * i, cmd, i);
 	}
 
-	info.Width = 256;
-	info.Height = 64;
-	info.LayerCount = 64;
+	info.Width = 128;
+	info.Height = 32;
+	info.LayerCount = 32;
 	m_RefractionLookupTextureEtaGreaterThan1.Init(info);
 	m_RefractionLookupTextureEtaLessThan1.Init(info);
 
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < 32; i++)
 	{
-		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable.data() + 256 * 64 * i, cmd, i);
+		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable.data() + 128 * 32 * i, cmd, i);
 	}
 
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < 32; i++)
 	{
-		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable.data() + 256 * 64 * i, cmd, i);
+		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable.data() + 128 * 32 * i, cmd, i);
 	}
 
 	VulkanHelper::Device::EndSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsQueue(), VulkanHelper::Device::GetGraphicsCommandPool());
@@ -643,7 +643,7 @@ void PathTracer::BuildEnergyLookupTable()
 	if (!std::filesystem::exists("assets/lookupTables/ReflectionLookup"))
 	{
 		// If file doesn't exists compute new values
-		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLoss({ 32, 32, 32 }, 100'000));
+		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLossGPU({ 32, 32, 32 }, 10'000'000));
 
 		std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
@@ -664,11 +664,11 @@ void PathTracer::BuildEnergyLookupTable()
 	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaGreaterThan1"))
 	{
 		// If file doesn't exists compute new values
-		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, true));
-
+		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, true));
+	
 		std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
-
+	
 		ostream.write((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
 	}
 	else
@@ -676,17 +676,16 @@ void PathTracer::BuildEnergyLookupTable()
 		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
 		std::ifstream istream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary);
 		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
-
-		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(256 * 64 * 64);
-
+	
+		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(128 * 32 * 32);
+	
 		istream.read((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
 	}
-
 
 	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaLessThan1"))
 	{
 		// If file doesn't exists compute new values
-		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLoss({ 256, 64, 64 }, 10'000, false));
+		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, false));
 
 		std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
 		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
@@ -699,7 +698,7 @@ void PathTracer::BuildEnergyLookupTable()
 		std::ifstream istream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary);
 		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
-		m_RefractionEtaLessThan1EnergyLookupTable.resize(256 * 64 * 64);
+		m_RefractionEtaLessThan1EnergyLookupTable.resize(128 * 32 * 32);
 
 		istream.read((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
 	}

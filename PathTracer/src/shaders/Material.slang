@@ -97,7 +97,7 @@ public struct Material
         Color.rgb *= albedoTexture.SampleLevel(surface.GetTexCoords(), 0).rgb;
 #endif
 
-        Roughness *= roughnessTexture.SampleLevel(surface.GetTexCoords(), 0).r;
+        Roughness *= pow(roughnessTexture.SampleLevel(surface.GetTexCoords(), 0).r, 1.0f / 4.0f);
         Metallic *= metallicTexture.SampleLevel(surface.GetTexCoords(), 0).r;
     }
 
@@ -121,7 +121,7 @@ public struct Material
 
     public BSDFSample SampleMetallic(inout Sampler sampler, in float3 V)
     {
-        float3 H = GGXSampleAnisotopic(V, sampler);
+        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
         float3 L = normalize(reflect(-V, H));
 
         float PDF;
@@ -150,11 +150,16 @@ public struct Material
 
     public BSDFSample SampleDielectric(inout Sampler sampler, in float3 V)
     {
-        float3 H = GGXSampleAnisotopic(V, sampler);
+        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
         float3 L = normalize(reflect(-V, H));
 
         float PDF;
         float3 BSDF = EvaluateDielectricReflection(V, L, 1.0f, PDF);
+
+        float layer = Anisotropy * 32.0f;
+        float energyCompensation = uReflectionEnergyLookupTexture.SampleLevel( { V.z, Roughness, layer }, 0.0).r;
+        energyCompensation = (1.0f - energyCompensation) / energyCompensation;
+        BSDF = (1.0f + float3(energyCompensation)) * BSDF;
 
         return { L, BSDF, PDF };
     }
@@ -165,13 +170,6 @@ public struct Material
 
         float3 BSDF = EvaluateReflection(V, L, F, PDF);
 
-        // Energy Compensation
-        float layer = Anisotropy * 32.0f;
-        float energyCompensation = uReflectionEnergyLookupTexture.SampleLevel( { V.z, Roughness, layer }, 0.0).r;
-        energyCompensation = (1.0f - energyCompensation) / energyCompensation;
-        BSDF = (1.0f + F * float3(energyCompensation)) * BSDF;
-
-        PDF *= F;
         return BSDF;
     }
 
@@ -179,81 +177,12 @@ public struct Material
     {
         float3 BSDF = EvaluateRefraction(V, L, F, PDF);
 
-        // Energy Compensation
-        float energyCompensation;
-        float renormalizedRoughness = Roughness;
-        float layer = pow((Ior - 1.0f) / 2.0f, 1.0f / 4.0f) * 63.0f;
-        float layerFrac = fract(layer);
-        if (Eta > 1.0f)
-        {
-            float energyCompensation1 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 2.5f) * 255.0f), int(renormalizedRoughness * 63.0f), int(floor(layer)) }) .r;
-            float energyCompensation2 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 2.5f) * 255.0f), int(renormalizedRoughness * 63.0f), int(floor(layer) + 1) }).r;
-            
-            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
-            //energyCompensation = uRefractionEnergyLookupTextureEtaGreaterThan1.SampleLevel( { pow(V.z, 1.0f / 2.5f), Roughness, floor(layer) }, 0.0).r;
-        }
-        else
-        {
-            float energyCompensation1 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 2.5f) * 255.0f), int(renormalizedRoughness * 63.0f), int(floor(layer)) }) .r;
-            float energyCompensation2 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 2.5f) * 255.0f), int(renormalizedRoughness * 63.0f), int(floor(layer) + 1) }) .r;
-            
-            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
-            //energyCompensation = uRefractionEnergyLookupTextureEtaLessThan1 .SampleLevel( { pow(V.z, 1.0f / 2.5f), Roughness, floor(layer) }, 0.0).r;
-        }
-        
-        PDF *= (1.0f - F);
-
-        // I have no clue why but glass is really fucking unstable and produces a lot of nans with eta > 1 which causes some values
-        // in lookup tables to be really small and when BSDF is divided by something really small it becomes really big.
-        // And because of that there are a lot of random energy gains which the code below tries to avoid by clamping energyCompensation Values.
-        // No idea how to fix them properly since none of the papers even mentions this problem. I've spent a couple of days 
-        // trying to find the issue but I had no luck so here goes a cheat fix. It's not perfect but I guess better this 
-        // than nothing. After playing a bit with different values that's the best fit I could find.
-        //if (renormalizedRoughness >= 0.0f && renormalizedRoughness < 0.4f && energyCompensation != 0 && energyCompensation < 0.9f)
-        //    energyCompensation = 0.0f;
-        //else if (renormalizedRoughness >= 0.4f && renormalizedRoughness < 0.7f && energyCompensation != 0 && energyCompensation < 0.9f)
-        //    energyCompensation = 0.9f;
-        //else if (renormalizedRoughness >= 0.7f && renormalizedRoughness < 0.75f && energyCompensation != 0 && energyCompensation < 0.8f)
-        //    energyCompensation = 0.8f;
-        //else if (renormalizedRoughness >= 0.75f && renormalizedRoughness < 0.8f && energyCompensation != 0 && energyCompensation < 0.7f)
-        //    energyCompensation = 0.7f;
-        //else if (renormalizedRoughness >= 0.8f && renormalizedRoughness < 0.85f && energyCompensation != 0 && energyCompensation < 0.65f)
-        //    energyCompensation = 0.65f;
-        //else if (renormalizedRoughness >= 0.85f && renormalizedRoughness < 0.875f && energyCompensation != 0 && energyCompensation < 0.6f)
-        //    energyCompensation = 0.6f;
-        //else if (renormalizedRoughness >= 0.875f && renormalizedRoughness < 0.9f && energyCompensation != 0 && energyCompensation < 0.5f)
-        //    energyCompensation = 0.55f;
-        //else if (renormalizedRoughness >= 0.9f && renormalizedRoughness < 0.95f && energyCompensation != 0 && energyCompensation < 0.5f)
-        //    energyCompensation = 0.5f;
-        //else if (renormalizedRoughness >= 0.95f && renormalizedRoughness < 0.97f && energyCompensation != 0 && energyCompensation < 0.4f)
-        //    energyCompensation = 0.4f;
-        //else if (renormalizedRoughness >= 0.97f && renormalizedRoughness <= 1.0f && energyCompensation != 0 && energyCompensation < 0.3f)
-        //    energyCompensation = 0.3f;
-
-        //if (energyCompensation > 0)
-        //{
-        //    energyCompensation = (1.0f - energyCompensation) / energyCompensation;
-        //    BSDF = (1.0f + (1.0f - F) * float3(energyCompensation)) * BSDF;
-        //}
-
-        //float newIor = (Ior - 1.0f) / 2.0f;
-        float newIor = ChangeRange(Ior, { 1, 3 }, { 0, 1 });
-        energyCompensation -= energyCompensation * 0.5f * max(smoothstep(-0.1, 1.0, renormalizedRoughness), 0.0) * max(1.1 * newIor, 1.0) * pow(smoothstep(0, 1, newIor), 1.0 / 4.0);
-
-        if (energyCompensation > 0)
-            BSDF = BSDF / energyCompensation;
-        else
-        {
-            BSDF = 1.0f;
-            PDF = 1.0f;
-        }
-
         return BSDF;
     }
 
     public BSDFSample SampleGlass(inout Sampler sampler, in float3 V, out bool refracted, out float F)
     {
-        float3 H = GGXSampleAnisotopic(V, sampler);
+        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
 
         F = DielectricFresnel(abs(dot(V, H)), Eta);
 
@@ -266,9 +195,11 @@ public struct Material
         {
             // Reflect
             refracted = false;
-        
+
             L = normalize(reflect(-V, H));
+
             BSDF = EvaluateDielectricReflection(V, L, F, PDF);
+            PDF *= F;
         }
         else
         {
@@ -278,7 +209,35 @@ public struct Material
             L = normalize(refract(-V, H, Eta));
 
             BSDF = EvaluateDielectricRefraction(V, L, F, PDF);
+            PDF *= (1.0f - F);
         }
+
+        // Energy Compensation
+        float energyCompensation;
+        float layer = pow((clamp(Ior, 1.0, 3.0) - 1.0f) / 2.0f, 1.0f / 4.0f) * 31.0f;
+        float layerFrac = fract(layer);
+        if (Eta > 1.0f)
+        {
+            float energyCompensation1 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
+            float energyCompensation2 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer) + 1) }) .r;
+
+            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
+        }
+        else
+        {
+            float energyCompensation1 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
+            float energyCompensation2 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer) + 1) }) .r;
+
+            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
+        }
+
+        // I dunno why but the compensation isn't fully working on glass and as the IOR gets bigger more energy is lost. I have no idea why is that happening
+        // so although that's not a correct way to fix this, I made some curve that mitigates that problem
+        float newIor = ChangeRange(Ior, { 1, 3 }, { 0, 1 });
+        energyCompensation -= energyCompensation * 0.1f * max(smoothstep(0.0, 1.45, pow(Roughness, 1.5)), 0.0) * pow(newIor, 1.5) * max(2.2 * pow(newIor, 1.0 / 4.0), 1.0);
+
+        if (energyCompensation > 0)
+            BSDF = BSDF / energyCompensation;
 
         if (isnan(L.x) || isnan(L.y) || isnan(L.z) || isinf(L.x) || isinf(L.y) || isinf(BSDF.z))
             return { 0, 0, 0 };
@@ -289,7 +248,7 @@ public struct Material
         return { L, BSDF, PDF };
     }
 
-    float3 EvaluateReflection(in float3 V, in float3 L, in float3 F, out float PDF)
+    public float3 EvaluateReflection(in float3 V, in float3 L, in float3 F, out float PDF)
     {
         float3 H = normalize(V + L);
 
@@ -311,7 +270,7 @@ public struct Material
         return bsdf;
     }
 
-    float3 EvaluateRefraction(in float3 V, in float3 L, in float3 F, out float PDF)
+    public float3 EvaluateRefraction(in float3 V, in float3 L, in float3 F, out float PDF)
     {
         float3 H = normalize(V + L);
 
@@ -335,7 +294,7 @@ public struct Material
         return bsdf;
     }
 
-    float DielectricFresnel(float VdotH, float eta)
+    public float DielectricFresnel(float VdotH, float eta)
     {
         float cosThetaI = VdotH;
         float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
@@ -386,31 +345,6 @@ public struct Material
     float GGXSmithAnisotropic(float3 V)
     {
         return 1.0f / (1.0f + Lambda(V));
-    }
-
-    float3 GGXSampleAnisotopic(float3 Ve, inout Sampler sampler)
-    {
-        float u1 = sampler.UniformFloat();
-        float u2 = sampler.UniformFloat();
-
-        float3 Vh = normalize(float3(Ax * Ve.x, Ay * Ve.y, abs(Ve.z)));
-
-        float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-        float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * (1.0f / sqrt(lensq)) : float3(1, 0, 0);
-        float3 T2 = cross(Vh, T1);
-
-        float r = sqrt(u1);
-        float phi = 2.0 * M_PI * u2;
-        float t1 = r * cos(phi);
-        float t2 = r * sin(phi);
-        float s = 0.5 * (1.0 + Vh.z);
-        t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
-
-        float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
-
-        float3 Ne = normalize(float3(Ax * Nh.x, Ay * Nh.y, max(0.0, Nh.z)));
-
-        return Ne;
     }
 
     // -----------------------------------------------------------------------------------------------------------------

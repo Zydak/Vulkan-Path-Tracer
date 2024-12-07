@@ -230,6 +230,31 @@ public struct Sampler
         toLight = Rotate(toLight, float3(1, 0, 0), -M_PI_2);
 
         // Lookup the environment value using computed uvs
-        outValue = hdrTexture.SampleLevel( SphericalToTexCoords(M_PI - theta, phi), 0);
+        outValue = hdrTexture.SampleLevel(SphericalToTexCoords(M_PI - theta, phi), 0);
+    }
+
+    public float3 GGXSampleAnisotopic(float3 Ve, float Ax, float Ay)
+    {
+        float u1 = UniformFloat();
+        float u2 = UniformFloat();
+
+        float3 Vh = normalize(float3(Ax * Ve.x, Ay * Ve.y, abs(Ve.z)));
+
+        float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+        float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * (1.0f / sqrt(lensq)) : float3(1, 0, 0);
+        float3 T2 = cross(Vh, T1);
+
+        float r = sqrt(u1);
+        float phi = 2.0 * M_PI * u2;
+        float t1 = r * cos(phi);
+        float t2 = r * sin(phi);
+        float s = 0.5 * (1.0 + Vh.z);
+        t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
+
+        float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
+
+        float3 Ne = normalize(float3(Ax * Nh.x, Ay * Nh.y, max(0.0, Nh.z)));
+
+        return Ne;
     }
 }
