@@ -83,18 +83,31 @@ public struct Material
         Anisotropy = material.Anisotropy;
         AnisotropyRotation = material.AnisotropyRotation / 360.0f * M_PI;
 
-        const float aspect = sqrt(1.0 - sqrt(Anisotropy) * 0.9);
-        Ax = max(0.001, Roughness / aspect);
-        Ay = max(0.001, Roughness * aspect);
-
-        Eta = dot(WorldRayDirection(), surface.GetGeometryNormal()) < 0.0 ? (1.0 / Ior) : Ior;
-
 #ifdef FURNACE_TEST_MODE
         Color = float4(1.0f);
         EmissiveColor = float4(0.0f);
 #else
         Color.rgb *= albedoTexture.SampleLevel(surface.GetTexCoords(), 0).rgb;
 #endif
+
+        // Some scenes handle transparency through albedo texture alpha channel. But since this is path tracer it cares only about the geometry
+        // and not the color. So if transparency is detected (alpha channel < 1) set the texture to fully transparent glass with IOR 1 so it looks
+        // like it's just not there. Though it will still block direct lighting from importance sampling lights.
+        float texTrans = albedoTexture.SampleLevel(surface.GetTexCoords(), 0).a;
+        if (texTrans < 1)
+        {
+            Roughness = 0;
+            Metallic = 0;
+            Color.rgb = 1.0f;
+            Ior = 1.0001f;
+            Transparency = 1.0f;
+        }
+
+        Eta = dot(WorldRayDirection(), surface.GetGeometryNormal()) < 0.0 ? (1.0 / Ior) : Ior;
+
+        const float aspect = sqrt(1.0 - sqrt(Anisotropy) * 0.9);
+        Ax = max(0.001, Roughness / aspect);
+        Ay = max(0.001, Roughness * aspect);
 
         Roughness *= pow(roughnessTexture.SampleLevel(surface.GetTexCoords(), 0).r, 1.0f / 4.0f);
         Metallic *= metallicTexture.SampleLevel(surface.GetTexCoords(), 0).r;
