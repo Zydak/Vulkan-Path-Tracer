@@ -2,12 +2,18 @@
 
 Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be saved as png images. It also features post processing effects and a denoiser.
 
+# Running
+## Windows Only
+- Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
+- Download [PathTracer.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0/PathTracer.zip) from [Releases](https://github.com/Zydak/Vulkan-Path-Tracer/releases).
+- Unzip and run `PathTracer\PathTracer\PathTracer.exe`.
+
 # Building
 ## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
 - Run `git clone https://github.com/Zydak/Vulkan-Path-Tracer --recursive`.
-- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release/Shaderc.zip)
-- Unzip and copy Shaderc libraries into `VulkanHelper/lib/shaderc/`.
+- Go to Releases and download [Shaderc.zip](https://github.com/Zydak/Vulkan-Path-Tracer/releases/download/Release-v1.0.0/Shaderc.zip)
+- Unzip and copy Shaderc libraries into `Vulkan-Helper/lib/shaderc/`.
 - Run `setup.bat` in main directory.
 - Open generated solution in Visual Studio.
 
@@ -76,26 +82,17 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 - HDR Environment Maps
 - Environment map MIS
 - Complex Materials
-- Volumetric Scattering using delta tracking
+- Volumetric Scattering
 - Textures and Normal Maps
 - Editor
   - Loading your own scenes in .gltf .fbx and .obj format
   - Editing scene materials in runtime
   - Exporting renders into .PNG files
   - Saving and loading scenes
-- Shader hot reloading and caching
 - Post Processing
   - Bloom using Mip Maps
-  - Exposure
-  - Contrast
-  - Brightness
-  - Saturation
-  - Vignette
-  - Gamma
-  - Temperature with Tint
-  - Color Filter
   - Chromatic Aberration
-  - 6 Tonemappers (Filmic, Hill Aces, Narkowicz Aces, Exposure Mapping, Uncharted 2, Reinchard Extended)
+  - Exposure and many more
 - Anti Aliasing
 - Depth of Field effect with automatic focal length
 - Image Denoising using Nvidia Optix Denoiser
