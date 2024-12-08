@@ -71,8 +71,8 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 - Energy Conserving BSSRDF.
 
 <p align="center">
-  <img src="./Gallery/Graphics/NoCompensation.png" alt="NoCompensation" />
-  <img src="./Gallery/Graphics/Original.png" alt="Original" />
+  <img src="./Gallery/materialShowcase/NoCompensation.png" alt="NoCompensation" />
+  <img src="./Gallery/materialShowcase/Original.png" alt="Original" />
 </p>
 <p align="center">
   <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
