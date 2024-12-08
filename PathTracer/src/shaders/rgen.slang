@@ -18,13 +18,17 @@ import Volume;
 
 [[vk::binding(12, 0)]] StructuredBuffer<Volume> uVolumes;
 
+[[vk::image_format("rgba32f")]]
 [[vk::binding(14, 0)]] RWTexture2D<float4> uGBufferAlbedo;
+[[vk::image_format("rgba32f")]]
 [[vk::binding(15, 0)]] RWTexture2D<float4> uGBufferNormal;
 
 [[vk::push_constant]] PushConstant push;
 
+//Enumerate through all volumes in the scene and choose in which one to scatter
 void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float outClosestScatterDistance, out float outPathLengthThroughVolume, out Volume outFinalVolume)
 {
+    // Launch a ray query to get the distance to closest geometry
     float closestGeometry = -1.0;
     if (push.VolumesCount > 0)
     {
@@ -40,19 +44,23 @@ void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float 
     outClosestScatterDistance = FLT_MAX;
     for (int v = 0; v < push.VolumesCount; v++)
     {
+        // Find intersection points in a volume
         float3 hitPosNear;
         float3 hitPosFar;
         Volume volume = uVolumes[v];
         volume.Aabb.IntersectRay(ray.GetOrigin(), ray.GetDirection(), hitPosNear, hitPosFar);
 
+        // If the ray starts inside a volume set the closest intersection point to the ray origin
         if (volume.Aabb.IsInsideAABB(ray.GetOrigin()))
             hitPosNear = ray.GetOrigin();
 
+        // If intersections aren't found hitPositions are set to FLT_MAX
         if (!VectorEqual(hitPosNear, FLT_MAX) && !VectorEqual(hitPosFar, FLT_MAX))
         {
+            // If there are intersections calculate path through the volume
             float distanceToNear = length(ray.GetOrigin() - hitPosNear);
             float distanceToFar = length(ray.GetOrigin() - hitPosFar);
-            float pathLengthThroughVolume;
+            float pathLengthThroughVolume = 0.0f;
 
             if (closestGeometry != -1.0)
             {
@@ -77,13 +85,21 @@ void EnumerateThroughVolumes(in const Ray ray, inout Sampler sampler, out float 
                 pathLengthThroughVolume = distanceToFar - distanceToNear;
             }
 
-            if (closestGeometry == -1.0 || distanceToNear < closestGeometry)
+            // If the geometry isn't obscuring the way pathLengthThroughVolume will be more than 0
+            if (pathLengthThroughVolume > 0.0)
             {
+                // Randomly choose the scatter distance based on scattering coefficient of the volume
                 float scatterDistance = volume.SampleScatterDistance(sampler);
+
+                // Get the distance of the scattering point from the camera
                 float scatterDistanceFromCamera = (distanceToNear + scatterDistance);
 
-                if (scatterDistance < pathLengthThroughVolume && pathLengthThroughVolume > 0.0)
+                // We can't scatter if the scatter distance is greater than the path through volume since
+                // that would mean we're scattering outside the volume
+                if (scatterDistance < pathLengthThroughVolume)
                 {
+                    // If the current scattering is closer than the previous one (since we can have multiple volumes)
+                    // choose it as the final scattering event
                     if (scatterDistanceFromCamera < outClosestScatterDistance)
                     {
                         outPathLengthThroughVolume = pathLengthThroughVolume;
@@ -105,6 +121,7 @@ void main()
 
     Camera camera = Camera(uUniformBuffer.ViewInverse, uUniformBuffer.ProjInverse);
 
+    // Create payload and sampler
     RTPayload payload = RTPayload();
     payload.GBufferPass = false;
     payload.Sampler = Sampler(LaunchID.y + LaunchSize.x * LaunchID.x + getRealtimeClock().x);
@@ -144,9 +161,12 @@ void main()
         // Random float2 from -0.5 to 0.5
         const float2 antiAliasingJitter = (payload.Sampler.UniformFloat2() - 0.5f) * push.AAstrength;
 
-        // Get ray direction
+        // Offset the pixel center by the antiAliasingJitter to get slightly different direction each time.
+        // This way we get anti aliasing for free.
         const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5, 0.5) + antiAliasingJitter;
         const float2 inUV = pixelCenter / float2(LaunchSize.xy);
+
+        // Then get the ray from the camera
         Ray ray = camera.GetRay(push.FocalLenght, push.DoFStrenght, payload.Sampler, inUV * 2.0 - 1.0);
 
         // Start tracing
@@ -159,18 +179,20 @@ void main()
             Volume volume;
             EnumerateThroughVolumes(ray, payload.Sampler, volumeScatter, pathLengthThroughVolume, volume);
 
+            // If there are no scattering events volumeScatter is set to FLT_MAX
             if (volumeScatter < FLT_MAX)
             {
                 // Scattered inside the volume
                 weight *= volume.Color.rgb;
                 ray.SetOrigin(ray.GetOrigin() + ray.GetDirection() * volumeScatter);
 
-                // MIS
+                // Direct Lighting
                 {
                     float3 dirToLight;
                     float4 envColor; // w = pdf
                     payload.Sampler.SampleImportanceEnvMap(uEnvironmentMap, uAccels, push.EnvAzimuth, push.EnvAltitude, dirToLight, envColor);
                 
+                    // Check if the ray path to the light is obscured by the geometry
                     bool canHit = true;
                     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
                     query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, ray.GetOrigin(), 0.0001, dirToLight, 1000000);
@@ -180,10 +202,11 @@ void main()
                         canHit = false;
                     }
                 
+                    // If there is no geometry on the way proceed
                     if (canHit)
                     {
                         float3 volumeAbsorption = float3(1.0f);
-                        // Iterate through all volumes
+                        // Iterate through all volumes and accumulate their absorption by using Beer's law
                         for (int i = 0; i < push.VolumesCount; i++)
                         {
                             Volume volume1 = uVolumes[i];
@@ -202,16 +225,20 @@ void main()
                             volumeAbsorption *= exp(-volume1.ScatteringCoefficient * volumeWidth);
                         }
 
+                        // Evaluate phase function to the light direction
                         float phase = volume.EvaluateHenyeyGreenstein(payload.RayDirection, dirToLight);
 
+                        // Add the direct lighting contribution
                         hitValue += volumeAbsorption * weight * phase * (envColor.xyz / envColor.w) * exp(-volume.ScatteringCoefficient * pathLengthThroughVolume);
                     }
                 }
+                
+                // Set new direction
                 ray.SetDirection(payload.Sampler.SampleHenyeyGreenstein(ray.GetDirection(), volume.G));
             }
             else
             {
-                // Scattered on surface
+                // There were no scattering events hence scattered on surface
                 ray.Trace(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, payload);
 
                 if (payload.Depth == DEPTH_INFINITE && VectorEqual(payload.Weight, -1.0))
@@ -248,6 +275,7 @@ void main()
     }
     finalValue /= push.SamplesPerFrame; // Average all samples
 
+    // output the final value
     film.WritePixel(LaunchID.xy, float4(finalValue, 1.0f), push.Frame);
 
     // If it's a first frame, shoot additional ray into the scene with GBufferPass flag set to true.

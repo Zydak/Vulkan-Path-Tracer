@@ -1,3 +1,7 @@
+//
+// Reference [https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf]
+//
+
 import Material;
 import Sampler;
 

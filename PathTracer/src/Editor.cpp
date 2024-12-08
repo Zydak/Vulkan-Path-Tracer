@@ -157,7 +157,7 @@ void Editor::Render()
 
 			PathTracingSettingsComponent* pathTracingSettings = &m_PathTracingSettings.GetComponent<PathTracingSettingsComponent>();
 
-			VL_CORE_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
+			VK_ASSERT(pathTracingSettings != nullptr, "Couldn't find path tracing settings!");
 
 			m_PathTracingFinished = m_PathTracer.GetSamplesAccumulated() >= pathTracingSettings->Settings.TotalSamplesPerPixel;
 
@@ -407,7 +407,7 @@ void Editor::ImGuiRenderRasterizerViewport()
 
 	EditorSettingsComponent* editorSettings = &m_EditorSettings.GetComponent<EditorSettingsComponent>();
 
-	VL_CORE_ASSERT(editorSettings != nullptr, "Can't find editor settings");
+	VK_ASSERT(editorSettings != nullptr, "Can't find editor settings");
 
 	ImVec2 size = { (float)editorSettings->ImageSize.x, (float)editorSettings->ImageSize.y };
 
@@ -697,14 +697,10 @@ void Editor::ImGuiSceneEditor()
 		if (ImGui::SliderFloat("Specular Tint", (float*)&materialProps->SpecularTint, 0.0f, 1.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
-		//const float aspect = sqrt(1.0 - glm::sqrt(materialProps->Anisotropy) * 0.9);
-		//materialProps->ax = glm::max(0.001f, materialProps->Roughness / aspect);
-		//materialProps->ay = glm::max(0.001f, materialProps->Roughness * aspect);
-
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Density", (float*)&materialProps->MediumDensity, 0.0f, 2.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Anisotropy", (float*)&materialProps->MediumAnisotropy, -1.0f, 1.0f)) { valuesChanged = true; };
-		if (ImGui::ColorEdit3("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
+		if (ImGui::ColorEdit4("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 3.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 
@@ -913,11 +909,11 @@ void Editor::ImGuiPostProcessingSettings()
 	VulkanHelper::TonemapperSettingsComponent* tonemapSettings = nullptr;
 	for (auto& entity : viewTonemap)
 	{
-		VL_CORE_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		tonemapSettings = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::TonemapperSettingsComponent>(entity);
 	}
 
-	VL_CORE_ASSERT(tonemapSettings != nullptr, "Couldn't find post processor settings!");
+	VK_ASSERT(tonemapSettings != nullptr, "Couldn't find post processor settings!");
 
 	ImGui::SliderFloat("Exposure", &tonemapSettings->Settings.Exposure, 0.0f, 2.0f);
 	ImGui::SliderFloat("Contrast", &tonemapSettings->Settings.Contrast, 0.0f, 2.0f);
@@ -961,10 +957,10 @@ void Editor::ImGuiPostProcessingSettings()
 	VulkanHelper::BloomSettingsComponent* bloomSettings = nullptr;
 	for (auto& entity : viewBloom)
 	{
-		VL_CORE_ASSERT(bloomSettings == nullptr, "Can't have more than one bloom settings inside a scene!");
+		VK_ASSERT(bloomSettings == nullptr, "Can't have more than one bloom settings inside a scene!");
 		bloomSettings = &(*m_CurrentScene)->GetRegistry().get<VulkanHelper::BloomSettingsComponent>(entity);
 	}
-	VL_CORE_ASSERT(bloomSettings != nullptr, "Couldn't find post bloom settings!");
+	VK_ASSERT(bloomSettings != nullptr, "Couldn't find post bloom settings!");
 
 	ImGui::SliderFloat("Threshold", &bloomSettings->Settings.Threshold, 0.0f, 3.0f);
 	ImGui::SliderFloat("Strength", &bloomSettings->Settings.Strength, 0.0f, 2.0f);
@@ -986,10 +982,10 @@ void Editor::ImGuiViewportSettings()
 	EditorSettingsComponent* editorSettings = nullptr;
 	for (auto& entity : viewEditor)
 	{
-		VL_CORE_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
 	}
-	VL_CORE_ASSERT(editorSettings != nullptr, "Couldn't find editor settings!");
+	VK_ASSERT(editorSettings != nullptr, "Couldn't find editor settings!");
 
 	if (ImGui::InputInt2("Rendered Image Size", (int*)&editorSettings->ImageSize)) { m_ImageResized = true; }
 

@@ -104,7 +104,7 @@ void PathTracer::SetScene(VulkanHelper::Scene* scene)
 		skybox = &scene->GetRegistry().get<SkyboxComponent>(entity);
 	}
 
-	VL_CORE_ASSERT(skybox != nullptr, "There is no skybox in the scene!");
+	VK_ASSERT(skybox != nullptr, "There is no skybox in the scene!");
 
 	VkDescriptorImageInfo info = { 
 		VulkanHelper::Renderer::GetLinearSampler().GetSamplerHandle(),
@@ -135,7 +135,7 @@ void PathTracer::SetScene(VulkanHelper::Scene* scene)
 		m_VolumesBuffer.WriteToBuffer(&volumeComp, sizeof(VolumeComponent), volumesCount * sizeof(VolumeComponent));
 		volumesCount++;
 		
-		VL_CHECK(volumesCount < 100, "Can't have more than 100 volumes!");
+		VK_CHECK(volumesCount < 100, "Can't have more than 100 volumes!");
 	}
 }
 
@@ -172,7 +172,7 @@ bool PathTracer::Render()
 	static glm::mat4 previousViewMat{ 0.0f };
 	static glm::mat4 previousProjMat{ 0.0f };
 	auto camComp = PerspectiveCameraComponent::GetMainCamera(m_CurrentSceneRendered);
-	VL_CORE_ASSERT(camComp != nullptr, "There is no camera");
+	VK_ASSERT(camComp != nullptr, "There is no camera");
 
 	if (previousViewMat != camComp->Camera.ViewMat ||
 		previousProjMat != camComp->Camera.ProjMat) // if camera moved
@@ -551,7 +551,7 @@ void PathTracer::CreateRayTracingDescriptorSets()
 			materialSizes += sizeof(VulkanHelper::MaterialProperties);
 		}
 
-		VL_CORE_ASSERT(meshSizes, "No meshes found?");
+		VK_ASSERT(meshSizes, "No meshes found?");
 
 		m_RayTracingMeshesBuffer.WriteToBuffer(meshAddresses.data(), meshSizes, 0);
 		m_RayTracingMaterialsBuffer.WriteToBuffer(materials.data(), materialSizes, 0);
@@ -590,7 +590,7 @@ void PathTracer::CreateAccelerationStructure()
 		}
 		else
 		{
-			VL_ASSERT(false, "Mesh has neither material or volume component! You have to add one!");
+			VK_ASSERT(false, "Mesh has neither material or volume component! You have to add one!");
 		}
 	}
 
@@ -609,7 +609,7 @@ void PathTracer::UpdateDescriptorSetsData()
 	glm::mat4 flipX = glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, 1.0f, 1.0f));
 
 	GlobalUbo ubo{};
-	VL_CORE_ASSERT(cameraCp != nullptr, "No main camera found!");
+	VK_ASSERT(cameraCp != nullptr, "No main camera found!");
 	ubo.ProjInverse = glm::inverse(cameraCp->Camera.ProjMat);
 	ubo.ViewInverse = glm::inverse(cameraCp->Camera.ViewMat * flipX);
 	ubo.ViewProjectionMat = cameraCp->Camera.ProjMat * (cameraCp->Camera.ViewMat * flipX);
@@ -646,7 +646,7 @@ void PathTracer::BuildEnergyLookupTable()
 		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLossGPU({ 32, 32, 32 }, 10'000'000));
 
 		std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
-		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 
 		ostream.write((char*)m_ReflectionEnergyLookupTable.data(), m_ReflectionEnergyLookupTable.size() * 4);
 	}
@@ -654,7 +654,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
 		std::ifstream istream("assets/lookupTables/ReflectionLookup", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
 		m_ReflectionEnergyLookupTable.resize(32 * 32 * 32);
 
@@ -667,7 +667,7 @@ void PathTracer::BuildEnergyLookupTable()
 		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, true));
 	
 		std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
-		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 	
 		ostream.write((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
 	}
@@ -675,7 +675,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
 		std::ifstream istream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 	
 		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(128 * 32 * 32);
 	
@@ -688,7 +688,7 @@ void PathTracer::BuildEnergyLookupTable()
 		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, false));
 
 		std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
-		VL_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
+		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
 
 		ostream.write((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
 	}
@@ -696,7 +696,7 @@ void PathTracer::BuildEnergyLookupTable()
 	{
 		// Else just read the cached table as recalculating it every time is quite slow even with multi threading
 		std::ifstream istream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary);
-		VL_ASSERT(istream.is_open(), "Couldn't open file for reading!");
+		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
 		m_RefractionEtaLessThan1EnergyLookupTable.resize(128 * 32 * 32);
 

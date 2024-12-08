@@ -5,14 +5,14 @@ class EnergyLossCalculator
 public:
 	EnergyLossCalculator() { Init(); }
 
-	std::vector<float> CalculateReflectionEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount);
-	std::vector<float> CalculateRefractionEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface);
+	std::vector<float> CalculateReflectionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount);
+	std::vector<float> CalculateRefractionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface);
 
 	void Init();
 	void Destroy();
 private:
 
-	std::vector<float> CalculateEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface);
+	std::vector<float> CalculateEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface);
 private:
 
 	struct PipelinePushConstant

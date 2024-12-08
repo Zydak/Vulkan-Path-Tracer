@@ -12,7 +12,6 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	appInfo.EnableRayTracingSupport = true;
 	appInfo.DeviceExtensions = 
 	{
-		VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
@@ -87,10 +86,6 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	vulkan11Features.variablePointers = true;
 	vulkan11Features.variablePointersStorageBuffer = true;
 
-	VkPhysicalDeviceCoherentMemoryFeaturesAMD amdFeatures = {};
-	amdFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
-	amdFeatures.deviceCoherentMemory = true;
-
 	// ------------------------
 	// Chain feature structures
 	// ------------------------
@@ -108,8 +103,7 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	hostQueryResetFeatures.pNext = &timelineSemaphoreFeatures;
 	timelineSemaphoreFeatures.pNext = &synchronization2Features;
 	synchronization2Features.pNext = &rayQueryFeatures;
-	rayQueryFeatures.pNext = &amdFeatures;
-	amdFeatures.pNext = nullptr;
+	rayQueryFeatures.pNext = nullptr;
 
 	appInfo.Features = features;
 	appInfo.UseMemoryAddress = true;
@@ -117,26 +111,33 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	appInfo.WindowWidth = 1600;
 	appInfo.MaxFramesInFlight = 1;
 
+	appInfo.IgnoredMessageIDs = 
+	{ 
+		-602362517, // Small allocation warning, it's caused by ImGui backend so not much I can do about that
+		-1277938581, // Small allocation warning
+		1413273847, // Memory priority
+		-2027362524, // Command Pool reset
+	};
+
 	Application* app = new ::Application(appInfo);
 
 	vkGetPhysicalDeviceFeatures2(VulkanHelper::Device::GetPhysicalDevice(), &features);
 
 	// Verify that all features are present
-	VL_CHECK(accelerationStructureFeatures.accelerationStructure, "acceleration structures not supported!");
-	VL_CHECK(rayTracingFeatures.rayTracingPipeline, "Ray Tracing Pipeline not supported!");
-	VL_CHECK(deviceAddressFeatures.bufferDeviceAddress, "Device address not supported!");
-	VL_CHECK(scalarBlockLayoutFeatures.scalarBlockLayout, "Scalar block layout not supported!");
-	VL_CHECK(shaderClockFeatures.shaderDeviceClock, "Shader Clock not supported!");
-	VL_CHECK(hostQueryResetFeatures.hostQueryReset, "Host Query not supported!");
-	VL_CHECK(timelineSemaphoreFeatures.timelineSemaphore, "Timeline semaphore not supported!");
-	VL_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
-	VL_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
-	VL_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
-	VL_CHECK(robustFeatures.nullDescriptor, "nullDescriptor not supported!");
-	VL_CHECK(vulkan11Features.variablePointers, "variablePointers not supported!");
-	VL_CHECK(vulkan11Features.variablePointersStorageBuffer, "variablePointersStorageBuffer not supported!");
-	VL_CHECK(rayQueryFeatures.rayQuery, "rayQuery not supported!");
-	VL_CHECK(amdFeatures.deviceCoherentMemory, "deviceCoherentMemory not supported!");
+	VK_CHECK(accelerationStructureFeatures.accelerationStructure, "acceleration structures not supported!");
+	VK_CHECK(rayTracingFeatures.rayTracingPipeline, "Ray Tracing Pipeline not supported!");
+	VK_CHECK(deviceAddressFeatures.bufferDeviceAddress, "Device address not supported!");
+	VK_CHECK(scalarBlockLayoutFeatures.scalarBlockLayout, "Scalar block layout not supported!");
+	VK_CHECK(shaderClockFeatures.shaderDeviceClock, "Shader Clock not supported!");
+	VK_CHECK(hostQueryResetFeatures.hostQueryReset, "Host Query not supported!");
+	VK_CHECK(timelineSemaphoreFeatures.timelineSemaphore, "Timeline semaphore not supported!");
+	VK_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
+	VK_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
+	VK_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
+	VK_CHECK(robustFeatures.nullDescriptor, "nullDescriptor not supported!");
+	VK_CHECK(vulkan11Features.variablePointers, "variablePointers not supported!");
+	VK_CHECK(vulkan11Features.variablePointersStorageBuffer, "variablePointersStorageBuffer not supported!");
+	VK_CHECK(rayQueryFeatures.rayQuery, "rayQuery not supported!");
 
 	return app;
 }

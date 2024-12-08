@@ -73,7 +73,6 @@ public struct Material
         Metallic = material.Metallic;
         // Roughness = Roughness^4 for better feel, linear roughness sucks
         Roughness = material.Roughness * material.Roughness * material.Roughness * material.Roughness;
-        //Roughness = material.Roughness;
         SpecularTint = material.SpecularTint;
 
         Ior = max(material.Ior, 1.000001);
@@ -248,6 +247,12 @@ public struct Material
         return { L, BSDF, PDF };
     }
 
+    //
+    // References
+    // [https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf]
+    // [https://inria.hal.science/hal-00996995v2/document]
+    // [https://dl.acm.org/doi/pdf/10.1145/357290.357293]
+    //
     public float3 EvaluateReflection(in float3 V, in float3 L, in float3 F, out float PDF)
     {
         float3 H = normalize(V + L);
@@ -270,6 +275,12 @@ public struct Material
         return bsdf;
     }
 
+    //
+    // References
+    // [https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf]
+    // [https://inria.hal.science/hal-00996995v2/document]
+    // [https://dl.acm.org/doi/pdf/10.1145/357290.357293]
+    //
     public float3 EvaluateRefraction(in float3 V, in float3 L, in float3 F, out float PDF)
     {
         float3 H = normalize(V + L);

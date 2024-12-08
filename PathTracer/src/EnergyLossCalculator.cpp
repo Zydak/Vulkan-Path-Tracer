@@ -52,13 +52,13 @@ void EnergyLossCalculator::Reset()
 
 }
 
-std::vector<float> EnergyLossCalculator::CalculateEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface)
+std::vector<float> EnergyLossCalculator::CalculateEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface)
 {
-	uint64_t totalSize = tableSize.x * tableSize.y * tableSize.x;
+	uint64_t totalSize = uint64_t(tableSize.x * tableSize.y * tableSize.x);
 	std::vector<float> dataVec(totalSize);
 
 	uint64_t totalSampleCount = totalSize * uint64_t(sampleCount);
-	VL_INFO("Calculating energy compensation LUT with {} total samples, it may take a while.", totalSampleCount);
+	VK_INFO("Calculating energy compensation LUT with {} total samples, it may take a while.", totalSampleCount);
 
 	// Create Buffer
 	VulkanHelper::Buffer dataBuffer;
@@ -77,9 +77,9 @@ std::vector<float> EnergyLossCalculator::CalculateEnergyLossGPU(glm::dvec3 table
 
 	// Set push data
 	m_PushConstant.GetDataPtr()->SampleCount = 20;
-	m_PushConstant.GetDataPtr()->TableSizeX = tableSize.x;
-	m_PushConstant.GetDataPtr()->TableSizeY = tableSize.y;
-	m_PushConstant.GetDataPtr()->TableSizeZ = tableSize.z;
+	m_PushConstant.GetDataPtr()->TableSizeX = int(tableSize.x);
+	m_PushConstant.GetDataPtr()->TableSizeY = int(tableSize.y);
+	m_PushConstant.GetDataPtr()->TableSizeZ = int(tableSize.z);
 	m_PushConstant.GetDataPtr()->AboveSurface = AboveTheSurface;
 
 	VkCommandBuffer cmdBuffer;
@@ -148,12 +148,12 @@ std::vector<float> EnergyLossCalculator::CalculateEnergyLossGPU(glm::dvec3 table
 	return dataVec;
 }
 
-std::vector<float> EnergyLossCalculator::CalculateReflectionEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount)
+std::vector<float> EnergyLossCalculator::CalculateReflectionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount)
 {
 	return CalculateEnergyLossGPU(tableSize, sampleCount, true, false);
 }
 
-std::vector<float> EnergyLossCalculator::CalculateRefractionEnergyLossGPU(glm::dvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface)
+std::vector<float> EnergyLossCalculator::CalculateRefractionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface)
 {
 	return CalculateEnergyLossGPU(tableSize, sampleCount, false, AboveTheSurface);
 }

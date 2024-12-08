@@ -112,36 +112,6 @@ public struct Sampler
     }
 
     [mutating]
-    public float3 SampleHenyeyGreenstein(float g, float3 incidentDir)
-    {
-        const float x1 = UniformFloat();
-        const float x2 = UniformFloat();
-        const float x3 = UniformFloat();
-
-        float cosTheta;
-        if (abs(g) < 1e-5) {
-            cosTheta = 2.0 * x1 - 1.0f;
-        }
-        else {
-            float sqrTerm = (1.0 - g * g) / (1.0 - g + 2.0 * g * x2);
-            cosTheta = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
-        }
-
-        float phi = 2.0 * M_PI * x3;
-
-        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-
-        float3 tangent;
-        float3 bitangent;
-        CalculateTangents(incidentDir, tangent, bitangent);
-
-        float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
-
-        return scatteredDir;
-    }
-
-    [mutating]
     public float3 SampleHenyeyGreenstein(float3 incidentDir, float G)
     {
         float2 rand = UniformFloat2();
@@ -227,12 +197,14 @@ public struct Sampler
         toLight = Rotate(toLight, float3(0, 1, 0), -altitude);
         toLight = Rotate(toLight, float3(0, 0, 1), -azimuth);
 
+        toLight = Rotate(toLight, float3(0, 0, 1), -M_PI / 2.5);
         toLight = Rotate(toLight, float3(1, 0, 0), -M_PI_2);
 
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(SphericalToTexCoords(M_PI - theta, phi), 0);
     }
 
+    // Reference https://jcgt.org/published/0007/04/01/paper.pdf
     public float3 GGXSampleAnisotopic(float3 Ve, float Ax, float Ay)
     {
         float u1 = UniformFloat();

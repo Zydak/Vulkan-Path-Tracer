@@ -57,7 +57,7 @@ public:
 			}
 		}
 
-		VL_CORE_ASSERT(false, "There is no main camera!");
+		VK_ASSERT(false, "There is no main camera!");
 		return { (entt::entity)0, scene };
 	}
 };
@@ -117,7 +117,7 @@ public:
 			}
 		}
 
-		VL_CORE_ASSERT(false, "There is no main camera!");
+		VK_ASSERT(false, "There is no main camera!");
 		return { (entt::entity)0, scene };
 	}
 };

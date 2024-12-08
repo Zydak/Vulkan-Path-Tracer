@@ -29,7 +29,7 @@ void PostProcessor::SetScene(VulkanHelper::Scene* currentScene)
 	VulkanHelper::BloomSettingsComponent* bloomSettings = nullptr;
 	for (auto& entity : viewBloom)
 	{
-		VL_CORE_ASSERT(bloomSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(bloomSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		bloomSettings = &currentScene->GetRegistry().get<VulkanHelper::BloomSettingsComponent>(entity);
 	}
 
@@ -49,7 +49,7 @@ void PostProcessor::SetScene(VulkanHelper::Scene* currentScene)
 	VulkanHelper::TonemapperSettingsComponent* tonemapSettings = nullptr;
 	for (auto& entity : viewTonemap)
 	{
-		VL_CORE_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		tonemapSettings = &currentScene->GetRegistry().get<VulkanHelper::TonemapperSettingsComponent>(entity);
 	}
 
@@ -76,7 +76,7 @@ void PostProcessor::Render()
 	VulkanHelper::BloomSettingsComponent* bloomSettings = nullptr;
 	for (auto& entity : viewBloom)
 	{
-		VL_CORE_ASSERT(bloomSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(bloomSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		bloomSettings = &m_CurrentScene->GetRegistry().get<VulkanHelper::BloomSettingsComponent>(entity);
 	}
 
@@ -93,7 +93,7 @@ void PostProcessor::Render()
 	VulkanHelper::TonemapperSettingsComponent* tonemapSettings = nullptr;
 	for (auto& entity : viewTonemap)
 	{
-		VL_CORE_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(tonemapSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
 		tonemapSettings = &m_CurrentScene->GetRegistry().get<VulkanHelper::TonemapperSettingsComponent>(entity);
 	}
 

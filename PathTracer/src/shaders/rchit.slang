@@ -55,6 +55,7 @@ void main(inout Input input, in float2 attribs)
 
     bool hitFromTheInside = material.Eta > 1.0f;
 
+    // See the end of rgen.slang
     if (input.Payload.GBufferPass)
     {
         input.Payload.GBufferColor = material.Color.xyz;
@@ -64,36 +65,48 @@ void main(inout Input input, in float2 attribs)
     }
 
     // Medium
-
     if (input.Payload.InMedium)
     {
+        // Get distance to the geometry from prev hit point
         float geometryHitDistance = length(input.Payload.RayOrigin - surface.GetWorldPos());
-        // Scattering Occured
+
         if (input.Payload.MediumAnisotropy == 1.0f)
         {
-            // Use Beer's law
+            // If the anisotropy equals 1 we can skip simulating the scattering events and just use Beer's law instead which is way faster
+            // and gives the same result.
             input.Payload.Weight *= exp(-(1.0f - material.MediumColor.rgb) * material.MediumDensity * geometryHitDistance);
+            input.Payload.HitValue += input.Payload.MediumColor.rgb * material.MediumColor.a;
         }
         else
         {
-            // Simulate scattering events
+            // If the anisotropy isn't 1, ray can bounce in different directions inside a medium. So in that case scattering
+            // events have to be simulated
+
+            // Randomly choose scattering distance based on medium density
             float scatterDistance = -log(input.Payload.Sampler.UniformFloat()) / input.Payload.MediumDensity;
             
             if (scatterDistance < geometryHitDistance)
             {
+                // If the scattering distance is smaller than closest geometry the ray is still inside the medium.
+
+                // Choose new origin and idrection
                 input.Payload.RayOrigin = input.Payload.RayOrigin + (scatterDistance * input.Payload.RayDirection);
+                input.Payload.RayDirection = input.Payload.Sampler.SampleHenyeyGreenstein( input.Payload.RayDirection, input.Payload.MediumAnisotropy);
 
-                input.Payload.RayDirection = input.Payload.Sampler.SampleHenyeyGreenstein( input.Payload.MediumAnisotropy, input.Payload.RayDirection);
-
+                // Change weight and hit value
                 input.Payload.Weight *= input.Payload.MediumColor.rgb;
+                input.Payload.HitValue += input.Payload.MediumColor.rgb * material.MediumColor.a;
 
+                // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
+                // and since the input.Payload.InMedium is still set we'll end up back here and simulate the next event
                 return;
             }
         }
     }
 
-    // Direct Lighting of the surface
+    // Direct Lighting of the surface (only Environment map has direct lighting, There is no importance sampling of emissive meshes)
 
+    // Randomly sample the environment map
     float3 dirToLight;
     float4 envColor; // w = pdf
     input.Payload.Sampler.SampleImportanceEnvMap(uEnvironmentMap, uAccels, push.EnvAzimuth, push.EnvAltitude, dirToLight, envColor);
@@ -101,8 +114,8 @@ void main(inout Input input, in float2 attribs)
     float3 BSDFSurfaceToLight;
     float PDFSurfaceToLight;
 
+    // Check whether it can be hit or not
     bool canHit = dot(dirToLight, surface.GetNormal()) > 0.0f;
-
     if (canHit)
     {
         RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
@@ -110,10 +123,11 @@ void main(inout Input input, in float2 attribs)
         query.Proceed();
         if (query.CommittedStatus() != COMMITTED_NOTHING)
         {
-            canHit = false;
+            canHit = false; // If an intersection is found on the way that means the shaded point is obscured by geometry
         }
     }
 
+    // Choose sampling probabilities for each lobe
     float F0 = (1.0f - material.Eta) / (1.0f + material.Eta);
     F0 *= F0;
 
@@ -130,25 +144,34 @@ void main(inout Input input, in float2 attribs)
 
     float x1 = input.Payload.Sampler.UniformFloat();
 
+    // Sample the lobes based on their probabilities
     bool refracted = false;
     BSDFSample sample;
     if (x1 < diffuseProbability)
     {
+        // Diffuse lobe
+
         sample = material.SampleDiffuse(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateDiffuse(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
-    else if (x1 < metallicProbability + diffuseProbability)
+    else if (x1 < diffuseProbability + metallicProbability)
     {
+        // Metallic lobe
+
         sample = material.SampleMetallic(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateMetallic(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
     else if (x1 < diffuseProbability + metallicProbability + dielectricProbability)
     {
+        // Dielectric lobe
+
         sample = material.SampleDielectric(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateDielectricReflection(V, surface.WorldToTangent(dirToLight), 1.0, PDFSurfaceToLight);
     }
     else if (x1 <= diffuseProbability + metallicProbability + dielectricProbability + glassProbability)
     {
+        // Glass lobe
+
         float F;
         sample = material.SampleGlass(input.Payload.Sampler, V, refracted, F);
 
@@ -172,6 +195,7 @@ void main(inout Input input, in float2 attribs)
         }
     }
 
+    // Terminate the path if the direction goes below (or above for refraction) the surface.
     if (!refracted && sample.L.z <= 0.0f)
     {
         input.Payload.Weight = float3(-1.0);
@@ -186,6 +210,7 @@ void main(inout Input input, in float2 attribs)
         return;
     }
 
+    // Terminate the path if the PDF is 0
     if (sample.PDF <= 0.0f)
     {
         input.Payload.Weight = float3(-1.0);
@@ -193,16 +218,20 @@ void main(inout Input input, in float2 attribs)
         return;
     }
 
+    // Save the values to the payload for raygen shader to read
     input.Payload.RayDirection = surface.TangentToWorld(sample.L);
     input.Payload.RayOrigin = surface.GetWorldPos();
     input.Payload.Weight *= sample.BSDF / sample.PDF;
-    input.Payload.HitValue = material.EmissiveColor.rgb * material.EmissiveColor.a;
+    input.Payload.HitValue += material.EmissiveColor.rgb * material.EmissiveColor.a;
 
+    // If the path to the light isn't obscured then sample the light
     if (canHit)
     {
         float lightWeight = PowerHeuristic(envColor.w, PDFSurfaceToLight);
 
+        // Whether the path is obscured by a volume has to be checked for separately from the geometry.
         float3 volumeAbsorption = float3(1.0f);
+
         // Iterate through all volumes
         for (int i = 0; i < push.VolumesCount; i++)
         {
@@ -222,11 +251,14 @@ void main(inout Input input, in float2 attribs)
 
             float volumeWidth = length(hitPosFar - hitPosNear);
 
+            // Calculate volume absorption based on Beer's law
             volumeAbsorption *= exp(-volume.ScatteringCoefficient * volumeWidth);
         }
 
+        // Add the light contribution
         input.Payload.HitValue += volumeAbsorption * dot(surface.GetNormal(), dirToLight) * (envColor.rgb / envColor.w) * BSDFSurfaceToLight * lightWeight;
     }
 
+    // Debug output for normals
     //input.Payload.HitValue = (surface.GetNormal() + float3(1.0f)) * float3(0.5f);
 }
