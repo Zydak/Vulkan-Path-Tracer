@@ -700,7 +700,7 @@ void Editor::ImGuiSceneEditor()
 		if (ImGui::SliderFloat("Transparency", (float*)&materialProps->Transparency, 0.0f, 1.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Density", (float*)&materialProps->MediumDensity, 0.0f, 2.0f)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("Medium Anisotropy", (float*)&materialProps->MediumAnisotropy, -1.0f, 1.0f)) { valuesChanged = true; };
-		if (ImGui::ColorEdit4("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
+		if (ImGui::ColorEdit3("Medium Color", (float*)&materialProps->MediumColor)) { valuesChanged = true; };
 		if (ImGui::SliderFloat("IOR", (float*)&materialProps->Ior, 1.0f, 3.0f)) { valuesChanged = true; };
 		ImGui::Separator();
 

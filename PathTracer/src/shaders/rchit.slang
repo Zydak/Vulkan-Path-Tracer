@@ -75,7 +75,6 @@ void main(inout Input input, in float2 attribs)
             // If the anisotropy equals 1 we can skip simulating the scattering events and just use Beer's law instead which is way faster
             // and gives the same result.
             input.Payload.Weight *= exp(-(1.0f - material.MediumColor.rgb) * material.MediumDensity * geometryHitDistance);
-            input.Payload.HitValue += input.Payload.MediumColor.rgb * material.MediumColor.a;
         }
         else
         {
@@ -95,7 +94,6 @@ void main(inout Input input, in float2 attribs)
 
                 // Change weight and hit value
                 input.Payload.Weight *= input.Payload.MediumColor.rgb;
-                input.Payload.HitValue += input.Payload.MediumColor.rgb * material.MediumColor.a;
 
                 // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
                 // and since the input.Payload.InMedium is still set we'll end up back here and simulate the next event
