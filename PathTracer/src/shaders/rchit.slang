@@ -35,18 +35,17 @@ void main(inout Input input, in float2 attribs)
 {
     // Prepare Surface
     Surface surface;
-    surface.Prepare(uMeshAddresses[InstanceIndex()], attribs, uNormalTextures[InstanceIndex()]);
+    surface.Prepare(uMeshAddresses[InstanceIndex()], attribs, uNormalTextures[NonUniformResourceIndex(InstanceIndex())]);
 
     // Prepare Material
     Material material;
     material.LoadFromCPU(
-        uMaterials[InstanceIndex()],
+        uMaterials[NonUniformResourceIndex(InstanceIndex())],
         surface,
-        uAlbedoTextures[InstanceIndex()],
-        uRoghnessTextures[InstanceIndex()],
-        uMetallnessTextures[InstanceIndex()]
+        uAlbedoTextures[NonUniformResourceIndex(InstanceIndex())],
+        uRoghnessTextures[NonUniformResourceIndex(InstanceIndex())],
+        uMetallnessTextures[NonUniformResourceIndex(InstanceIndex())]
     );
-    material.EmissiveColor = uMaterials[InstanceIndex()].EmissiveColor;
 
     surface.RotateTangents(material.AnisotropyRotation);
 

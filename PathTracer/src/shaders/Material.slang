@@ -90,6 +90,9 @@ public struct Material
         Color.rgb *= albedoTexture.SampleLevel(surface.GetTexCoords(), 0).rgb;
 #endif
 
+        Roughness *= pow(roughnessTexture.SampleLevel(surface.GetTexCoords(), 0).r, 1.0f / 4.0f);
+        Metallic *= metallicTexture.SampleLevel(surface.GetTexCoords(), 0).r;
+
         // Some scenes handle transparency through albedo texture alpha channel. But since this is path tracer it cares only about the geometry
         // and not the color. So if transparency is detected (alpha channel < 1) set the texture to fully transparent glass with IOR 1 so it looks
         // like it's just not there. Though it will still block direct lighting from importance sampling lights.
@@ -108,9 +111,6 @@ public struct Material
         const float aspect = sqrt(1.0 - sqrt(Anisotropy) * 0.9);
         Ax = max(0.001, Roughness / aspect);
         Ay = max(0.001, Roughness * aspect);
-
-        Roughness *= pow(roughnessTexture.SampleLevel(surface.GetTexCoords(), 0).r, 1.0f / 4.0f);
-        Metallic *= metallicTexture.SampleLevel(surface.GetTexCoords(), 0).r;
     }
 
     public BSDFSample SampleDiffuse(inout Sampler sampler, in float3 V)
