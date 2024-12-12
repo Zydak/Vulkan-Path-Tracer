@@ -228,7 +228,7 @@ public struct Material
         float energyCompensation;
         float layer = pow((clamp(Ior, 1.0, 3.0) - 1.0f) / 2.0f, 1.0f / 4.0f) * 31.0f;
         float layerFrac = fract(layer);
-        if (Eta > 1.0f)
+        if (NonUniformResourceIndex(Eta) > 1.0f)
         {
             float energyCompensation1 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
             float energyCompensation2 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer) + 1) }) .r;
