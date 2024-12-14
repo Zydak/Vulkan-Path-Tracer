@@ -71,8 +71,8 @@ public struct Material
         MediumColor = material.MediumColor;
 
         Metallic = material.Metallic;
-        // Roughness = Roughness^4 for better feel, linear roughness sucks
-        Roughness = material.Roughness * material.Roughness * material.Roughness * material.Roughness;
+        // Roughness = Roughness^2 for better feel, linear roughness sucks
+        Roughness = material.Roughness * material.Roughness;
         SpecularTint = material.SpecularTint;
 
         Ior = max(material.Ior, 1.000001);
@@ -178,8 +178,6 @@ public struct Material
 
     public float3 EvaluateDielectricReflection(in float3 V, in float3 L, in float F, out float PDF)
     {
-        float3 H = normalize(V + L);
-
         float3 BSDF = EvaluateReflection(V, L, F, PDF);
 
         return BSDF;
@@ -196,7 +194,7 @@ public struct Material
     {
         float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
 
-        F = DielectricFresnel(abs(dot(V, H)), Eta);
+        F = DielectricFresnel(abs(dot(V, H)));
 
         float x1 = sampler.UniformFloat();
 
@@ -226,36 +224,32 @@ public struct Material
 
         // Energy Compensation
         float energyCompensation;
-        float layer = pow((clamp(Ior, 1.0, 3.0) - 1.0f) / 2.0f, 1.0f / 4.0f) * 31.0f;
+        float layer = (clamp(Ior, 1.0, 3.0) - 1.0f) / 2.0f * 31.0f;
         float layerFrac = fract(layer);
         if (NonUniformResourceIndex(Eta) > 1.0f)
         {
-            float energyCompensation1 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
-            float energyCompensation2 = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer) + 1) }) .r;
-
-            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
+            energyCompensation = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
         }
         else
         {
-            float energyCompensation1 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
-            float energyCompensation2 = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 4.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer) + 1) }) .r;
-
-            energyCompensation = lerp(energyCompensation1, energyCompensation2, layerFrac);
+            energyCompensation = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
         }
-
-        // I dunno why but the compensation isn't fully working on glass and as the IOR gets bigger more energy is lost. I have no idea why is that happening
-        // so although that's not a correct way to fix this, I made some curve that mitigates that problem
-        float newIor = ChangeRange(Ior, { 1, 3 }, { 0, 1 });
-        energyCompensation -= energyCompensation * 0.1f * max(smoothstep(0.0, 1.45, pow(Roughness, 1.5)), 0.0) * pow(newIor, 1.5) * max(2.2 * pow(newIor, 1.0 / 4.0), 1.0);
-
-        if (energyCompensation > 0)
-            BSDF = BSDF / energyCompensation;
 
         if (isnan(L.x) || isnan(L.y) || isnan(L.z) || isinf(L.x) || isinf(L.y) || isinf(BSDF.z))
             return { 0, 0, 0 };
 
         if (isnan(BSDF.x) || isnan(BSDF.y) || isnan(BSDF.z) || isinf(BSDF.x) || isinf(BSDF.y) || isinf(BSDF.z))
             return { 0, 0, 0 };
+
+        if (!refracted && L.z <= 0)
+            return { 0, 0, 0 };
+
+        if (refracted && L.z >= 0)
+            return { 0, 0, 0 };
+
+        energyCompensation = max(energyCompensation, 0.00001);
+
+        BSDF = BSDF / energyCompensation;
 
         return { L, BSDF, PDF };
     }
@@ -318,10 +312,10 @@ public struct Material
         return bsdf;
     }
 
-    public float DielectricFresnel(float VdotH, float eta)
+    public float DielectricFresnel(float VdotH)
     {
         float cosThetaI = VdotH;
-        float sinThetaTSq = eta * eta * (1.0f - cosThetaI * cosThetaI);
+        float sinThetaTSq = Eta * Eta * (1.0f - cosThetaI * cosThetaI);
 
         // Total internal reflection
         if (sinThetaTSq > 1.0)
@@ -329,8 +323,8 @@ public struct Material
 
         float cosThetaT = sqrt(max(1.0 - sinThetaTSq, 0.0));
 
-        float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
-        float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
+        float rs = (Eta * cosThetaT - cosThetaI) / (Eta * cosThetaT + cosThetaI);
+        float rp = (Eta * cosThetaI - cosThetaT) / (Eta * cosThetaI + cosThetaT);
 
         return 0.5f * (rs * rs + rp * rp);
     }

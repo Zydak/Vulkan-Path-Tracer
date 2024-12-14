@@ -205,6 +205,7 @@ public struct Sampler
     }
 
     // Reference https://jcgt.org/published/0007/04/01/paper.pdf
+    [mutating]
     public float3 GGXSampleAnisotopic(float3 Ve, float Ax, float Ay)
     {
         float u1 = UniformFloat();

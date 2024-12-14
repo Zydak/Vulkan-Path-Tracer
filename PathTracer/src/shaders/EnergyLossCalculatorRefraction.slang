@@ -32,20 +32,18 @@ void main(uint3 threadId: SV_DispatchThreadID)
     Sampler sampler = Sampler(threadId.y + threadId.x * threadId.x + getRealtimeClock().x);
 
     // Set all values
-    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 4.0), 0.0001, 0.9999);
+    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 2.0), 0.0001, 1.0);
     float roughness = clamp(float(threadId.y) / (push.TableSizeY - 1.0f), 0.0001, 1.0);
-    float ior = 1.0f + clamp(pow(float(threadId.z) / (push.TableSizeZ - 1.0f), 4.0), 0.0001, 1.0) * 2.0f;
-    float ax = roughness;
-    float ay = roughness;
+    float ior = 1.0f + clamp(float(threadId.z) / (push.TableSizeZ - 1.0f), 0.0001, 1.0) * 2.0f;
 
     // Prepare material
     Material material;
     material.Roughness = roughness;
     material.Color = float4(1.0, 1.0, 1.0, 1.0);
-    material.Ax = ax;
-    material.Ay = ay;
+    material.Ax = roughness;
+    material.Ay = roughness;
     material.Ior = ior;
-    material.Eta = push.AboveSurface ? ior : 1.0f / ior;
+    material.Eta = push.AboveSurface ? ior : (1.0f / ior);
 
     float finalValue = 0.0;
     for (int i = 0; i < push.SampleCount; i++)
@@ -62,44 +60,40 @@ void main(uint3 threadId: SV_DispatchThreadID)
         float3 V = float3(x, y, z);
         V = normalize(V);
 
-        float3 H = sampler.GGXSampleAnisotopic(V, ax, ay);
+        float3 H = sampler.GGXSampleAnisotopic(V, material.Ax, material.Ay);
 
-        float F = material.DielectricFresnel(abs(dot(V, H)), material.Eta);
+        float F = material.DielectricFresnel(abs(dot(V, H)));
 
         float valRefract = 0.0;
         float valReflect = 0.0;
         if (sampler.UniformFloat() < F)
         {
-            for (int j = 0; j < 1; j++)
+            // Reflection
+            float3 L = normalize(reflect(-V, H));
+
+            if (L.z > 0.0)
             {
-                // Reflection
-                float3 L = normalize(reflect(-V, H));
-
-                if (L.z <= 0.0)
-                    continue;
-
                 float PDF;
-                float3 BSDF = material.EvaluateReflection(V, L, F, PDF);
+                float BSDF = material.EvaluateReflection(V, L, F, PDF).x;
                 PDF *= F;
 
-                valReflect += BSDF.x / PDF;
+                if (PDF > 0 && !isnan(BSDF) && !isinf(BSDF))
+                    valReflect += BSDF / PDF;
             }
         }
         else
         {
-            for (int j = 0; j < 1; j++)
-            {
-                // Refraction
-                float3 L = normalize(refract(-V, H, material.Eta));
-        
-                if (L.z >= 0.0)
-                    continue;
-        
-                float PDF;
-                float3 BSDF = material.EvaluateRefraction(V, L, F, PDF);
-                PDF *= 1.0f - F;
+            // Refraction
+            float3 L = normalize(refract(-V, H, material.Eta));
 
-                valRefract += BSDF.x / PDF;
+            if (L.z < 0.0)
+            {
+                float PDF;
+                float BSDF = material.EvaluateRefraction(V, L, F, PDF).x;
+                PDF *= (1.0f - F);
+
+                if (PDF > 0 && !isnan(BSDF) && !isinf(BSDF))
+                    valRefract += BSDF / PDF;
             }
         }
 

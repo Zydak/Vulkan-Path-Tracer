@@ -91,7 +91,7 @@ void main(inout Input input, in float2 attribs)
                 input.Payload.RayOrigin = input.Payload.RayOrigin + (scatterDistance * input.Payload.RayDirection);
                 input.Payload.RayDirection = input.Payload.Sampler.SampleHenyeyGreenstein( input.Payload.RayDirection, input.Payload.MediumAnisotropy);
 
-                // Change weight and hit value
+                // Change weight
                 input.Payload.Weight *= input.Payload.MediumColor.rgb;
 
                 // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
@@ -147,21 +147,21 @@ void main(inout Input input, in float2 attribs)
     if (x1 < diffuseProbability)
     {
         // Diffuse lobe
-
+    
         sample = material.SampleDiffuse(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateDiffuse(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
     else if (x1 < diffuseProbability + metallicProbability)
     {
         // Metallic lobe
-
+    
         sample = material.SampleMetallic(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateMetallic(V, surface.WorldToTangent(dirToLight), PDFSurfaceToLight);
     }
     else if (x1 < diffuseProbability + metallicProbability + dielectricProbability)
     {
         // Dielectric lobe
-
+    
         sample = material.SampleDielectric(input.Payload.Sampler, V);
         BSDFSurfaceToLight = material.EvaluateDielectricReflection(V, surface.WorldToTangent(dirToLight), 1.0, PDFSurfaceToLight);
     }
