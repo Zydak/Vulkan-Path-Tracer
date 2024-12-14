@@ -2,6 +2,20 @@
 
 Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be saved as png images. It also features post processing effects and a denoiser.
 
+# System Requirements
+- Windows 10 and newer.
+- Either NVIDIA RTX 2000+ series or AMD RX 6000+ series to support all of the extensions below. Tho you may check whether they're present on your device [here](https://vulkan.gpuinfo.org/listdevices.php), maybe it's possible to run on older hardware (Intel GPUs aren't tested).
+- - VK_KHR_ray_query,
+- - VK_KHR_acceleration_structure,
+- - VK_KHR_ray_tracing_pipeline,
+- - VK_KHR_swapchain,
+- - VK_KHR_deferred_host_operations,
+- - VK_KHR_shader_clock,
+- - VK_KHR_external_memory_win32,
+- - VK_KHR_external_semaphore_win32,
+- - VK_KHR_external_fence_win32,
+- Visual Studio 2022 (older versions might work but aren't tested).
+
 # Running
 ## Windows Only
 - Download [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
