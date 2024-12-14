@@ -1,10 +1,11 @@
 # Vulkan-Path-Tracer
+![DragonHead](./Gallery/Archer.png)
 
-Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volumes. Renders that you create can be saved as png images. It also features post processing effects and a denoiser.
+Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volume scattering. Renders can be saved as png images. It also features post processing effects and a denoiser.
 
 # System Requirements
 - Windows 10 and newer.
-- Either NVIDIA RTX 2000+ series or AMD RX 6000+ series to support all of the extensions below. Tho you may check whether they're present on your device [here](https://vulkan.gpuinfo.org/listdevices.php), maybe it's possible to run on older hardware (Intel GPUs aren't tested).
+- Either NVIDIA RTX 2000+ series or AMD RX 6000+ series to support all of the extensions below. You may check whether they're present on your device [here](https://vulkan.gpuinfo.org/listdevices.php), maybe it's possible to run on older hardware.
 - - VK_KHR_ray_query,
 - - VK_KHR_acceleration_structure,
 - - VK_KHR_ray_tracing_pipeline,
@@ -31,26 +32,57 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 - Run `setup.bat` in main directory.
 - Open generated solution in Visual Studio.
 
+# Features
+- Energy Conserving BSSRDF:
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/MetallicNoCompensation.png" alt="MetallicNoCompensation" />
+  <img src="./Gallery/materialShowcase/MetallicCompensation.png" alt="MetallicCompensation" />
+
+  Difference:
+  <img src="./Gallery/materialShowcase/DifferenceMetallic.png" alt="DifferenceMetallic" />
+</p>
+
+------------
+
+<p align="center">
+  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
+  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
+
+  Difference:
+  <img src="./Gallery/materialShowcase/DifferenceGlass.png" alt="DifferenceGlass" />
+</p>
+
+- HDR Environment Maps
+- Environment map MIS
+- Complex Materials
+- Volumetric Scattering
+- Textures and Normal Maps
+- Editor
+  - Loading your own scenes in .gltf .fbx and .obj format
+  - Editing scene materials in runtime
+  - Exporting renders into .PNG files
+  - Saving and loading scenes
+- Post Processing
+  - Bloom using Mip Maps
+  - Chromatic Aberration
+  - Exposure and many more
+- Anti Aliasing
+- Depth of Field effect with automatic focal length
+- Image Denoising using Nvidia Optix Denoiser
+- Camera controller made using quaternions
+
 # Gallery
 ![Sponza](./Gallery/GodRays.png)
---------
 ![Bistro](./Gallery/Bistro.png)
---------
 ![DragonHead](./Gallery/DragonHead.png)
---------
 ![OceanAjax](./Gallery/OceanAjax.png)
---------
 ![Mustang0](./Gallery/Mustang0.png)
---------
 ![Volume](./Gallery/NonUniform.png)
---------
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
---------
 ![Dogs](./Gallery/Dogs.png)
---------
 ![Caustics](./Gallery/Caustics.png)
---------
 
 ## Material Showcase
 
@@ -81,37 +113,6 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 - Index of refraction (IOR) factor on transparent surface ranging from 1 to 2. Determines how much the path of light is bent during refraction.
 ![IOR](./Gallery/materialShowcase/ior.png)
 
-# List Of Features
-- Energy Conserving BSSRDF.
-
-<p align="center">
-  <img src="./Gallery/materialShowcase/NoCompensation.png" alt="NoCompensation" />
-  <img src="./Gallery/materialShowcase/Original.png" alt="Original" />
-</p>
-<p align="center">
-  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
-  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
-</p>
-
-- HDR Environment Maps
-- Environment map MIS
-- Complex Materials
-- Volumetric Scattering
-- Textures and Normal Maps
-- Editor
-  - Loading your own scenes in .gltf .fbx and .obj format
-  - Editing scene materials in runtime
-  - Exporting renders into .PNG files
-  - Saving and loading scenes
-- Post Processing
-  - Bloom using Mip Maps
-  - Chromatic Aberration
-  - Exposure and many more
-- Anti Aliasing
-- Depth of Field effect with automatic focal length
-- Image Denoising using Nvidia Optix Denoiser
-- Camera controller made using quaternions
-
 # References
 
 ## Papers Implemented
@@ -123,6 +124,7 @@ Physically based path tracer made using Vulkan Ray-Tracing Pipeline. It uses ene
 
 ## Models
 - https://developer.nvidia.com/orca/amazon-lumberyard-bistro - Bistro
+- https://sketchfab.com/3d-models/elven-ranger-statue-71aec2d9f7724ae09992435ce8ff7258 - Archer
 - https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html - Sponza
 - https://www.blender.org/download/demo-files/ - Classroom
 - https://sketchfab.com/3d-models/screaming-dragon-head-3d-print-5712b52618f743b193bdd39459099f25 - Screaming Dragon Head
