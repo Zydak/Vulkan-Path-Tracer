@@ -1,16 +1,22 @@
-#define VL_ENTRY_POINT
-
 #include <VulkanHelper.h>
 #include "Application.h"
 
-// Create VL Entry point definition
-VulkanHelper::Application* VulkanHelper::CreateApplication()
+int main()
 {
-	VulkanHelper::ApplicationInfo appInfo;
-	appInfo.Name = "Path Tracer";
-	appInfo.WorkingDirectory = "";
-	appInfo.EnableRayTracingSupport = true;
-	appInfo.DeviceExtensions = 
+	VulkanHelper::WindowInfo windowInfo{};
+
+	windowInfo.Name = "Path Tracer";
+	windowInfo.WorkingDirectory = "";
+	windowInfo.WindowHeight = 900;
+	windowInfo.WindowWidth = 1600;
+
+	std::shared_ptr<VulkanHelper::Window> window = VulkanHelper::InitWindow(windowInfo);
+
+	VulkanHelper::QueryDevicesInfo queryInfo{};
+	queryInfo.Window = window;
+
+	queryInfo.EnableRayTracingSupport = true;
+	queryInfo.DeviceExtensions =
 	{
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
@@ -22,7 +28,7 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 		VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
 		VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
 	};
-	appInfo.OptionalExtensions =
+	queryInfo.OptionalExtensions =
 	{
 		VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
 		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
@@ -105,13 +111,10 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 	synchronization2Features.pNext = &rayQueryFeatures;
 	rayQueryFeatures.pNext = nullptr;
 
-	appInfo.Features = features;
-	appInfo.UseMemoryAddress = true;
-	appInfo.WindowHeight = 900;
-	appInfo.WindowWidth = 1600;
-	appInfo.MaxFramesInFlight = 1;
+	queryInfo.Features = features;
+	queryInfo.UseMemoryAddress = true;
 
-	appInfo.IgnoredMessageIDs = 
+	queryInfo.IgnoredMessageIDs =
 	{ 
 		-602362517, // Small allocation warning, it's caused by ImGui backend so not much I can do about that
 		-1277938581, // Small allocation warning
@@ -119,25 +122,30 @@ VulkanHelper::Application* VulkanHelper::CreateApplication()
 		-2027362524, // Command Pool reset
 	};
 
-	Application* app = new ::Application(appInfo);
+	std::vector<VulkanHelper::Device::PhysicalDevice> physicalDevices = VulkanHelper::QueryDevices(queryInfo);
 
-	vkGetPhysicalDeviceFeatures2(VulkanHelper::Device::GetPhysicalDevice(), &features);
+	VulkanHelper::Device::PhysicalDevice finalChoice = physicalDevices[0];
+	// Choose any discrete GPU if it's suitable
+	for (int i = 0; i < physicalDevices.size(); i++)
+	{
+		std::string error;
+		if (physicalDevices[i].IsSuitable(error))
+		{
+			if (finalChoice.Discrete == false)
+				finalChoice = physicalDevices[i];
+		}
+	}
 
-	// Verify that all features are present
-	VK_CHECK(accelerationStructureFeatures.accelerationStructure, "acceleration structures not supported!");
-	VK_CHECK(rayTracingFeatures.rayTracingPipeline, "Ray Tracing Pipeline not supported!");
-	VK_CHECK(deviceAddressFeatures.bufferDeviceAddress, "Device address not supported!");
-	VK_CHECK(scalarBlockLayoutFeatures.scalarBlockLayout, "Scalar block layout not supported!");
-	VK_CHECK(shaderClockFeatures.shaderDeviceClock, "Shader Clock not supported!");
-	VK_CHECK(hostQueryResetFeatures.hostQueryReset, "Host Query not supported!");
-	VK_CHECK(timelineSemaphoreFeatures.timelineSemaphore, "Timeline semaphore not supported!");
-	VK_CHECK(synchronization2Features.synchronization2, "Synchronization2 not supported!");
-	VK_CHECK(indexingFeatures.runtimeDescriptorArray, "Indexing not supported!");
-	VK_CHECK(memoryPriorityFeatures.memoryPriority, "memory priority not supported!");
-	VK_CHECK(robustFeatures.nullDescriptor, "nullDescriptor not supported!");
-	VK_CHECK(vulkan11Features.variablePointers, "variablePointers not supported!");
-	VK_CHECK(vulkan11Features.variablePointersStorageBuffer, "variablePointersStorageBuffer not supported!");
-	VK_CHECK(rayQueryFeatures.rayQuery, "rayQuery not supported!");
+	VulkanHelper::InitializationInfo initInfo{};
+	initInfo.MaxFramesInFlight = 1;
+	initInfo.PhysicalDevice = finalChoice;
+	initInfo.Window = window;
 
-	return app;
+	VulkanHelper::Init(initInfo);
+
+	Application* app = new::Application(window);
+
+	app->Run();
+
+	app->Destroy();
 }

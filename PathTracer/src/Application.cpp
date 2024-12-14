@@ -3,11 +3,10 @@
 #include "CameraScript.h"
 #include "Components.h"
 
-#include "glm/glm/gtx/matrix_decompose.hpp"
-
-Application::Application(VulkanHelper::ApplicationInfo appInfo)
-	: VulkanHelper::Application(appInfo)
+Application::Application(std::shared_ptr<VulkanHelper::Window> window)
 {
+	m_Window = window;
+
 	Init();
 	InitScripts();
 }
@@ -23,13 +22,30 @@ void Application::Destroy()
 	m_Scene->Destroy();
 
 	m_Editor.reset();
+
+	VulkanHelper::Destroy();
 }
 
-void Application::OnUpdate(double deltaTime)
+void Application::Run()
 {
-	UpdateScripts(deltaTime);
+	VK_TRACE("Main Loop Start.");
 
-	m_Editor->Render();
+	VulkanHelper::Timer timer;
+	double deltaTime = 0.0f;
+
+	while (!m_Window->ShouldClose())
+	{
+		timer.Reset();
+		m_Window->PollEvents();
+
+		UpdateScripts(deltaTime);
+
+		m_Editor->Render();
+
+		deltaTime = timer.ElapsedSeconds();
+
+		VulkanHelper::EndFrame();
+	}
 }
 
 void Application::InitScripts()
