@@ -108,8 +108,8 @@ void main(inout Input input, in float2 attribs)
     float4 envColor; // w = pdf
     input.Payload.Sampler.SampleImportanceEnvMap(uEnvironmentMap, uAccels, push.EnvAzimuth, push.EnvAltitude, dirToLight, envColor);
 
-    float3 BSDFSurfaceToLight;
-    float PDFSurfaceToLight;
+    float3 BSDFSurfaceToLight = 0.0;
+    float PDFSurfaceToLight = 0.0;
 
     // Check whether it can be hit or not
     bool canHit = dot(dirToLight, surface.GetNormal()) > 0.0f;
@@ -173,7 +173,7 @@ void main(inout Input input, in float2 attribs)
         sample = material.SampleGlass(input.Payload.Sampler, V, refracted, F);
 
         if (refracted)
-            BSDFSurfaceToLight = material.EvaluateDielectricRefraction(V, surface.WorldToTangent(dirToLight), F, PDFSurfaceToLight);
+            BSDFSurfaceToLight = 0.0f;//material.EvaluateDielectricRefraction(V, surface.WorldToTangent(dirToLight), F, PDFSurfaceToLight);
         else
             BSDFSurfaceToLight = material.EvaluateDielectricReflection(V, surface.WorldToTangent(dirToLight), F, PDFSurfaceToLight);
 
@@ -222,7 +222,7 @@ void main(inout Input input, in float2 attribs)
     input.Payload.HitValue += material.EmissiveColor.rgb * material.EmissiveColor.a;
 
     // If the path to the light isn't obscured then sample the light
-    if (canHit)
+    if (canHit && PDFSurfaceToLight > 0.0)
     {
         float lightWeight = PowerHeuristic(envColor.w, PDFSurfaceToLight);
 
