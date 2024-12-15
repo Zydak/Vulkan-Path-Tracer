@@ -1,5 +1,5 @@
 # Vulkan-Path-Tracer
-![DragonHead](./Gallery/Archer.png)
+![Display](./Gallery/Display.png)
 
 Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volume scattering. Renders can be saved as png images. It also features post processing effects and a denoiser.
 
@@ -76,6 +76,7 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 ![Sponza](./Gallery/GodRays.png)
 ![Bistro](./Gallery/Bistro.png)
 ![DragonHead](./Gallery/DragonHead.png)
+![Archer](./Gallery/Archer.png)
 ![OceanAjax](./Gallery/OceanAjax.png)
 ![Mustang0](./Gallery/Mustang0.png)
 ![Volume](./Gallery/NonUniform.png)
