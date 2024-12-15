@@ -1,5 +1,5 @@
 # Vulkan-Path-Tracer
-![Display](./Gallery/Display.png)
+![Sponza](./Gallery/GodRays.png)
 
 Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSSRDF with Diffuse, Dielectric, Metallic and Glass lobes + volume scattering. Renders can be saved as png images. It also features post processing effects and a denoiser.
 
@@ -79,6 +79,7 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 ![Archer](./Gallery/Archer.png)
 ![OceanAjax](./Gallery/OceanAjax.png)
 ![Mustang0](./Gallery/Mustang0.png)
+![Display](./Gallery/Display.png)
 ![Volume](./Gallery/NonUniform.png)
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
@@ -141,3 +142,5 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 - https://renderman.pixar.com/official-swatch - RenderMan teapot
 - https://www.cgbookcase.com/ - Textures for teapots
 - https://benedikt-bitterli.me/resources/ - Material Test Ball
+- https://sketchfab.com/3d-models/cemetery-angel-miller-3b7e4e4a84f94f0d876e21e853eb8db8 - Angel
+- https://sketchfab.com/3d-models/norse-valkyrie-a4b4ab11feb24b979fcd81013096fe63 - Valkyrie
