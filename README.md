@@ -33,36 +33,57 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 - Open generated solution in Visual Studio.
 
 # Features
-- Energy Conserving BSSRDF:
 
+## BSSRDF
+BSSRDF implementation with Diffuse, Metallic, Dielectric, and Glass lobes alongside volumetric scattering. It uses Lambertian reflectance for diffuse surfaces and GGX for specular reflection and refraction made according to [[Microfacet models for refraction through rough surfaces]](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf). Specular reflection and refraction can also make use of Anisotropy that's implemented according to [[Eric Heitz 2018]](https://jcgt.org/published/0007/04/01/paper.pdf) paper. Volumetric scattering is modeled  with ratio tracking by doing a random walk using the Henyey-Greenstein phase function and Beer's law for realistic light transport through translucent materials and volumetrics, implemented according to [[Production Volume Rendering 2017]](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf).
+
+## Energy compensation
+
+Energy compensation implemented according to [[Turquin 2018]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) paper.
+
+### Metallic
 <p align="center">
+
+  <p style="font-size: 20px;">Compensation Off:</p>
   <img src="./Gallery/materialShowcase/MetallicNoCompensation.png" alt="MetallicNoCompensation" />
-  <img src="./Gallery/materialShowcase/MetallicCompensation.png" alt="MetallicCompensation" />
+  <img src="./Gallery/materialShowcase/FurnaceMetallicCompensationOff.png" alt="FurnaceMetallicCompensationOff" />
 
-  Difference:
+  <p style="font-size: 20px;">Compensation On:</p>
+  <img src="./Gallery/materialShowcase/MetallicCompensation.png" alt="MetallicCompensation" />
+  <img src="./Gallery/materialShowcase/FurnaceMetallicCompensationOn.png" alt="FurnaceMetallicCompensationOn" />
+
+  <p style="font-size: 20px;">Difference:</p>
   <img src="./Gallery/materialShowcase/DifferenceMetallic.png" alt="DifferenceMetallic" />
+  <img src="./Gallery/materialShowcase/FurnaceMetallicCompensationDifference.png" alt="FurnaceMetallicCompensationDifference" />
 </p>
 
-------------
+### Glass
 
 <p align="center">
-  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
-  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
 
-  Difference:
+  <p style="font-size: 20px;">Compensation Off:</p>
+  <img src="./Gallery/materialShowcase/GlassNoCompensation.png" alt="GlassNoCompensation" />
+  <img src="./Gallery/materialShowcase/FurnaceGlassCompensationOff.png" alt="FurnaceGlassCompensationOff" />
+
+  <p style="font-size: 20px;">Compensation On:</p>
+  <img src="./Gallery/materialShowcase/GlassCompensation.png" alt="GlassCompensation" />
+  <img src="./Gallery/materialShowcase/FurnaceGlassCompensationOn.png" alt="FurnaceGlassCompensationOn" />
+
+  <p style="font-size: 20px;">Difference:</p>
   <img src="./Gallery/materialShowcase/DifferenceGlass.png" alt="DifferenceGlass" />
+  <img src="./Gallery/materialShowcase/FurnaceGlassCompensationDifference.png" alt="FurnaceGlassCompensationDifference" />
 </p>
+
+## Other
 
 - HDR Environment Maps
 - Environment map MIS
-- Complex Materials
-- Volumetric Scattering
 - Textures and Normal Maps
 - Editor
   - Loading your own scenes in .gltf .fbx and .obj format
   - Editing scene materials in runtime
   - Exporting renders into .PNG files
-  - Saving and loading scenes
+  - Scene serialization
 - Post Processing
   - Bloom using Mip Maps
   - Chromatic Aberration
@@ -78,13 +99,14 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 ![DragonHead](./Gallery/DragonHead.png)
 ![Archer](./Gallery/Archer.png)
 ![OceanAjax](./Gallery/OceanAjax.png)
+![CornellBox](./Gallery/CornellBox.png)
 ![Mustang0](./Gallery/Mustang0.png)
-![Display](./Gallery/Display.png)
 ![Volume](./Gallery/NonUniform.png)
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
 ![Dogs](./Gallery/Dogs.png)
 ![Caustics](./Gallery/Caustics.png)
+![Display](./Gallery/Display.png)
 
 ## Material Showcase
 

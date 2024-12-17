@@ -228,11 +228,11 @@ public struct Material
         float layerFrac = fract(layer);
         if (NonUniformResourceIndex(Eta) > 1.0f)
         {
-            energyCompensation = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
+            energyCompensation = uRefractionEnergyLookupTextureEtaGreaterThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 127.0f), int(layer) }) .r;
         }
         else
         {
-            energyCompensation = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 31.0f), int(floor(layer)) }) .r;
+            energyCompensation = uRefractionEnergyLookupTextureEtaLessThan1 .Load( { int(pow(V.z, 1.0f / 2.0f) * 127.0f), int(Roughness * 127.0f), int(layer) }) .r;
         }
 
         if (isnan(L.x) || isnan(L.y) || isnan(L.z) || isinf(L.x) || isinf(L.y) || isinf(BSDF.z))

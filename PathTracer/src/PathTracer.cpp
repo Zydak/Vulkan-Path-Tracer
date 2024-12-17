@@ -17,8 +17,8 @@ void PathTracer::Init(VkExtent2D size)
 	VulkanHelper::Image::CreateInfo info{};
 	info.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	info.Usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	info.Width = 32;
-	info.Height = 32;
+	info.Width = 64;
+	info.Height = 64;
 	info.Format = VK_FORMAT_R32_SFLOAT;
 	info.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	info.LayerCount = 32;
@@ -29,23 +29,23 @@ void PathTracer::Init(VkExtent2D size)
 
 	for (int i = 0; i < 32; i++)
 	{
-		m_ReflectionLookupTexture.WritePixels(m_ReflectionEnergyLookupTable.data() + 32 * 32 * i, cmd, i);
+		m_ReflectionLookupTexture.WritePixels(m_ReflectionEnergyLookupTable.data() + 64 * 64 * i, cmd, i);
 	}
 
 	info.Width = 128;
-	info.Height = 32;
+	info.Height = 128;
 	info.LayerCount = 32;
 	m_RefractionLookupTextureEtaGreaterThan1.Init(info);
 	m_RefractionLookupTextureEtaLessThan1.Init(info);
 
 	for (int i = 0; i < 32; i++)
 	{
-		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable.data() + 128 * 32 * i, cmd, i);
+		m_RefractionLookupTextureEtaGreaterThan1.WritePixels(m_RefractionEtaGreaterThan1EnergyLookupTable.data() + 128 * 128 * i, cmd, i);
 	}
 
 	for (int i = 0; i < 32; i++)
 	{
-		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable.data() + 128 * 32 * i, cmd, i);
+		m_RefractionLookupTextureEtaLessThan1.WritePixels(m_RefractionEtaLessThan1EnergyLookupTable.data() + 128 * 128 * i, cmd, i);
 	}
 
 	VulkanHelper::Device::EndSingleTimeCommands(cmd, VulkanHelper::Device::GetGraphicsQueue(), VulkanHelper::Device::GetGraphicsCommandPool());
@@ -643,7 +643,7 @@ void PathTracer::BuildEnergyLookupTable()
 	if (!std::filesystem::exists("assets/lookupTables/ReflectionLookup"))
 	{
 		// If file doesn't exists compute new values
-		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLossGPU({ 32, 32, 32 }, 10'000'000));
+		m_ReflectionEnergyLookupTable = std::move(calculator.CalculateReflectionEnergyLossGPU({ 64, 64, 32 }, 10'000'000));
 
 		std::ofstream ostream("assets/lookupTables/ReflectionLookup", std::ios_base::binary | std::ios_base::trunc);
 		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
@@ -656,7 +656,7 @@ void PathTracer::BuildEnergyLookupTable()
 		std::ifstream istream("assets/lookupTables/ReflectionLookup", std::ios_base::binary);
 		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
-		m_ReflectionEnergyLookupTable.resize(32 * 32 * 32);
+		m_ReflectionEnergyLookupTable.resize(64 * 64 * 32);
 
 		istream.read((char*)m_ReflectionEnergyLookupTable.data(), m_ReflectionEnergyLookupTable.size() * 4);
 	}
@@ -664,7 +664,7 @@ void PathTracer::BuildEnergyLookupTable()
 	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaGreaterThan1"))
 	{
 		// If file doesn't exists compute new values
-		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, true));
+		m_RefractionEtaGreaterThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 128, 32 }, 1'000'000, true));
 	
 		std::ofstream ostream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary | std::ios_base::trunc);
 		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
@@ -677,7 +677,7 @@ void PathTracer::BuildEnergyLookupTable()
 		std::ifstream istream("assets/lookupTables/RefractionEtaGreaterThan1", std::ios_base::binary);
 		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 	
-		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(128 * 32 * 32);
+		m_RefractionEtaGreaterThan1EnergyLookupTable.resize(128 * 128 * 32);
 	
 		istream.read((char*)m_RefractionEtaGreaterThan1EnergyLookupTable.data(), m_RefractionEtaGreaterThan1EnergyLookupTable.size() * 4);
 	}
@@ -685,7 +685,7 @@ void PathTracer::BuildEnergyLookupTable()
 	if (!std::filesystem::exists("assets/lookupTables/RefractionEtaLessThan1"))
 	{
 		// If file doesn't exists compute new values
-		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 32, 32 }, 1'000'000, false));
+		m_RefractionEtaLessThan1EnergyLookupTable = std::move(calculator.CalculateRefractionEnergyLossGPU({ 128, 128, 32 }, 1'000'000, false));
 
 		std::ofstream ostream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary | std::ios_base::trunc);
 		VK_ASSERT(ostream.is_open(), "Couldn't open file for writing!");
@@ -698,7 +698,7 @@ void PathTracer::BuildEnergyLookupTable()
 		std::ifstream istream("assets/lookupTables/RefractionEtaLessThan1", std::ios_base::binary);
 		VK_ASSERT(istream.is_open(), "Couldn't open file for reading!");
 
-		m_RefractionEtaLessThan1EnergyLookupTable.resize(128 * 32 * 32);
+		m_RefractionEtaLessThan1EnergyLookupTable.resize(128 * 128 * 32);
 
 		istream.read((char*)m_RefractionEtaLessThan1EnergyLookupTable.data(), m_RefractionEtaLessThan1EnergyLookupTable.size() * 4);
 	}

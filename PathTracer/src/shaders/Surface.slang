@@ -39,7 +39,7 @@ public struct Surface
         m_WorldPos = mul(ObjectToWorld3x4(), float4(pos, 1.0)).xyz;
 
         float3 normal = v1.Normal.xyz * barycentricCoords.x + v2.Normal.xyz * barycentricCoords.y + v3.Normal.xyz * barycentricCoords.z;
-        //m_GeometryNormal = normalize(cross(pos2 - pos1, pos3 - pos1));
+        //normal = normalize(cross(pos2 - pos1, pos3 - pos1));
 
         normal = normalize(mul(normal, WorldToObject()).xyz);
         m_GeometryNormal = normal;

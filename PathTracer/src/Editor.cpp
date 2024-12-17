@@ -52,13 +52,15 @@ void Editor::SetCurrentScene(VulkanHelper::Scene** scene, VulkanHelper::AssetHan
 	m_SceneHandle = sceneHandle;
 
 	auto viewEditor = (*m_CurrentScene)->GetRegistry().view<EditorSettingsComponent>();
+	bool settingsFound = false;
 	for (auto& entity : viewEditor)
 	{
+		settingsFound = true;
 		m_EditorSettings = VulkanHelper::Entity(entity, *m_CurrentScene);
 	}
 
 	// No settings found, create one
-	if (m_EditorSettings == 0)
+	if (!settingsFound)
 	{
 		m_EditorSettings = (*m_CurrentScene)->CreateEntity();
 		m_EditorSettings.AddComponent<EditorSettingsComponent>();
@@ -226,13 +228,15 @@ void Editor::Render()
 void Editor::CreateQuadPipeline()
 {
 	VulkanHelper::Shader::CreateInfo vertexShaderInfo{};
-	vertexShaderInfo.Filepath = "src/shaders/Quad.vert";
+	vertexShaderInfo.Filepath = "src/shaders/QuadVert.glsl";
 	vertexShaderInfo.Type = VK_SHADER_STAGE_VERTEX_BIT;
+	vertexShaderInfo.CacheToFile = true;
 	VulkanHelper::Shader vertexShader(vertexShaderInfo);
 
 	VulkanHelper::Shader::CreateInfo fragmentShaderInfo{};
-	fragmentShaderInfo.Filepath = "src/shaders/Quad.frag";
+	fragmentShaderInfo.Filepath = "src/shaders/QuadFrag.glsl";
 	fragmentShaderInfo.Type = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragmentShaderInfo.CacheToFile = true;
 	VulkanHelper::Shader fragmentShader(fragmentShaderInfo);
 
 	std::vector<VulkanHelper::DescriptorSetLayout::Binding> bindings = { { 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT } }; //-V826
@@ -982,7 +986,7 @@ void Editor::ImGuiViewportSettings()
 	EditorSettingsComponent* editorSettings = nullptr;
 	for (auto& entity : viewEditor)
 	{
-		VK_ASSERT(editorSettings == nullptr, "Can't have more than one tonemap settings inside a scene!");
+		VK_ASSERT(editorSettings == nullptr, "Can't have more than one editor settings inside a scene!");
 		editorSettings = &(*m_CurrentScene)->GetRegistry().get<EditorSettingsComponent>(entity);
 	}
 	VK_ASSERT(editorSettings != nullptr, "Couldn't find editor settings!");
@@ -1187,11 +1191,6 @@ void Editor::UpdateModel()
 	for (auto& entity : view)
 	{
 		auto [meshComp, materialComp] = (*m_CurrentScene)->GetRegistry().get<VulkanHelper::MeshComponent, VulkanHelper::MaterialComponent>(entity);
-		
-		// Unload everything
-		meshComp.AssetHandle.Unload();
-		if (materialComp.AssetHandle.DoesHandleExist())
-			materialComp.AssetHandle.Unload();
 
 		// Delete the entity
 		(*m_CurrentScene)->GetRegistry().destroy(entity);
@@ -1225,9 +1224,6 @@ void Editor::UpdateModel()
 		{
 			(*m_CurrentScene)->GetRegistry().destroy(entity);
 		}
-
-		// Reload entire scene asset
-		m_SceneHandle.Unload();
 
 		m_SceneHandle = VulkanHelper::AssetManager::LoadSceneAsset<
 			PerspectiveCameraComponent,
@@ -1284,7 +1280,6 @@ void Editor::UpdateModel()
 
 		VulkanHelper::ModelAsset* modelAsset = (VulkanHelper::ModelAsset*)modelAssetHandle.GetAsset();
 		modelAsset->CreateEntities((*m_CurrentScene));
-		modelAssetHandle.Unload(); // Unload the model asset since it's only references to mesh data
 	}
 
 	SetCurrentScene(m_CurrentScene, m_SceneHandle);
@@ -1312,7 +1307,6 @@ void Editor::UpdateSkybox()
 	for (auto& entity : view)
 	{
 		SkyboxComponent* skyboxComp = &(*m_CurrentScene)->GetRegistry().get<SkyboxComponent>(entity); // TODO: support more than one model
-		skyboxComp->ImageHandle.Unload();
 
 		newAssetHandle = VulkanHelper::AssetManager::LoadAsset(m_ChangedSkyboxFilepath);
 		skyboxComp->ImageHandle = newAssetHandle;

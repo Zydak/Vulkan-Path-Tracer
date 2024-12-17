@@ -29,7 +29,6 @@ globalIncludes =
     "%{wks.location}/Vulkan-Helper/lib/lodepng/",
     "%{wks.location}/Vulkan-Helper/lib/imNodeFlow/include/",
     "%{wks.location}/Vulkan-Helper/lib/slang/include/",
-    "%{wks.location}/Vulkan-Helper/lib/dxc/inc/",
 }
 	
 include "Vulkan-Helper"
