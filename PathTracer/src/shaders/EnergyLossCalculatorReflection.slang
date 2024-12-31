@@ -12,6 +12,8 @@ struct Push
     int TableSizeX;
     int TableSizeY;
     int TableSizeZ;
+
+    bool AboveSurface;
 }
 
 [[vk::binding(0, 0)]] RWStructuredBuffer<float> uTable;

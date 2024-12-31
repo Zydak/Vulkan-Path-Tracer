@@ -32,7 +32,7 @@ void main(uint3 threadId: SV_DispatchThreadID)
     Sampler sampler = Sampler(threadId.y + threadId.x * threadId.x + getRealtimeClock().x);
 
     // Set all values
-    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 2.0), 0.0001, 1.0);
+    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 2.0), 0.0001, 1.0); // Stored as ViewCosine^2 for more precision near 0
     float roughness = clamp(float(threadId.y) / (push.TableSizeY - 1.0f), 0.0001, 1.0);
     float ior = 1.0f + clamp(float(threadId.z) / (push.TableSizeZ - 1.0f), 0.0001, 1.0) * 2.0f;
 
@@ -64,8 +64,7 @@ void main(uint3 threadId: SV_DispatchThreadID)
 
         float F = material.DielectricFresnel(abs(dot(V, H)));
 
-        float valRefract = 0.0;
-        float valReflect = 0.0;
+        float val = 0.0;
         if (sampler.UniformFloat() < F)
         {
             // Reflection
@@ -78,7 +77,7 @@ void main(uint3 threadId: SV_DispatchThreadID)
                 PDF *= F;
 
                 if (PDF > 0 && !isnan(BSDF) && !isinf(BSDF))
-                    valReflect += BSDF / PDF;
+                    val += BSDF / PDF;
             }
         }
         else
@@ -93,16 +92,12 @@ void main(uint3 threadId: SV_DispatchThreadID)
                 PDF *= (1.0f - F);
 
                 if (PDF > 0 && !isnan(BSDF) && !isinf(BSDF))
-                    valRefract += BSDF / PDF;
+                    val += BSDF / PDF;
             }
         }
 
-        if (!isnan(valRefract) && !isinf(valRefract))
-            finalValue += valRefract;
-
-        if (!isnan(valReflect) && !isinf(valReflect))
-            finalValue += valReflect;
-
+        if (!isnan(val) && !isinf(val))
+            finalValue += val;
     }
 
     uTable[index] += finalValue / push.SampleCount;

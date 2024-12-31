@@ -41,7 +41,7 @@ BSSRDF implementation with Diffuse, Metallic, Dielectric, and Glass lobes alongs
 
 Energy compensation implemented according to [[Turquin 2018]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) paper.
 
-### Metallic
+### Specular
 <p align="center">
 
   <p style="font-size: 20px;">Compensation Off:</p>
@@ -101,9 +101,10 @@ Energy compensation implemented according to [[Turquin 2018]](https://blog.selfs
 ![OceanAjax](./Gallery/OceanAjax.png)
 ![CornellBox](./Gallery/CornellBox.png)
 ![Mustang0](./Gallery/Mustang0.png)
-![Volume](./Gallery/NonUniform.png)
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
+![SubsurfaceBall](./Gallery/SubsurfaceBall.png)
+![Volume](./Gallery/NonUniform.png)
 ![Dogs](./Gallery/Dogs.png)
 ![Caustics](./Gallery/Caustics.png)
 ![Display](./Gallery/Display.png)
