@@ -229,7 +229,8 @@ void main()
                         float phase = volume.EvaluateHenyeyGreenstein(payload.RayDirection, dirToLight);
 
                         // Add the direct lighting contribution
-                        hitValue += volumeAbsorption * weight * phase * (envColor.xyz / envColor.w) * exp(-volume.ScatteringCoefficient * pathLengthThroughVolume);
+                        if (phase > 0.01f && envColor.w > 0.01f)
+                            hitValue += volumeAbsorption * weight * phase * (envColor.xyz / envColor.w) * exp(-volume.ScatteringCoefficient * pathLengthThroughVolume);
                     }
                 }
                 

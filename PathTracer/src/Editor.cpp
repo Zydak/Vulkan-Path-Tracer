@@ -940,22 +940,24 @@ void Editor::ImGuiPostProcessingSettings()
 		ImGui::SliderFloat2("Offset XY G", (float*)&tonemapSettings->Settings.AberrationOffsets[1], -3.0f, 3.0f);
 		ImGui::SliderFloat2("Offset XY B", (float*)&tonemapSettings->Settings.AberrationOffsets[2], -3.0f, 3.0f);
 	}
-	
-	const char* tonemappers[] = { "Filmic", "Hill Aces", "Narkowicz Aces", "Exposure Mapping", "Uncharted 2", "Reinchard Extended" };
 
-	ImGui::Text("Tonemappers");
-	static int currentTonemapper = 0;
-	if (ImGui::ListBox("##Tonemappers", &currentTonemapper, tonemappers, IM_ARRAYSIZE(tonemappers), IM_ARRAYSIZE(tonemappers)))
-	{
-		tonemapSettings->Settings.Tonemapper = (VulkanHelper::Tonemap::Tonemappers)currentTonemapper;
-	}
+	// Not Working Properly
+	//
+	//const char* tonemappers[] = { "Filmic", "Hill Aces", "Narkowicz Aces", "Exposure Mapping", "Uncharted 2", "Reinchard Extended" };
+	//
+	//ImGui::Text("Tonemappers");
+	//static int currentTonemapper = 0;
+	//if (ImGui::ListBox("##Tonemappers", &currentTonemapper, tonemappers, IM_ARRAYSIZE(tonemappers), IM_ARRAYSIZE(tonemappers)))
+	//{
+	//	tonemapSettings->Settings.Tonemapper = (VulkanHelper::Tonemap::Tonemappers)currentTonemapper;
+	//}
+	//
+	//if (currentTonemapper == VulkanHelper::Tonemap::Tonemappers::ReinchardExtended)
+	//{
+	//	ImGui::SliderFloat("White Point", &tonemapSettings->Settings.whitePointReinhard, 0.0f, 5.0f);
+	//}
 
-	if (currentTonemapper == VulkanHelper::Tonemap::Tonemappers::ReinchardExtended)
-	{
-		ImGui::SliderFloat("White Point", &tonemapSettings->Settings.whitePointReinhard, 0.0f, 5.0f);
-	}
-
-	ImGui::Separator();
+	ImGui::SeparatorText("Bloom Settings");
 
 	auto viewBloom = (*m_CurrentScene)->GetRegistry().view<VulkanHelper::BloomSettingsComponent>();
 	VulkanHelper::BloomSettingsComponent* bloomSettings = nullptr;
@@ -1224,6 +1226,7 @@ void Editor::UpdateModel()
 		{
 			(*m_CurrentScene)->GetRegistry().destroy(entity);
 		}
+		m_SceneHandle.Destroy();
 
 		m_SceneHandle = VulkanHelper::AssetManager::LoadSceneAsset<
 			PerspectiveCameraComponent,
