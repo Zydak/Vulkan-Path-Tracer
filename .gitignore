@@ -1,12 +1,2 @@
-bin/
-bin-int/
-.vs/
-**/*.vcxproj.*
-**/*.vcxproj
-**.sln
-**/VulkanHelper.log
-**/CachedShaders/**
-**/*.cmd
-**/*.rsp
-**/DragonHead.gltf
-**/DragonHead.bin
+**/build
+**/Libraries
