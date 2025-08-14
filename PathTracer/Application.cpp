@@ -36,9 +36,16 @@ void Application::Run()
     {
         VulkanHelper::Window::PollEvents();
 
-        VulkanHelper::CommandBuffer* commandBuffer = m_Renderer.BeginFrame(nullptr).Value();
+        VulkanHelper::CommandBuffer commandBuffer = m_Renderer.BeginFrame(nullptr).Value();
 
         (void)commandBuffer; // Use commandBuffer for rendering commands here
+
+        m_Renderer.BeginImGuiRendering();
+        ImGuiID dockspaceID = ImGui::GetID("Dockspace");
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::DockSpaceOverViewport(dockspaceID, viewport);
+        ImGui::ShowDemoWindow();
+        m_Renderer.EndImGuiRendering();
 
         VH_ASSERT(m_Renderer.EndFrame(nullptr) == VulkanHelper::VHResult::OK, "Failed to end frame rendering");
     }
