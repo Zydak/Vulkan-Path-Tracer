@@ -1,0 +1,3 @@
+[submodule "VulkanHelper"]
+	path = VulkanHelper
+	url = https://github.com/Zydak/VulkanHelper.git

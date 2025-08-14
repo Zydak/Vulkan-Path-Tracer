@@ -12,12 +12,5 @@ set(PROJECT_OUTPUT_DIR ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
 include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/Libraries")
 
-FetchContent_Declare(
-    VulkanHelper
-    GIT_REPOSITORY https://github.com/Zydak/VulkanHelper.git
-    GIT_TAG 7a590ef81208fea47ce92cb6008dc7b9fadbdfb8
-)
-
-FetchContent_MakeAvailable(VulkanHelper)
-
+add_subdirectory(VulkanHelper)
 add_subdirectory(PathTracer)
