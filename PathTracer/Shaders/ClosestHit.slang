@@ -36,6 +36,10 @@ void Main(inout Payload payload, in float2 attrib)
     float3 normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
     //normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
     normal = mul(normal, WorldToObject()).xyz;
+    if (dot(normal, payload.Direction) > 0.0f)
+    {
+        normal = -normal; // Ensure the normal is facing the ray
+    }
 
     const float2 texCoord = v1.TexCoord * barycentrics.x + v2.TexCoord * barycentrics.y + v3.TexCoord * barycentrics.z;
 
