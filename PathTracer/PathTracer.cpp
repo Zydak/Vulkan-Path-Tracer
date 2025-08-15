@@ -66,7 +66,7 @@ void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
         return (word >> 22u) ^ word;
     };
 
-    uint32_t timeElapsed = (uint32_t)std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - timer).count();
+    uint32_t timeElapsed = (uint32_t)((uint64_t)std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - timer).count() % UINT32_MAX);
 
     static uint32_t frameCount = 0;
     Data data;
@@ -174,6 +174,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }).Value();
 
     // Create Output Image
+    // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene (thus camera) is loaded
     VulkanHelper::Image::Config outputImageConfig{};
     outputImageConfig.Device = m_Device;
     outputImageConfig.Width = (uint32_t)((float)m_ResolutionPixels * m_AspectRatio);
