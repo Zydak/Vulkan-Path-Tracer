@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <chrono>
+#include <array>
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device)
 {
@@ -44,7 +45,7 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device)
 
     pathTracer.m_TextureSampler = VulkanHelper::Sampler::New(samplerConfig).Value();
     
-    VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/");
+    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
 
     return pathTracer;
 }
@@ -60,9 +61,9 @@ void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
         uint32_t Seed;
     };
 
-    auto PCGHash = [](uint input){
-        uint state = input * 747796405u + 2891336453u;
-        uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    auto PCGHash = [](uint32_t input){
+        uint32_t state = input * 747796405u + 2891336453u;
+        uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         return (word >> 22u) ^ word;
     };
 

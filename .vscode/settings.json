@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "valarray": "cpp",
-        "deque": "cpp"
-    }
-}
