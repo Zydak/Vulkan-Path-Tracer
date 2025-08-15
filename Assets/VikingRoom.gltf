@@ -3,6 +3,10 @@
         "generator" : "Khronos glTF Blender I/O v3.4.50",
         "version" : "2.0"
     },
+    "extensionsUsed" : [
+        "KHR_materials_specular",
+        "KHR_materials_ior"
+    ],
     "scene" : 0,
     "scenes" : [
         {
@@ -16,41 +20,30 @@
     "nodes" : [
         {
             "mesh" : 0,
-            "name" : "mesh_all1_Texture1_0",
-            "rotation" : [
-                0,
-                1,
-                0,
-                0
-            ],
-            "scale" : [
-                -1,
-                -1,
-                -1
-            ]
+            "name" : "mesh_all1_Texture1_0"
         },
         {
             "camera" : 0,
             "name" : "Camera",
             "rotation" : [
-                0.4095747768878937,
-                0.3522898554801941,
-                0.5487477779388428,
-                0.6379782557487488
+                0.32547369599342346,
+                0.43602025508880615,
+                0.6651791334152222,
+                0.5113608837127686
             ],
             "translation" : [
-                1.9177777767181396,
-                -0.2727541923522949,
-                0.8931100368499756
+                2.950000047683716,
+                0.689869225025177,
+                1.584883213043213
             ]
         }
     ],
     "cameras" : [
         {
-            "name" : "Camera.002",
+            "name" : "Camera.001",
             "perspective" : {
-                "aspectRatio" : 1.7777777777777777,
-                "yfov" : 0.39959652046304894,
+                "aspectRatio" : 1,
+                "yfov" : 0.5664004683494568,
                 "zfar" : 1000,
                 "znear" : 0.10000000149011612
             },
@@ -60,19 +53,30 @@
     "materials" : [
         {
             "doubleSided" : true,
-            "name" : "Material",
+            "extensions" : {
+                "KHR_materials_specular" : {
+                    "specularColorFactor" : [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "KHR_materials_ior" : {
+                    "ior" : 1.4500000476837158
+                }
+            },
+            "name" : "Texture1",
             "pbrMetallicRoughness" : {
                 "baseColorTexture" : {
                     "index" : 0
                 },
-                "metallicFactor" : 0,
-                "roughnessFactor" : 0.5
+                "metallicFactor" : 0
             }
         }
     ],
     "meshes" : [
         {
-            "name" : "mesh_all1_Texture1_0",
+            "name" : "mesh_all1_Texture1_0.003",
             "primitives" : [
                 {
                     "attributes" : {

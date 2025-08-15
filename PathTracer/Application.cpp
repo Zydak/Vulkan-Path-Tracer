@@ -8,8 +8,8 @@ Application::Application()
     // Create a window
     m_Window = VulkanHelper::Window::New({
         .Instance = m_Instance,
-        .Width = 800,
-        .Height = 600,
+        .Width = 900,
+        .Height = 900,
         .Name = "Vulkan Path Tracer",
         .Resizable = true
     }).Value();

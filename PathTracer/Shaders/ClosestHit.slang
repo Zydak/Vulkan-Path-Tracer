@@ -40,7 +40,7 @@ void Main(inout Payload payload, in float2 attrib)
     const float2 texCoord = v1.TexCoord * barycentrics.x + v2.TexCoord * barycentrics.y + v3.TexCoord * barycentrics.z;
 
     float3 color = uTextures[NonUniformResourceIndex(geometryIndex)].Sample(uSampler, texCoord).rgb;
-    color = float3(0.8f);
+    color = float3(0.9f);
 
     // Generate random direction on the hemisphere around the normal
     float3 newDirection = payload.Sampler.RandomSphereVec();
