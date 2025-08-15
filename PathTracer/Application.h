@@ -2,6 +2,8 @@
 
 #include "VulkanHelper.h"
 
+#include "PathTracer.h"
+
 class Application
 {
 public:
@@ -15,4 +17,7 @@ private:
     VulkanHelper::Window m_Window;
     VulkanHelper::Device m_Device;
     VulkanHelper::Renderer m_Renderer;
+
+    PathTracer m_PathTracer;
+    VulkanHelper::Sampler m_ImGuiSampler;
 };
