@@ -21,7 +21,7 @@ private:
     VulkanHelper::Device m_Device;
 
     VulkanHelper::ImageView m_OutputImageView;
-    uint32_t m_ResolutionPixels = 1000;
+    uint32_t m_ResolutionPixels = 2000;
     float m_AspectRatio = 1.0f;
     float m_FOV = 45.0f;
     
