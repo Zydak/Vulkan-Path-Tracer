@@ -391,6 +391,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, 0.1f, 100.0f);
     pathTracerUniform.CameraViewInverse = glm::inverse(cameraView);
     pathTracerUniform.CameraProjectionInverse = glm::inverse(cameraProjection);
+    pathTracerUniform.MaxDepth = 20;
+    pathTracerUniform.SampleCount = 3;
+    pathTracerUniform.MaxLuminance = 500.0f;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 

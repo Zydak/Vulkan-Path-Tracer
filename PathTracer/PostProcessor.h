@@ -8,7 +8,6 @@ public:
     struct TonemappingData
     {
         float Exposure = 1.0f;
-        float Gamma = 2.2f;
     };
 
     PostProcessor() = default;
