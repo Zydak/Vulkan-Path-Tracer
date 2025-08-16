@@ -26,6 +26,63 @@ public struct Sampler
     }
 
     [mutating]
+    public float2 UniformFloat2()
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+
+        return float2(x1, x2);
+    }
+
+    [mutating]
+    public float3 UniformFloat3()
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x3 = float(hash) / float(UINT_MAX);
+
+        return float3(x1, x2, x3);
+    }
+
+    [mutating]
+    public float UniformFloat(float a, float b)
+    {
+        uint hash = PCG();
+
+        float rand = float(hash) / float(UINT_MAX);
+        return (rand * (b - a)) + a;
+    }
+
+    [mutating]
+    public float2 UniformFloat2(float a, float b)
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+
+        return (float2(x1, x2) * (b - a)) + a;
+    }
+
+    [mutating]
+    public float3 UniformFloat3(float a, float b)
+    {
+        uint hash = PCG();
+        float x1 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x2 = float(hash) / float(UINT_MAX);
+        hash = PCG();
+        float x3 = float(hash) / float(UINT_MAX);
+
+        return (float3(x1, x2, x3) * (b - a)) + a;
+    }
+
+    [mutating]
     public float3 RandomSphereVec()
     {
         // Spherical Coordinates
@@ -44,5 +101,11 @@ public struct Sampler
         dir.z = z;
 
         return dir;
+    }
+
+    [mutating]
+    public float3 RandomSphereVecCosineWeight(in float3 normal)
+    {
+        return normalize(RandomSphereVec() + normal);
     }
 }

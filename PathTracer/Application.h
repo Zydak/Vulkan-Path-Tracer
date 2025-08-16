@@ -3,6 +3,7 @@
 #include "VulkanHelper.h"
 
 #include "PathTracer.h"
+#include "PostProcessor.h"
 
 class Application
 {
@@ -19,5 +20,7 @@ private:
     VulkanHelper::Renderer m_Renderer;
 
     PathTracer m_PathTracer;
+    PostProcessor m_PostProcessor;
+    bool m_TonemappingDataChanged = true;
     VulkanHelper::Sampler m_ImGuiSampler;
 };

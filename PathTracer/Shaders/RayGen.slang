@@ -55,9 +55,21 @@ void Main()
 
         weight *= payload.SurfaceColor.rgb;
         hitValue += payload.LightColor.rgb * weight;
+
+        float p = max(weight.x, max(weight.y, weight.z));
+
+        if (p <= payload.Sampler.UniformFloat())
+            break;
+        weight /= p;
     }
 
     float3 sampleColor = hitValue;
+
+    // Eliminate high luminance
+    const float maxLuminance = 50.0f;
+    float lum = dot(sampleColor, float3(0.212671f, 0.715160f, 0.072169f));
+    float scale = maxLuminance / max(lum, maxLuminance);
+    sampleColor *= scale;
 
     float a = 1.0f / float(uUBO.FrameCount + 1);
     float3 color = lerp(prevColor, sampleColor, a);

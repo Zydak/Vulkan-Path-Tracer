@@ -42,7 +42,10 @@ Application::Application()
     samplerConfig.MipmapMode = VulkanHelper::Sampler::MipmapMode::LINEAR;
     m_ImGuiSampler = VulkanHelper::Sampler::New(samplerConfig).Value();
 
-    m_Renderer.CreateImGuiDescriptorSet(m_PathTracer.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+    m_PostProcessor = PostProcessor::New(m_Device);
+    m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
+
+    m_Renderer.CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Application::Run()
@@ -53,10 +56,17 @@ void Application::Run()
 
         VulkanHelper::CommandBuffer commandBuffer = m_Renderer.BeginFrame(nullptr).Value();
 
+        if (m_TonemappingDataChanged)
+        {
+            m_PostProcessor.SetTonemappingData({1.0f, 2.2f}, commandBuffer);
+            m_TonemappingDataChanged = false;
+        }
+
         m_PathTracer.PathTrace(commandBuffer);
+        m_PostProcessor.PostProcess(commandBuffer);
 
         // Transition output image to shader read-only optimal layout for imgui rendering
-        m_PathTracer.GetOutputImage().TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+        m_PostProcessor.GetOutputImageView().GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
         m_Renderer.BeginImGuiRendering();
         ImGuiID dockspaceID = ImGui::GetID("Dockspace");
@@ -65,7 +75,7 @@ void Application::Run()
 
 	    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::Begin("Viewport");
-        glm::vec2 pathTraceImageSize = {m_PathTracer.GetOutputImage().GetWidth(), m_PathTracer.GetOutputImage().GetHeight()};
+        glm::vec2 pathTraceImageSize = {m_PostProcessor.GetOutputImageView().GetWidth(), m_PostProcessor.GetOutputImageView().GetHeight()};
         glm::vec2 viewportSize = {ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y};
 
         float scale = std::min(viewportSize.x / pathTraceImageSize.x, viewportSize.y / pathTraceImageSize.y);
