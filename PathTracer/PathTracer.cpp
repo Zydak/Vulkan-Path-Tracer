@@ -34,7 +34,13 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device)
     uniformBufferConfig.Usage = VulkanHelper::Buffer::Usage::UNIFORM_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
     uniformBufferConfig.CpuMapable = true; // For updating uniform data
     pathTracer.m_PathTracerUniformBuffer = VulkanHelper::Buffer::New(uniformBufferConfig).Value();
-    
+
+    VulkanHelper::Buffer::Config materialsBufferConfig{};
+    materialsBufferConfig.Device = device;
+    materialsBufferConfig.Size = sizeof(VulkanHelper::MaterialAsset) * MAX_ENTITIES;
+    materialsBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+    pathTracer.m_MaterialsBuffer = VulkanHelper::Buffer::New(materialsBufferConfig).Value();
+
     // Sampler
     VulkanHelper::Sampler::Config samplerConfig{};
     samplerConfig.AddressMode = VulkanHelper::Sampler::AddressMode::REPEAT;
@@ -101,6 +107,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::CommandBuffer initializationCmd = m_CommandPool.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
 
+    // Meshes
     for (const auto& mesh : scene.Value().Meshes)
     {
         VulkanHelper::Mesh::Config meshConfig{};
@@ -117,7 +124,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         m_SceneMeshes.push_back(VulkanHelper::Mesh::New(meshConfig).Value());
     }
     
-    for (const auto& texture : scene.Value().AlbedoTextures)
+    // Base Color Textures
+    for (const auto& texture : scene.Value().BaseColorTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
         imageConfig.Device = m_Device;
@@ -129,12 +137,12 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
 
         // Upload texture data
-        textureImage.UploadData(
+        VH_ASSERT(textureImage.UploadData(
             texture.Data.Data(),
             texture.Data.Size() * sizeof(uint8_t),
             0,
             &initializationCmd
-        );
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
 
         VulkanHelper::ImageView::Config imageViewConfig{};
         imageViewConfig.image = textureImage;
@@ -144,6 +152,149 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
         m_SceneAlbedoTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
     }
+
+    // Normal Textures
+    for (const auto& texture : scene.Value().NormalTextures)
+    {
+        VulkanHelper::Image::Config imageConfig{};
+        imageConfig.Device = m_Device;
+        imageConfig.Width = texture.Width;
+        imageConfig.Height = texture.Height;
+        imageConfig.Format = VulkanHelper::Format::R8G8B8A8_UNORM;
+        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+        VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+        // Upload texture data
+        VH_ASSERT(textureImage.UploadData(
+            texture.Data.Data(),
+            texture.Data.Size() * sizeof(uint8_t),
+            0,
+            &initializationCmd
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+        VulkanHelper::ImageView::Config imageViewConfig{};
+        imageViewConfig.image = textureImage;
+        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+        imageViewConfig.BaseLayer = 0;
+        imageViewConfig.LayerCount = 1;
+
+        m_SceneNormalTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+    }
+
+    // Roughness Textures
+    for (const auto& texture : scene.Value().RoughnessTextures)
+    {
+        VulkanHelper::Image::Config imageConfig{};
+        imageConfig.Device = m_Device;
+        imageConfig.Width = texture.Width;
+        imageConfig.Height = texture.Height;
+        imageConfig.Format = VulkanHelper::Format::R8_UNORM;
+        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+        VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+        // Pack texture data into a single channel since there's only roughness values
+        std::vector<uint8_t> packedData(texture.Data.Size() / 4);
+        for (size_t i = 0; i < texture.Data.Size(); i += 4)
+        {
+            packedData[i / 4] = texture.Data[i]; // Take the R channel
+        }
+
+        // Upload texture data
+        VH_ASSERT(textureImage.UploadData(
+            packedData.data(),
+            packedData.size() * sizeof(uint8_t),
+            0,
+            &initializationCmd
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+        VulkanHelper::ImageView::Config imageViewConfig{};
+        imageViewConfig.image = textureImage;
+        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+        imageViewConfig.BaseLayer = 0;
+        imageViewConfig.LayerCount = 1;
+
+        m_SceneRoughnessTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+    }
+
+    // Metallic Textures
+    for (const auto& texture : scene.Value().MetallicTextures)
+    {
+        VulkanHelper::Image::Config imageConfig{};
+        imageConfig.Device = m_Device;
+        imageConfig.Width = texture.Width;
+        imageConfig.Height = texture.Height;
+        imageConfig.Format = VulkanHelper::Format::R8_UNORM;
+        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+        VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+        // Pack texture data into a single channel since there's only metallic values
+        std::vector<uint8_t> packedData(texture.Data.Size() / 4);
+        for (size_t i = 0; i < texture.Data.Size(); i += 4)
+        {
+            packedData[i / 4] = texture.Data[i]; // Take the R channel
+        }
+
+        // Upload texture data
+        VH_ASSERT(textureImage.UploadData(
+            packedData.data(),
+            packedData.size() * sizeof(uint8_t),
+            0,
+            &initializationCmd
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+        VulkanHelper::ImageView::Config imageViewConfig{};
+        imageViewConfig.image = textureImage;
+        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+        imageViewConfig.BaseLayer = 0;
+        imageViewConfig.LayerCount = 1;
+
+        m_SceneMetallicTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+    }
+
+    // Emissive Textures
+    for (const auto& texture : scene.Value().EmissiveTextures)
+    {
+        VulkanHelper::Image::Config imageConfig{};
+        imageConfig.Device = m_Device;
+        imageConfig.Width = texture.Width;
+        imageConfig.Height = texture.Height;
+        imageConfig.Format = VulkanHelper::Format::R8G8B8A8_UNORM;
+        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+        VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+        // Upload texture data
+        VH_ASSERT(textureImage.UploadData(
+            texture.Data.Data(),
+            texture.Data.Size() * sizeof(uint8_t),
+            0,
+            &initializationCmd
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+        VulkanHelper::ImageView::Config imageViewConfig{};
+        imageViewConfig.image = textureImage;
+        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+        imageViewConfig.BaseLayer = 0;
+        imageViewConfig.LayerCount = 1;
+
+        m_SceneEmissiveTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+    }
+
+    // Materials
+    std::vector<VulkanHelper::MaterialAsset> materials;
+    for (const auto& material : scene.Value().Materials)
+    {
+        materials.push_back(material);
+    }
+    VH_ASSERT(m_MaterialsBuffer.UploadData(
+        materials.data(),
+        materials.size() * sizeof(VulkanHelper::MaterialAsset),
+        0,
+        &initializationCmd
+    ) == VulkanHelper::VHResult::OK, "Failed to upload materials buffer");
 
     VH_ASSERT(initializationCmd.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording initialization command buffer");
     VH_ASSERT(initializationCmd.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit initialization command buffer");
@@ -194,14 +345,19 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     m_OutputImageView = VulkanHelper::ImageView::New(outputImageViewConfig).Value();
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 7> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 12> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
         VulkanHelper::DescriptorSet::BindingDescription{3, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // vertex Meshes
         VulkanHelper::DescriptorSet::BindingDescription{4, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // index Meshes
-        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneAlbedoTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Textures
-        VulkanHelper::DescriptorSet::BindingDescription{6, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER} // Sampler
+        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneAlbedoTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
+        VulkanHelper::DescriptorSet::BindingDescription{6, (uint32_t)m_SceneNormalTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Normal Textures
+        VulkanHelper::DescriptorSet::BindingDescription{7, (uint32_t)m_SceneRoughnessTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Roughness Textures
+        VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
+        VulkanHelper::DescriptorSet::BindingDescription{9, (uint32_t)m_SceneEmissiveTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Emissive Textures
+        VulkanHelper::DescriptorSet::BindingDescription{10, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
+        VulkanHelper::DescriptorSet::BindingDescription{11, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Materials
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -218,8 +374,17 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(4, i, m_SceneMeshes[i].GetIndexBuffer()) == VulkanHelper::VHResult::OK, "Failed to add index buffer to descriptor set");
     for (uint32_t i = 0; i < m_SceneAlbedoTextures.size(); ++i)
         VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, i, m_SceneAlbedoTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add albedo texture to descriptor set");
+    for (uint32_t i = 0; i < m_SceneNormalTextures.size(); ++i)
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, i, m_SceneNormalTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
+    for (uint32_t i = 0; i < m_SceneRoughnessTextures.size(); ++i)
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, i, m_SceneRoughnessTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
+    for (uint32_t i = 0; i < m_SceneMetallicTextures.size(); ++i)
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, i, m_SceneMetallicTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
+    for (uint32_t i = 0; i < m_SceneEmissiveTextures.size(); ++i)
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, i, m_SceneEmissiveTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
 
-    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(6, 0, m_TextureSampler) == VulkanHelper::VHResult::OK, "Failed to add texture sampler to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(10, 0, m_TextureSampler) == VulkanHelper::VHResult::OK, "Failed to add texture sampler to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(11, 0, m_MaterialsBuffer) == VulkanHelper::VHResult::OK, "Failed to add materials buffer to descriptor set");
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};

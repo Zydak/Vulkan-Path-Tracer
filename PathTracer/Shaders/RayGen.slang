@@ -40,24 +40,29 @@ void Main()
     payload.LightColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
     payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uUBO.Seed);
 
+    float3 weight = 1.0f;
+    float3 hitValue = 0.0f;
     // Depth is incremented in closest hit and miss shaders
     for (;payload.Depth < 20;)
     {
         RayDesc rayDesc;
         rayDesc.Origin = payload.Origin;
         rayDesc.Direction = payload.Direction;
-        rayDesc.TMin = 0.0f;
+        rayDesc.TMin = 0.00001f;
         rayDesc.TMax = 1000.0f;
 
         TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
+
+        weight *= payload.SurfaceColor.rgb;
+        hitValue += payload.LightColor.rgb * weight;
     }
 
-    float3 sampleColor = payload.SurfaceColor.rgb * payload.LightColor.rgb;
+    float3 sampleColor = hitValue;
 
     float a = 1.0f / float(uUBO.FrameCount + 1);
     float3 color = lerp(prevColor, sampleColor, a);
 
-    //if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
+    if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
     {
         uImage[LaunchID.xy] = float4(color, 1.0f);
     }

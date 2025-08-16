@@ -10,8 +10,13 @@ struct Vertex
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
 [[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
 
-[[vk::binding(5, 0)]] Texture2D uTextures[];
-[[vk::binding(6, 0)]] SamplerState uSampler;
+[[vk::binding(5, 0)]] Texture2D uBaseColorTextures[];
+[[vk::binding(6, 0)]] Texture2D uNormalColorTextures[];
+[[vk::binding(7, 0)]] Texture2D uRoughnessTextures[];
+[[vk::binding(8, 0)]] Texture2D uMetallicTextures[];
+[[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
+[[vk::binding(10, 0)]] SamplerState uSampler;
+[[vk::binding(11, 0)]] StructuredBuffer<Material, ScalarDataLayout> uMaterials;
 
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
@@ -33,18 +38,25 @@ void Main(inout Payload payload, in float2 attrib)
     float3 position = v1.Position * barycentrics.x + v2.Position * barycentrics.y + v3.Position * barycentrics.z;
     position = mul(ObjectToWorld3x4(), float4(position, 1.0f)).xyz;
 
-    float3 normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
-    //normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
+    // Don't use model normals, they're often transformed which causes rays to go under the geometry
+    //float3 normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
+
+    // Instead compute geometric normals
+    float3 normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
     normal = mul(normal, WorldToObject()).xyz;
+
     if (dot(normal, payload.Direction) > 0.0f)
     {
-        normal = -normal; // Ensure the normal is facing the ray
+        // Sometimes the geometry is flat (e.g. a 2D plane), it has only one face (and one normal direction).
+        // If that's the case then flip the normal and act as if it has two faces.
+        normal = -normal;
     }
 
     const float2 texCoord = v1.TexCoord * barycentrics.x + v2.TexCoord * barycentrics.y + v3.TexCoord * barycentrics.z;
 
-    float3 color = uTextures[NonUniformResourceIndex(geometryIndex)].Sample(uSampler, texCoord).rgb;
-    color = float3(0.9f);
+    float3 color = uBaseColorTextures[NonUniformResourceIndex(geometryIndex)].Sample(uSampler, texCoord).rgb;
+    float3 emissiveColor = uEmissiveTextures[NonUniformResourceIndex(geometryIndex)].Sample(uSampler, texCoord).rgb;
+    //color = float3(0.8f);
 
     // Generate random direction on the hemisphere around the normal
     float3 newDirection = payload.Sampler.RandomSphereVec();
@@ -53,8 +65,11 @@ void Main(inout Payload payload, in float2 attrib)
         newDirection = -newDirection; // Ensure the direction is in the same hemisphere as the normal
     }
 
-    payload.SurfaceColor *= float4(color, 1.0f);
+    Material material = uMaterials[NonUniformResourceIndex(geometryIndex)];
+
+    payload.SurfaceColor = float4(color * material.BaseColor, 1.0f);
+    payload.LightColor = float4(emissiveColor * material.EmissiveColor, 1.0f);
     payload.Direction = newDirection;
-    payload.Origin = position + normal * 0.0001f; // Offset origin slightly to avoid self-intersection
+    payload.Origin = position + normal * 0.00001f; // Offset origin slightly to avoid self-intersection
     payload.Depth += 1;
 }
