@@ -21,7 +21,7 @@ private:
     VulkanHelper::Device m_Device;
 
     VulkanHelper::ImageView m_OutputImageView;
-    uint32_t m_ResolutionPixels = 2000;
+    uint32_t m_ResolutionPixels = 1300;
     float m_AspectRatio = 1.0f;
     float m_FOV = 45.0f;
     
@@ -46,6 +46,9 @@ private:
         glm::mat4 CameraProjectionInverse;
         uint32_t FrameCount;
         uint32_t Seed;
+        uint32_t SampleCount;
+        uint32_t MaxDepth;
+        float MaxLuminance;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
 

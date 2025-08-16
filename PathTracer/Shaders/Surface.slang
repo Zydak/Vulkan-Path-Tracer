@@ -10,8 +10,10 @@ public struct Surface
     float3 m_Tangent;
     float3 m_Bitangent;
 
+    bool m_HitFromInside;
+
     [mutating]
-    public void Initialize(StructuredBuffer<Vertex, ScalarDataLayout> vertices, StructuredBuffer<uint> indices, float3 barycentrics, float3 V)
+    public void Initialize(StructuredBuffer<Vertex, ScalarDataLayout> vertices, StructuredBuffer<uint> indices, float3 barycentrics)
     {
         uint primitiveIndex = PrimitiveIndex();
 
@@ -35,11 +37,16 @@ public struct Surface
         m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
         m_Normal = mul(m_Normal, WorldToObject()).xyz;
 
-        if (dot(m_Normal, -V) > 0.0f)
+        if (dot(m_Normal, WorldRayDirection()) > 0.0f)
         {
             // Sometimes the geometry is flat (e.g. a 2D plane), it has only one face (and one normal direction).
             // If that's the case then flip the normal and act as if it has two faces.
             m_Normal = -m_Normal;
+            m_HitFromInside = true;
+        }
+        else
+        {
+            m_HitFromInside = false;
         }
 
         m_TextureCoord = v1.TexCoord * barycentrics.x + v2.TexCoord * barycentrics.y + v3.TexCoord * barycentrics.z;
@@ -64,4 +71,5 @@ public struct Surface
     public inline float3 GetBitangent() { return m_Bitangent; }
     public inline float3 GetWorldPos() { return m_WorldPos; }
     public inline float2 GetTextureCoordinates() { return m_TextureCoord; }
+    public inline bool WasHitFromInside() { return m_HitFromInside; }
 }
