@@ -31,7 +31,7 @@ Application::Application()
 
     // Create Path Tracer
     m_PathTracer = PathTracer::New(m_Device);
-    m_PathTracer.SetScene("../../../Assets/the-white-room-low.gltf");
+    m_PathTracer.SetScene("../../../Assets/VikingRoom.gltf");
 
     // Create ImGui sampler
     VulkanHelper::Sampler::Config samplerConfig;

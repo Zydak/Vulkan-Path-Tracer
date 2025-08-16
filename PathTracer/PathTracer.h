@@ -16,14 +16,20 @@ public:
     [[nodiscard]] inline VulkanHelper::Image GetOutputImage() const { return m_OutputImageView.GetImage(); }
 
 private:
+    constexpr static uint32_t MAX_ENTITIES = 2048;
+
     VulkanHelper::Device m_Device;
 
     VulkanHelper::ImageView m_OutputImageView;
-    uint32_t m_ResolutionPixels = 2000;
+    uint32_t m_ResolutionPixels = 1000;
     float m_AspectRatio = 1.0f;
     float m_FOV = 45.0f;
     
     std::vector<VulkanHelper::ImageView> m_SceneAlbedoTextures;
+    std::vector<VulkanHelper::ImageView> m_SceneNormalTextures;
+    std::vector<VulkanHelper::ImageView> m_SceneRoughnessTextures;
+    std::vector<VulkanHelper::ImageView> m_SceneMetallicTextures;
+    std::vector<VulkanHelper::ImageView> m_SceneEmissiveTextures;
     std::vector<VulkanHelper::Mesh> m_SceneMeshes;
     VulkanHelper::TLAS m_SceneTLAS;
 
@@ -42,6 +48,8 @@ private:
         uint32_t Seed;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
+
+    VulkanHelper::Buffer m_MaterialsBuffer;
 
     VulkanHelper::Sampler m_TextureSampler;
 };
