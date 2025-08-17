@@ -3,6 +3,7 @@
 #include "VulkanHelper.h"
 
 #include "Editor.h"
+#include "LookupTableCalculator.h"
 
 class Application
 {
@@ -19,4 +20,5 @@ private:
     VulkanHelper::Renderer m_Renderer;
 
     Editor m_Editor;
+    LookupTableCalculator m_LookupTableCalculator;
 };

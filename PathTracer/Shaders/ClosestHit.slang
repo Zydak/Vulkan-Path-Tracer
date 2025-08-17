@@ -5,10 +5,15 @@ import Surface;
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
 [[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
 
+[[vk::image_format("rgba8")]]
 [[vk::binding(5, 0)]] Texture2D uBaseColorTextures[];
+[[vk::image_format("rgba8")]]
 [[vk::binding(6, 0)]] Texture2D uNormalTextures[];
+[[vk::image_format("rgba8")]]
 [[vk::binding(7, 0)]] Texture2D uRoughnessTextures[];
+[[vk::image_format("rgba8")]]
 [[vk::binding(8, 0)]] Texture2D uMetallicTextures[];
+[[vk::image_format("rgba8")]]
 [[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
 [[vk::binding(10, 0)]] SamplerState uSampler;
 [[vk::binding(11, 0)]] StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
@@ -92,5 +97,5 @@ void Main(inout Payload payload, in float2 attrib)
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
     bool isInvalid = (!wasRefracted && dot(newDir, surface.GetNormal()) < 0.0f) || sample.PDF < 0.0f;
-    payload.Depth += 1;//0xFFFFFFFF * (isInvalid) + 1 * (!isInvalid);
+    payload.Depth += 0xFFFFFFFF * (isInvalid) + 1 * (!isInvalid);
 }

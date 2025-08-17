@@ -99,6 +99,10 @@ private:
     std::vector<VulkanHelper::Mesh> m_SceneMeshes;
     VulkanHelper::TLAS m_SceneTLAS;
 
+    VulkanHelper::ImageView m_ReflectionLookup;
+    VulkanHelper::ImageView m_RefractionFromInsideLookup;
+    VulkanHelper::ImageView m_RefractionFromOutsideLookup;
+
     VulkanHelper::CommandPool m_CommandPool;
 
     VulkanHelper::Pipeline m_PathTracerPipeline;

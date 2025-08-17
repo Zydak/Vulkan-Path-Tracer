@@ -41,7 +41,8 @@ private:
     uint32_t m_CurrentImGuiDescriptorIndex = 0;
     float m_RenderTime = 0.0f;
 
-    // A lot of vulkan commands can't be called when the render pass is active, so they have to be deferred to the beginning of the next frame.
+    // A lot of vulkan commands can't be called when the render pass is active. And because ImGui
+    // Is an immediate mode GUI, they have to be deferred to the beginning of the next frame.
     std::vector<std::pair<std::shared_ptr<void>, std::function<void(VulkanHelper::CommandBuffer, std::shared_ptr<void> data)>>> m_DeferredTasks;
     void PushDeferredTask(std::shared_ptr<void> data, std::function<void(VulkanHelper::CommandBuffer, std::shared_ptr<void> data)> task)
     {
