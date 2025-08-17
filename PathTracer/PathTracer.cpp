@@ -33,7 +33,7 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     uniformBufferConfig.Device = device;
     uniformBufferConfig.Size = sizeof(PathTracerUniform);
     uniformBufferConfig.Usage = VulkanHelper::Buffer::Usage::UNIFORM_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
-    uniformBufferConfig.CpuMapable = true; // For updating uniform data
+    uniformBufferConfig.CpuMapable = true;
     pathTracer.m_PathTracerUniformBuffer = VulkanHelper::Buffer::New(uniformBufferConfig).Value();
 
     VulkanHelper::Buffer::Config materialsBufferConfig{};
@@ -51,8 +51,6 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     samplerConfig.Device = device;
 
     pathTracer.m_TextureSampler = VulkanHelper::Sampler::New(samplerConfig).Value();
-    
-    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
 
     return pathTracer;
 }
@@ -447,9 +445,11 @@ void PathTracer::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::Comm
     // Update projection
     const float aspectRatio = static_cast<float>(m_Width) / static_cast<float>(m_Height);
     glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
+
     cameraProjection = glm::inverse(cameraProjection);
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&cameraProjection, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+
     ResetPathTracing();
 }
 

@@ -25,6 +25,11 @@ Application::Application()
             break;
         }
     }
+    
+    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
+
+    m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
+    m_LookupTableCalculator.CalculateReflectionEnergyLossGPU({64, 64, 64}, 1000);
 
     // Create Renderer
     m_Renderer = VulkanHelper::Renderer::New({m_Device, m_Window}).Value();
