@@ -21,7 +21,7 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
     postProcessor.m_DescriptorPool = VulkanHelper::DescriptorPool::New(descriptorPoolConfig).Value();
 
     std::array<VulkanHelper::DescriptorSet::BindingDescription, 3> bindingDescriptions = {
-        VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
+        VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER}
     };
@@ -69,17 +69,17 @@ void PostProcessor::SetInputImage(const VulkanHelper::ImageView& inputImageView)
 
     m_OutputImageView = VulkanHelper::ImageView::New({ outputImage, VulkanHelper::ImageView::ViewType::VIEW_2D }).Value();
 
-    VH_ASSERT(m_TonemappingDescriptorSet.AddImage(0, 0, inputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add input image view to descriptor set");
+    VH_ASSERT(m_TonemappingDescriptorSet.AddImage(0, 0, inputImageView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add input image view to descriptor set");
     VH_ASSERT(m_TonemappingDescriptorSet.AddImage(1, 0, m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
 }
 
 void PostProcessor::PostProcess(VulkanHelper::CommandBuffer& commandBuffer)
 {
-    m_InputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
+    m_InputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
     m_OutputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
 
     m_TonemappingPipeline.Bind(commandBuffer);
-    m_TonemappingPipeline.Dispatch(commandBuffer, glm::ceil((float)m_InputImageView.GetWidth() / (float)32), glm::ceil((float)m_InputImageView.GetHeight() / (float)32), 1);
+    m_TonemappingPipeline.Dispatch(commandBuffer, (uint32_t)glm::ceil((float)m_InputImageView.GetWidth() / (float)32), (uint32_t)glm::ceil((float)m_InputImageView.GetHeight() / (float)32), 1);
 }
 
 void PostProcessor::SetTonemappingData(const TonemappingData& data, VulkanHelper::CommandBuffer& commandBuffer)

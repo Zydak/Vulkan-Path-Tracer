@@ -33,6 +33,8 @@ void Main(inout Payload payload, in float2 attrib)
         uEmissiveTextures[NonUniformResourceIndex(geometryIndex)]
     );
 
+    surface.RotateTangents(material.Properties.AnisotropyRotation);
+
     // Choose sampling probabilities for each lobe
     float F0 = (1.0 - material.Eta) / (1.0f + material.Eta);
     F0 *= F0;

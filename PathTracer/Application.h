@@ -2,8 +2,7 @@
 
 #include "VulkanHelper.h"
 
-#include "PathTracer.h"
-#include "PostProcessor.h"
+#include "Editor.h"
 
 class Application
 {
@@ -19,8 +18,5 @@ private:
     VulkanHelper::Device m_Device;
     VulkanHelper::Renderer m_Renderer;
 
-    PathTracer m_PathTracer;
-    PostProcessor m_PostProcessor;
-    bool m_TonemappingDataChanged = true;
-    VulkanHelper::Sampler m_ImGuiSampler;
+    Editor m_Editor;
 };

@@ -1,5 +1,5 @@
 [[vk::image_format("rgba32f")]]
-[[vk::binding(0, 0)]] RWTexture2D<float4> uInputImage;
+[[vk::binding(0, 0)]] Texture2D<float4> uInputImage;
 
 [[vk::image_format("rgba8")]]
 [[vk::binding(1, 0)]] RWTexture2D<float4> uOutputImage;
@@ -52,7 +52,7 @@ float3 ACESFitted(float3 color)
 [numthreads(32,32,1)]
 void Main(uint3 threadID : SV_DispatchThreadID)
 {
-    float3 color = uInputImage.Load(threadID.xy).rgb;
+    float3 color = uInputImage.Load(int3(threadID.xy, 0)).rgb;
     color *= pow(2.0, uUBO.Exposure);
     color = ACESFitted(color);
     uOutputImage.Store(threadID.xy, float4(color, 1.0));
