@@ -4,10 +4,11 @@
 #include <chrono>
 #include <array>
 
-PathTracer PathTracer::New(const VulkanHelper::Device& device)
+PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
     PathTracer pathTracer{};
     pathTracer.m_Device = device;
+    pathTracer.m_ThreadPool = threadPool;
 
     pathTracer.m_CommandPool = VulkanHelper::CommandPool::New({
         .Device = device,
@@ -37,7 +38,7 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device)
 
     VulkanHelper::Buffer::Config materialsBufferConfig{};
     materialsBufferConfig.Device = device;
-    materialsBufferConfig.Size = sizeof(VulkanHelper::MaterialAsset) * MAX_ENTITIES;
+    materialsBufferConfig.Size = sizeof(Material) * MAX_ENTITIES;
     materialsBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
     pathTracer.m_MaterialsBuffer = VulkanHelper::Buffer::New(materialsBufferConfig).Value();
 
@@ -58,6 +59,9 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device)
 
 void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
 {
+    if (m_SamplesAccumulated >= m_MaxSamplesAccumulated)
+        return;
+
     static auto timer = std::chrono::high_resolution_clock::now();
     m_OutputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
 
@@ -75,26 +79,26 @@ void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
 
     uint32_t timeElapsed = (uint32_t)((uint64_t)std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - timer).count() % UINT32_MAX);
 
-    static uint32_t frameCount = 0;
     Data data;
-    data.FrameCount = frameCount++;
+    data.FrameCount = m_FrameCount;
     data.Seed = PCGHash(timeElapsed); // Random seed for each frame
-
+    
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&data, sizeof(Data), offsetof(PathTracerUniform, FrameCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform buffer");
-
+    
     m_PathTracerPipeline.Bind(commandBuffer);
     m_PathTracerPipeline.RayTrace(commandBuffer, m_OutputImageView.GetImage().GetWidth(), m_OutputImageView.GetImage().GetHeight());
+    m_FrameCount++;
+    m_SamplesAccumulated += m_SamplesPerFrame;
 }
 
 void PathTracer::SetScene(const std::string& sceneFilePath)
 {
-    VulkanHelper::ThreadPool threadPool(4);
-    VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({&threadPool}).Value();
+    VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
 
     // Load Camera values
-    m_AspectRatio = scene.Value().Cameras[0].AspectRatio;
+    const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
     m_FOV = scene.Value().Cameras[0].FOV;
     glm::mat4 cameraView = scene.Value().Cameras[0].ViewMatrix;
 
@@ -150,7 +154,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageViewConfig.BaseLayer = 0;
         imageViewConfig.LayerCount = 1;
 
-        m_SceneAlbedoTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneBaseColorTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneBaseColorTextureNames.push_back(texture.Name);
     }
 
     // Normal Textures
@@ -180,6 +185,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageViewConfig.LayerCount = 1;
 
         m_SceneNormalTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneNormalTextureNames.push_back(texture.Name);
     }
 
     // Roughness Textures
@@ -216,6 +222,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageViewConfig.LayerCount = 1;
 
         m_SceneRoughnessTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneRoughnessTextureNames.push_back(texture.Name);
     }
 
     // Metallic Textures
@@ -252,6 +259,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageViewConfig.LayerCount = 1;
 
         m_SceneMetallicTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneMetallicTextureNames.push_back(texture.Name);
     }
 
     // Emissive Textures
@@ -281,17 +289,28 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageViewConfig.LayerCount = 1;
 
         m_SceneEmissiveTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+        m_SceneEmissiveTextureNames.push_back(texture.Name);
     }
 
     // Materials
-    std::vector<VulkanHelper::MaterialAsset> materials;
     for (const auto& material : scene.Value().Materials)
     {
-        materials.push_back(material);
+        Material pathTracerMaterial{};
+        pathTracerMaterial.BaseColor = material.BaseColor;
+        pathTracerMaterial.EmissiveColor = material.EmissiveColor;
+        pathTracerMaterial.Metallic = material.Metallic;
+        pathTracerMaterial.Roughness = material.Roughness;
+        pathTracerMaterial.IOR = material.IOR;
+        pathTracerMaterial.Transmission = material.Transmission;
+        pathTracerMaterial.Anisotropy = material.Anisotropy;
+        pathTracerMaterial.AnisotropyRotation = material.AnisotropyRotation;
+
+        m_Materials.push_back(pathTracerMaterial);
+        m_MaterialNames.push_back(material.Name);
     }
     VH_ASSERT(m_MaterialsBuffer.UploadData(
-        materials.data(),
-        materials.size() * sizeof(VulkanHelper::MaterialAsset),
+        m_Materials.data(),
+        m_Materials.size() * sizeof(Material),
         0,
         &initializationCmd
     ) == VulkanHelper::VHResult::OK, "Failed to upload materials buffer");
@@ -326,23 +345,11 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }).Value();
 
     // Create Output Image
-    // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene (thus camera) is loaded
-    VulkanHelper::Image::Config outputImageConfig{};
-    outputImageConfig.Device = m_Device;
-    outputImageConfig.Width = (uint32_t)((float)m_ResolutionPixels * m_AspectRatio);
-    outputImageConfig.Height = m_ResolutionPixels;
-    outputImageConfig.Format = VulkanHelper::Format::R32G32B32A32_SFLOAT;
-    outputImageConfig.Usage = VulkanHelper::Image::Usage::STORAGE_BIT | VulkanHelper::Image::Usage::SAMPLED_BIT;
-
-    VulkanHelper::Image outputImage = VulkanHelper::Image::New(outputImageConfig).Value();
-
-    VulkanHelper::ImageView::Config outputImageViewConfig{};
-    outputImageViewConfig.image = outputImage;
-    outputImageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
-    outputImageViewConfig.BaseLayer = 0;
-    outputImageViewConfig.LayerCount = 1;
-
-    m_OutputImageView = VulkanHelper::ImageView::New(outputImageViewConfig).Value();
+    // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene is loaded
+    const int initialRes = 1080;
+    m_Width = (uint32_t)((float)initialRes * aspectRatio);
+    m_Height = initialRes;
+    CreateOutputImageView();
 
     // Create Descriptor set
     std::array<VulkanHelper::DescriptorSet::BindingDescription, 12> bindingDescriptions = {
@@ -351,7 +358,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
         VulkanHelper::DescriptorSet::BindingDescription{3, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // vertex Meshes
         VulkanHelper::DescriptorSet::BindingDescription{4, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // index Meshes
-        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneAlbedoTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
+        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneBaseColorTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
         VulkanHelper::DescriptorSet::BindingDescription{6, (uint32_t)m_SceneNormalTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Normal Textures
         VulkanHelper::DescriptorSet::BindingDescription{7, (uint32_t)m_SceneRoughnessTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Roughness Textures
         VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
@@ -372,8 +379,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(3, i, m_SceneMeshes[i].GetVertexBuffer()) == VulkanHelper::VHResult::OK, "Failed to add vertex buffer to descriptor set");
     for (uint32_t i = 0; i < m_SceneMeshes.size(); ++i)
         VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(4, i, m_SceneMeshes[i].GetIndexBuffer()) == VulkanHelper::VHResult::OK, "Failed to add index buffer to descriptor set");
-    for (uint32_t i = 0; i < m_SceneAlbedoTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, i, m_SceneAlbedoTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add albedo texture to descriptor set");
+    for (uint32_t i = 0; i < m_SceneBaseColorTextures.size(); ++i)
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, i, m_SceneBaseColorTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add albedo texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneNormalTextures.size(); ++i)
         VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, i, m_SceneNormalTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneRoughnessTextures.size(); ++i)
@@ -388,11 +395,11 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
-    glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, 0.1f, 100.0f);
+    glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
     pathTracerUniform.CameraViewInverse = glm::inverse(cameraView);
     pathTracerUniform.CameraProjectionInverse = glm::inverse(cameraProjection);
-    pathTracerUniform.MaxDepth = 20;
-    pathTracerUniform.SampleCount = 3;
+    pathTracerUniform.MaxDepth = m_MaxDepth;
+    pathTracerUniform.SampleCount = m_SamplesPerFrame;
     pathTracerUniform.MaxLuminance = 500.0f;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
@@ -417,4 +424,169 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     VH_ASSERT(initializationCmd.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording initialization command buffer");
     VH_ASSERT(initializationCmd.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit initialization command buffer");
+}
+
+void PathTracer::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_Width = width;
+    m_Height = height;
+
+    // Update the output image view with the new dimensions
+    CreateOutputImageView();
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
+
+    // Update projection
+    const float aspectRatio = static_cast<float>(m_Width) / static_cast<float>(m_Height);
+    glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
+    cameraProjection = glm::inverse(cameraProjection);
+
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&cameraProjection, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::CreateOutputImageView()
+{
+    VulkanHelper::Image::Config outputImageConfig{};
+    outputImageConfig.Device = m_Device;
+    outputImageConfig.Width = m_Width;
+    outputImageConfig.Height = m_Height;
+    outputImageConfig.Format = VulkanHelper::Format::R32G32B32A32_SFLOAT;
+    outputImageConfig.Usage = VulkanHelper::Image::Usage::STORAGE_BIT | VulkanHelper::Image::Usage::SAMPLED_BIT;
+
+    VulkanHelper::Image outputImage = VulkanHelper::Image::New(outputImageConfig).Value();
+
+    VulkanHelper::ImageView::Config outputImageViewConfig{};
+    outputImageViewConfig.image = outputImage;
+    outputImageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+    outputImageViewConfig.BaseLayer = 0;
+    outputImageViewConfig.LayerCount = 1;
+
+    m_OutputImageView = VulkanHelper::ImageView::New(outputImageViewConfig).Value();
+}
+
+void PathTracer::SetMaterial(uint32_t index, const Material& material, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_Materials[index] = material;
+
+    // Update material buffer
+    VH_ASSERT(m_MaterialsBuffer.UploadData(&material, sizeof(Material), index * sizeof(Material), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload material data");
+    ResetPathTracing();
+}
+
+VulkanHelper::ImageView PathTracer::LoadTexture(const char* filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
+    VulkanHelper::TextureAsset textureAsset = importer.ImportTexture(filePath).get().Value();
+
+    VulkanHelper::Image::Config imageConfig{};
+    imageConfig.Device = m_Device;
+    imageConfig.Width = textureAsset.Width;
+    imageConfig.Height = textureAsset.Height;
+    imageConfig.Format = VulkanHelper::Format::R8G8B8A8_UNORM;
+    imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+    VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+    // Upload texture data
+    VH_ASSERT(textureImage.UploadData(
+        textureAsset.Data.Data(),
+        textureAsset.Data.Size() * sizeof(uint8_t),
+        0,
+        &commandBuffer
+    ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+    VulkanHelper::ImageView::Config imageViewConfig{};
+    imageViewConfig.image = textureImage;
+    imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+    imageViewConfig.BaseLayer = 0;
+    imageViewConfig.LayerCount = 1;
+
+    return VulkanHelper::ImageView::New(imageViewConfig).Value();
+}
+
+void PathTracer::SetBaseColorTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SceneBaseColorTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
+    m_SceneBaseColorTextureNames[index] = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, index, m_SceneBaseColorTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add base color texture to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetNormalTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SceneNormalTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
+    m_SceneNormalTextureNames[index] = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, index, m_SceneNormalTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetRoughnessTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SceneRoughnessTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
+    m_SceneRoughnessTextureNames[index] = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, index, m_SceneRoughnessTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetMetallicTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SceneMetallicTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
+    m_SceneMetallicTextureNames[index] = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, index, m_SceneMetallicTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetEmissiveTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SceneEmissiveTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
+    m_SceneEmissiveTextureNames[index] = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    // Update descriptor set
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, index, m_SceneEmissiveTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_MaxDepth == maxDepth)
+        return;
+    
+    m_MaxDepth = maxDepth;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&maxDepth, sizeof(uint32_t), offsetof(PathTracerUniform, MaxDepth), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::SetMaxSamplesAccumulated(uint32_t maxSamples)
+{
+    m_MaxSamplesAccumulated = maxSamples;
+}
+
+void PathTracer::SetSamplesPerFrame(uint32_t samplesPerFrame, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_SamplesPerFrame == samplesPerFrame)
+        return;
+
+    m_SamplesPerFrame = samplesPerFrame;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&samplesPerFrame, sizeof(uint32_t), offsetof(PathTracerUniform, SampleCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_MaxLuminance == maxLuminance)
+        return;
+
+    m_MaxLuminance = maxLuminance;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&maxLuminance, sizeof(float), offsetof(PathTracerUniform, MaxLuminance), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
 }

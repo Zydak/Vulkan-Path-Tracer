@@ -1,4 +1,5 @@
 import RTCommon;
+import Defines;
 
 // This class holds geometric data of the hit surface, things like world position, normals, tangents and texture coordinates
 public struct Surface
@@ -13,7 +14,7 @@ public struct Surface
     bool m_HitFromInside;
 
     [mutating]
-    public void Initialize(StructuredBuffer<Vertex, ScalarDataLayout> vertices, StructuredBuffer<uint> indices, float3 barycentrics)
+    public void Initialize(in StructuredBuffer<Vertex, ScalarDataLayout> vertices, in StructuredBuffer<uint> indices, in float3 barycentrics)
     {
         uint primitiveIndex = PrimitiveIndex();
 
@@ -56,14 +57,24 @@ public struct Surface
         m_Bitangent = cross(m_Normal, m_Tangent);
     }
 
-    public float3 TangentToWorld(float3 vec)
+    public float3 TangentToWorld(in float3 vec)
     {
         return normalize(vec.x * m_Tangent + vec.y * m_Bitangent + vec.z * m_Normal);
     }
 
-    public float3 WorldToTangent(float3 vec)
+    public float3 WorldToTangent(in float3 vec)
     {
         return normalize(float3(dot(vec, m_Tangent), dot(vec, m_Bitangent), dot(vec, m_Normal)));
+    }
+
+    [mutating]
+    public void RotateTangents(in float rotationDegrees)
+    {
+        // Convert to radians
+        float rotation = rotationDegrees * (M_PI / 180.0f);
+
+        m_Tangent = m_Tangent * cos(rotation) + cross(m_Normal, m_Tangent) * sin(rotation) + m_Normal * dot(m_Normal, m_Tangent) * (1.0f - cos(rotation));
+        m_Bitangent = cross(m_Tangent, m_Normal);
     }
 
     public inline float3 GetNormal() { return m_Normal; }
