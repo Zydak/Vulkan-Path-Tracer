@@ -64,8 +64,12 @@ public struct Material
         Properties.Metallic = min(Properties.Metallic, 0.999);
 
         // Textures
-        Properties.BaseColor *= baseColorTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
-        Properties.Roughness *= roughnessTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
+
+        // Textures are in SRGB space so transform them to linear for all calculations
+        Properties.BaseColor *= pow(baseColorTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb, float3(2.2f));
+
+        const float textureRoughness = roughnessTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
+        Properties.Roughness *= textureRoughness * textureRoughness; // Square roughness
         Properties.Metallic *= metallicTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
         Properties.EmissiveColor *= emissiveTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
     }

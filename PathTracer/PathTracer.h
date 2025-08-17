@@ -20,7 +20,9 @@ public:
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);
 
     void SetScene(const std::string& sceneFilePath);
-    void PathTrace(VulkanHelper::CommandBuffer& commandBuffer);
+
+    // True when all samples were accumulated
+    bool PathTrace(VulkanHelper::CommandBuffer& commandBuffer);
 
     void ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer);
 
@@ -51,11 +53,15 @@ public:
     [[nodiscard]] inline uint32_t GetMaxSamplesAccumulated() const { return m_MaxSamplesAccumulated; }
     [[nodiscard]] inline uint32_t GetMaxDepth() const { return m_MaxDepth; }
     [[nodiscard]] inline float GetMaxLuminance() const { return m_MaxLuminance; }
+    [[nodiscard]] inline float GetFocusDistance() const { return m_FocusDistance; }
+    [[nodiscard]] inline float GetDepthOfFieldStrength() const { return m_DepthOfFieldStrength; }
 
+    void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
     void SetSamplesPerFrame(uint32_t samplesPerFrame, VulkanHelper::CommandBuffer commandBuffer);
-    void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer commandBuffer);
+    void SetFocusDistance(float focusDistance, VulkanHelper::CommandBuffer commandBuffer);
+    void SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -70,6 +76,8 @@ private:
     uint32_t m_MaxSamplesAccumulated = 5000;
     uint32_t m_MaxDepth = 20;
     float m_MaxLuminance = 500.0f;
+    float m_FocusDistance = 1.0f;
+    float m_DepthOfFieldStrength = 0.0f;
 
     VulkanHelper::Device m_Device;
 
@@ -107,6 +115,8 @@ private:
         uint32_t SampleCount;
         uint32_t MaxDepth;
         float MaxLuminance;
+        float FocusDistance;
+        float DepthOfFieldStrength;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
 

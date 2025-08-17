@@ -61,7 +61,7 @@ void PostProcessor::SetInputImage(const VulkanHelper::ImageView& inputImageView)
     VulkanHelper::Image::Config outputImageConfig{};
     outputImageConfig.Device = m_Device;
     outputImageConfig.Format = VulkanHelper::Format::R8G8B8A8_UNORM;
-    outputImageConfig.Usage = VulkanHelper::Image::Usage::STORAGE_BIT | VulkanHelper::Image::Usage::SAMPLED_BIT;
+    outputImageConfig.Usage = VulkanHelper::Image::Usage::STORAGE_BIT | VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_SRC_BIT;
     outputImageConfig.Width = m_InputImageView.GetWidth();
     outputImageConfig.Height = m_InputImageView.GetHeight();
 
