@@ -57,10 +57,10 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     return pathTracer;
 }
 
-void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
+bool PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
 {
     if (m_SamplesAccumulated >= m_MaxSamplesAccumulated)
-        return;
+        return true;
 
     static auto timer = std::chrono::high_resolution_clock::now();
     m_OutputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
@@ -89,6 +89,8 @@ void PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
     m_PathTracerPipeline.RayTrace(commandBuffer, m_OutputImageView.GetImage().GetWidth(), m_OutputImageView.GetImage().GetHeight());
     m_FrameCount++;
     m_SamplesAccumulated += m_SamplesPerFrame;
+
+    return false;
 }
 
 void PathTracer::SetScene(const std::string& sceneFilePath)
@@ -96,6 +98,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
+
+    VH_ASSERT(scene.Value().Cameras.Size() > 0, "No cameras found in scene! Please load a scene that contains a camera!");
+    VH_ASSERT(scene.Value().Meshes.Size() > 0, "No meshes found in scene! Please load a scene that contains meshes!");
 
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
@@ -346,7 +351,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Create Output Image
     // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene is loaded
-    const int initialRes = 1080;
+    const int initialRes = 500;
     m_Width = (uint32_t)((float)initialRes * aspectRatio);
     m_Height = initialRes;
     CreateOutputImageView();
@@ -400,7 +405,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.CameraProjectionInverse = glm::inverse(cameraProjection);
     pathTracerUniform.MaxDepth = m_MaxDepth;
     pathTracerUniform.SampleCount = m_SamplesPerFrame;
-    pathTracerUniform.MaxLuminance = 500.0f;
+    pathTracerUniform.MaxLuminance = m_MaxLuminance;
+    pathTracerUniform.FocusDistance = m_FocusDistance;
+    pathTracerUniform.DepthOfFieldStrength = m_DepthOfFieldStrength;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
@@ -588,5 +595,25 @@ void PathTracer::SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer
 
     m_MaxLuminance = maxLuminance;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&maxLuminance, sizeof(float), offsetof(PathTracerUniform, MaxLuminance), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::SetFocusDistance(float focusDistance, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_FocusDistance == focusDistance)
+        return;
+
+    m_FocusDistance = focusDistance;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&focusDistance, sizeof(float), offsetof(PathTracerUniform, FocusDistance), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_DepthOfFieldStrength == depthOfFieldStrength)
+        return;
+
+    m_DepthOfFieldStrength = depthOfFieldStrength;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&depthOfFieldStrength, sizeof(float), offsetof(PathTracerUniform, DepthOfFieldStrength), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
 }

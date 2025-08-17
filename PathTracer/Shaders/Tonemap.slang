@@ -7,6 +7,7 @@
 struct UniformBuffer
 {
     float Exposure;
+    float Gamma;
 }
 
 [[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
@@ -53,7 +54,8 @@ float3 ACESFitted(float3 color)
 void Main(uint3 threadID : SV_DispatchThreadID)
 {
     float3 color = uInputImage.Load(int3(threadID.xy, 0)).rgb;
-    color *= pow(2.0, uUBO.Exposure);
+    color *= uUBO.Exposure;
+    color = pow(color, float3(1.0 / uUBO.Gamma));
     color = ACESFitted(color);
     uOutputImage.Store(threadID.xy, float4(color, 1.0));
 }

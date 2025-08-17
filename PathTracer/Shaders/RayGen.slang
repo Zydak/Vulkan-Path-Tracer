@@ -15,6 +15,8 @@ struct UniformBuffer
     uint SampleCount;
     uint MaxDepth;
     float MaxLuminance;
+    float FocusDistance;
+    float DepthOfFieldStrength;
 };
 
 [[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
@@ -30,20 +32,29 @@ void Main()
 
     float3 prevColor = uImage[LaunchID.xy].rgb;
 
-    const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.5f, 0.5f); // Add small jitter for anti aliasing
-    const float2 pixelUV = pixelCenter / float2(size.xy);
-    float2 d = pixelUV * 2.0f - 1.0f;
-
-    float4 origin       = mul(uUBO.ViewInverse, float4(0, 0, 0, 1));
-    float4 target       = mul(uUBO.ProjectionInverse, float4(d.x, d.y, 1.0f, 1.0f));
-    float4 direction    = mul(uUBO.ViewInverse, float4(normalize(target.xyz), 0.0f));
-
     float3 sampleSum = 0.0f;
     for (uint i = 0; i < uUBO.SampleCount; i++)
     {
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.5f, 0.5f); // Add small jitter for anti aliasing
+        const float2 pixelUV = pixelCenter / float2(size.xy);
+        float2 d = pixelUV * 2.0f - 1.0f;
+
+        float3 origin       = mul(uUBO.ViewInverse, float4(0, 0, 0, 1)).xyz;
+        float3 target       = mul(uUBO.ProjectionInverse, float4(d.x, d.y, 1.0f, 1.0f)).xyz;
+        float3 direction    = mul(uUBO.ViewInverse, float4(normalize(target), 0.0f)).xyz;
+
+        float3 focusPoint = origin + direction * max(uUBO.FocusDistance, 0.001f);
+        float2 randomOffset = payload.Sampler.UniformFloat2(-0.5f, 0.5f) * uUBO.DepthOfFieldStrength;
+
+        const float3 cameraRight = float3(uUBO.ViewInverse[0][0], uUBO.ViewInverse[1][0], uUBO.ViewInverse[2][0]);
+        const float3 cameraUp = float3(uUBO.ViewInverse[0][1], uUBO.ViewInverse[1][1], uUBO.ViewInverse[2][1]);
+        origin += randomOffset.x * cameraRight + randomOffset.y * cameraUp;
+
+        direction = normalize(focusPoint - origin);
+
         payload.Depth = 0;
-        payload.Origin = origin.xyz;
-        payload.Direction = direction.xyz;
+        payload.Origin = origin;
+        payload.Direction = direction;
         payload.SurfaceColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         payload.LightColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -63,8 +74,8 @@ void Main()
             hitValue += payload.LightColor.rgb * weight;
             weight *= payload.SurfaceColor.rgb;
 
+            // Russian roulette
             float p = max(weight.x, max(weight.y, weight.z));
-
             if (p <= payload.Sampler.UniformFloat())
                 break;
             weight /= p;
