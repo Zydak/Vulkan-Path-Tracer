@@ -69,6 +69,8 @@ void Main()
             rayDesc.TMin = 0.00001f;
             rayDesc.TMax = 1000.0f;
 
+            payload.SurfaceColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+            payload.LightColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
             TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
             hitValue += payload.LightColor.rgb * weight;
@@ -76,6 +78,10 @@ void Main()
 
             // Russian roulette
             float p = max(weight.x, max(weight.y, weight.z));
+            // Because of energy compensation weight is sometimes greater than 1
+            // and p gets compared to random variable that is between 0 and 1
+            // so it also has to be between 0 and 1 hence the min()
+            p = min(p, 1.0f);
             if (p <= payload.Sampler.UniformFloat())
                 break;
             weight /= p;

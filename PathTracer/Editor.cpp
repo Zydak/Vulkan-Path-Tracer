@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "Editor.h"
 
 #include <portable-file-dialogs.h>
@@ -79,7 +80,7 @@ void Editor::RenderViewportTab()
     glm::vec2 viewportSize = {ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y};
 
     // Don't change dimensions of the image, scale it so that it always fits the screen
-    float scale = std::min(viewportSize.x / pathTraceImageSize.x, viewportSize.y / pathTraceImageSize.y);
+    float scale = glm::min(viewportSize.x / pathTraceImageSize.x, viewportSize.y / pathTraceImageSize.y);
 
     ImGui::SameLine();
     ImGui::SetCursorPos(ImVec2((viewportSize.x - pathTraceImageSize.x * scale) / 2.0f, ImGui::GetCursorPos().y + (viewportSize.y - pathTraceImageSize.y * scale) / 2.0f));
@@ -300,6 +301,15 @@ void Editor::RenderInfo()
         m_PathTracer.ResetPathTracing();
         m_RenderTime = 0.0f;
     }
+
+    if(ImGui::Button("Reload Shaders"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_Device.WaitUntilIdle();
+            m_PathTracer.ReloadShaders(commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderPathTracingSettings()
@@ -323,7 +333,7 @@ void Editor::RenderPathTracingSettings()
     }
 
     static int maxDepth = (int)m_PathTracer.GetMaxDepth();
-    if (ImGui::SliderInt("Max Depth", &maxDepth, 1, 40, "%d", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderInt("Max Depth", &maxDepth, 1, 40, "%d"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetMaxDepth((uint32_t)maxDepth, commandBuffer);
@@ -332,7 +342,7 @@ void Editor::RenderPathTracingSettings()
     }
 
     static float maxLuminance = m_PathTracer.GetMaxLuminance();
-    if (ImGui::SliderFloat("Max Luminance", &maxLuminance, 0.0f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderFloat("Max Luminance", &maxLuminance, 0.0f, 1000.0f, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetMaxLuminance(maxLuminance, commandBuffer);
@@ -341,7 +351,7 @@ void Editor::RenderPathTracingSettings()
     }
 
     static float focusDistance = m_PathTracer.GetFocusDistance();
-    if (ImGui::SliderFloat("Focus Distance", &focusDistance, 0.0f, 10.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderFloat("Focus Distance", &focusDistance, 0.0f, 10.0f, "%.2f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetFocusDistance(focusDistance, commandBuffer);
@@ -350,7 +360,7 @@ void Editor::RenderPathTracingSettings()
     }
 
     static float depthOfFieldStrength = m_PathTracer.GetDepthOfFieldStrength();
-    if (ImGui::SliderFloat("Depth of Field Strength", &depthOfFieldStrength, 0.0f, 2.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderFloat("Depth of Field Strength", &depthOfFieldStrength, 0.0f, 2.0f, "%.2f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetDepthOfFieldStrength(depthOfFieldStrength, commandBuffer);

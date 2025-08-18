@@ -26,7 +26,7 @@ public:
 
     void ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer);
 
-    void ReloadShaders();
+    void ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer);
 
     [[nodiscard]] inline VulkanHelper::ImageView GetOutputImageView() const { return m_OutputImageView; }
     [[nodiscard]] inline VulkanHelper::Image GetOutputImage() const { return m_OutputImageView.GetImage(); }
@@ -65,16 +65,17 @@ public:
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
-private:
+    private:
     void CreateOutputImageView();
     VulkanHelper::ImageView LoadTexture(const char* filePath, VulkanHelper::CommandBuffer commandBuffer);
+    VulkanHelper::ImageView LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
     uint32_t m_FrameCount = 0;
     uint32_t m_SamplesAccumulated = 0;
     uint32_t m_SamplesPerFrame = 1;
     uint32_t m_MaxSamplesAccumulated = 5000;
-    uint32_t m_MaxDepth = 20;
+    uint32_t m_MaxDepth = 200;
     float m_MaxLuminance = 500.0f;
     float m_FocusDistance = 1.0f;
     float m_DepthOfFieldStrength = 0.0f;
@@ -100,8 +101,8 @@ private:
     VulkanHelper::TLAS m_SceneTLAS;
 
     VulkanHelper::ImageView m_ReflectionLookup;
-    VulkanHelper::ImageView m_RefractionFromInsideLookup;
     VulkanHelper::ImageView m_RefractionFromOutsideLookup;
+    VulkanHelper::ImageView m_RefractionFromInsideLookup;
 
     VulkanHelper::CommandPool m_CommandPool;
 

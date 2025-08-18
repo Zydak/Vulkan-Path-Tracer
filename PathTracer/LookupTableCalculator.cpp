@@ -1,6 +1,7 @@
 #include "LookupTableCalculator.h"
 
 #include <array>
+#include <chrono>
 
 LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device)
 {
@@ -93,12 +94,14 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
         return (word >> 22u) ^ word;
     };
 
+    auto timer = std::chrono::high_resolution_clock::now();
     uint32_t loopCount = sampleCount / 20; // Each dispatch takes 20 samples
     for (uint32_t i = 0; i < loopCount; i++)
     {
-        uint32_t seed = PCGHash(i * 2 + sampleCount);
+        float timeMillis = std::chrono::duration<float, std::micro>(std::chrono::high_resolution_clock::now() - timer).count() * 0.001f;
+        uint32_t seed = PCGHash(i * 2 + sampleCount + PCGHash(timeMillis));
         VH_ASSERT(m_PushConstant.SetData(&seed, sizeof(uint32_t), offsetof(PipelinePushConstant, Seed)) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
-        pipeline.Dispatch(commandBuffer, tableSize.x / 8 + 1, tableSize.y / 8 + 1, tableSize.z / 8 + 1);
+        pipeline.Dispatch(commandBuffer, tableSize.x / 8 + 1, tableSize.y / 8 + 1, tableSize.z);
 
         buffer.Barrier(
             commandBuffer,

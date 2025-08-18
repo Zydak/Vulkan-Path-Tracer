@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <chrono>
 #include <array>
+#include <fstream>
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
@@ -44,7 +45,7 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
 
     // Sampler
     VulkanHelper::Sampler::Config samplerConfig{};
-    samplerConfig.AddressMode = VulkanHelper::Sampler::AddressMode::REPEAT;
+    samplerConfig.AddressMode = VulkanHelper::Sampler::AddressMode::CLAMP_TO_EDGE;
     samplerConfig.MinFilter = VulkanHelper::Sampler::Filter::LINEAR;
     samplerConfig.MagFilter = VulkanHelper::Sampler::Filter::LINEAR;
     samplerConfig.MipmapMode = VulkanHelper::Sampler::MipmapMode::LINEAR;
@@ -113,6 +114,10 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     VulkanHelper::CommandBuffer initializationCmd = m_CommandPool.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
+
+    m_ReflectionLookup = LoadLookupTable("../../../Assets/LookupTables/ReflectionLookup.bin", {64, 64, 32}, initializationCmd);
+    m_RefractionFromOutsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", {128, 128, 32}, initializationCmd);
+    m_RefractionFromInsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", {128, 128, 32}, initializationCmd);
 
     // Meshes
     for (const auto& mesh : scene.Value().Meshes)
@@ -355,7 +360,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     CreateOutputImageView();
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 12> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 15> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
@@ -367,7 +372,10 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
         VulkanHelper::DescriptorSet::BindingDescription{9, (uint32_t)m_SceneEmissiveTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Emissive Textures
         VulkanHelper::DescriptorSet::BindingDescription{10, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
-        VulkanHelper::DescriptorSet::BindingDescription{11, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Materials
+        VulkanHelper::DescriptorSet::BindingDescription{11, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Materials
+        VulkanHelper::DescriptorSet::BindingDescription{12, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Reflection Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{13, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // RefractionHitFromOutside Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{14, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // ReflectionHitFromInside Lookup
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -395,6 +403,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(10, 0, m_TextureSampler) == VulkanHelper::VHResult::OK, "Failed to add texture sampler to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(11, 0, m_MaterialsBuffer) == VulkanHelper::VHResult::OK, "Failed to add materials buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(12, 0, m_ReflectionLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection lookup texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(13, 0, m_RefractionFromOutsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add refraction hit from outside lookup texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(14, 0, m_RefractionFromInsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection hit from inside lookup texture to descriptor set");
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
@@ -513,6 +524,49 @@ VulkanHelper::ImageView PathTracer::LoadTexture(const char* filePath, VulkanHelp
     return VulkanHelper::ImageView::New(imageViewConfig).Value();
 }
 
+VulkanHelper::ImageView PathTracer::LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer)
+{
+    // Reflection
+    VulkanHelper::Image::Config imageConfig{};
+    imageConfig.Device = m_Device;
+    imageConfig.Width = tableSize.x;
+    imageConfig.Height = tableSize.y;
+    imageConfig.LayerCount = tableSize.z;
+    imageConfig.Format = VulkanHelper::Format::R32_SFLOAT;
+    imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+    VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+    std::ifstream file(filepath, std::ios::binary);
+    VH_ASSERT(file, "Failed to open reflection lookup table");
+
+    // Read the file contents into a buffer
+    std::vector<uint8_t> buffer(tableSize.x * tableSize.y * tableSize.z * sizeof(float));
+    file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+    file.close();
+
+    // Upload texture data one layer at a time
+    for (uint64_t i = 0; i < tableSize.z; i++)
+    {
+        VH_ASSERT(textureImage.UploadData(
+            buffer.data() + (i * (uint64_t)tableSize.y * (uint64_t)tableSize.x * (uint64_t)sizeof(float)),
+            tableSize.y * tableSize.x * sizeof(float),
+            0,
+            &commandBuffer,
+            i
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+    }
+    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, tableSize.z);
+
+    VulkanHelper::ImageView::Config imageViewConfig{};
+    imageViewConfig.image = textureImage;
+    imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D_ARRAY;
+    imageViewConfig.BaseLayer = 0;
+    imageViewConfig.LayerCount = tableSize.z;
+
+    return VulkanHelper::ImageView::New(imageViewConfig).Value();
+}
+
 void PathTracer::SetBaseColorTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_SceneBaseColorTextures[index] = LoadTexture(filePath.c_str(), commandBuffer);
@@ -615,5 +669,23 @@ void PathTracer::SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelpe
 
     m_DepthOfFieldStrength = depthOfFieldStrength;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&depthOfFieldStrength, sizeof(float), offsetof(PathTracerUniform, DepthOfFieldStrength), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
+{
+    VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
+    VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
+    VulkanHelper::Shader missShader = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
+
+    VulkanHelper::Pipeline::RayTracingConfig pipelineConfig{};
+    pipelineConfig.Device = m_Device;
+    pipelineConfig.RayGenShaders.PushBack(rgenShader);
+    pipelineConfig.HitShaders.PushBack(hitShader);
+    pipelineConfig.MissShaders.PushBack(missShader);
+    pipelineConfig.DescriptorSets.PushBack(m_PathTracerDescriptorSet);
+    pipelineConfig.CommandBuffer = &commandBuffer;
+
+    m_PathTracerPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
     ResetPathTracing();
 }
