@@ -27,6 +27,11 @@ import Defines;
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
 {
+    // ---------------------------------------------------------------------------------
+    //
+    // Initialize Geometry Data
+    //
+
     float3 barycentrics = float3(1.0f - attrib.x - attrib.y, attrib.x, attrib.y);
     uint geometryIndex = GeometryIndex();
 
@@ -48,6 +53,58 @@ void Main(inout Payload payload, in float2 attrib)
     );
 
     surface.RotateTangents(material.Properties.AnisotropyRotation);
+
+    // ---------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------
+    //
+    // Handle Volumes
+    //
+
+    if (payload.InMedium)
+    {
+        // Get distance to the geometry from prev hit point
+        float geometryHitDistance = length(payload.Origin - surface.GetWorldPos());
+
+        if (payload.MediumAnisotropy == 1.0f)
+        {
+            // If the anisotropy equals 1 the entire path through volume is perfectly straight line, in that case
+            // it's pointless to simulate each scattering event since we know where we'll end up. So just use Beer's law instead which is way faster
+            // and gives the same result.
+            payload.SurfaceColor *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
+        }
+        else
+        {
+            // If the anisotropy isn't 1, ray can bounce in different directions inside a medium. So in that case scattering
+            // events have to be simulated
+
+            // Randomly choose scattering distance based on medium density
+            float scatterDistance = -log(payload.Sampler.UniformFloat()) / payload.MediumDensity;
+            
+            if (scatterDistance < geometryHitDistance)
+            {
+                // If the scattering distance is smaller than closest geometry the ray is still inside the medium.
+
+                // Choose new origin and idrection
+                payload.Origin = payload.Origin + (scatterDistance * payload.Direction);
+                payload.Direction = payload.Sampler.SampleHenyeyGreenstein( payload.Direction, payload.MediumAnisotropy);
+
+                // Change weight
+                payload.SurfaceColor *= payload.MediumColor.rgb;
+
+                // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
+                // and since the input.Payload.InMedium is still set we'll end up back here and simulate the next event
+                return;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------
+    //
+    // Sample BxDFs
+    //
 
     // Choose sampling probabilities for each lobe
     float F0 = (1.0 - material.Eta) / (1.0f + material.Eta);
@@ -93,13 +150,36 @@ void Main(inout Payload payload, in float2 attrib)
     {
         // Sample glass lobe
         sample = material.SampleGlass(payload.Sampler, V, wasRefracted);
+
+        // Ray left the mesh
+        if (wasRefracted && surface.WasHitFromInside())
+        {
+            payload.InMedium = false;
+        }
+
+        // Ray entered the mesh
+        if (wasRefracted && !surface.WasHitFromInside())
+        {
+            payload.InMedium = true;
+            payload.MediumDensity = material.Properties.MediumDensity;
+            payload.MediumAnisotropy = material.Properties.MediumAnisotropy;
+            payload.MediumColor = material.Properties.MediumColor.rgb;
+            payload.MediumEmissiveColor = material.Properties.MediumEmissiveColor.rgb;
+        }
     }
+
+    // ---------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------
+    //
+    // Write Payload
+    //
 
     // Everything is calculated in tangent space, so at the end we have to convert to world space
     const float3 newDir = surface.TangentToWorld(sample.L);
 
-    payload.SurfaceColor = float4(sample.BxDF / sample.PDF, 1.0f);
-    payload.LightColor = float4(material.Properties.EmissiveColor, 1.0f);
+    payload.SurfaceColor *= float3(sample.BxDF / sample.PDF);
+    payload.LightColor = float3(material.Properties.EmissiveColor);
     payload.Direction = newDir;
 
     // Offset origin slightly to avoid self-intersection on the next event
@@ -108,4 +188,6 @@ void Main(inout Payload payload, in float2 attrib)
     // Invalid samples have to be discarded
     bool isInvalid = (wasRefracted && sample.L.z >= 0.0f) || (!wasRefracted && sample.L.z <= 0.0f) || sample.PDF <= 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
+
+    // ---------------------------------------------------------------------------------
 }

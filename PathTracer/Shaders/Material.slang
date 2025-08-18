@@ -21,12 +21,17 @@ public struct CPUMaterial
 {
     public float3 BaseColor;
     public float3 EmissiveColor;
+    public float3 MediumColor;
+    public float3 MediumEmissiveColor;
     public float Metallic;
     public float Roughness;
     public float IOR;
     public float Transmission;
     public float Anisotropy;
     public float AnisotropyRotation;
+
+    public float MediumDensity;
+    public float MediumAnisotropy;
 }
 
 public struct Material
@@ -77,7 +82,7 @@ public struct Material
         Ay = max(0.001, Properties.Roughness * aspect);
 
         //Properties.Metallic = min(Properties.Metallic, 0.999);
-
+        
         // Textures
 
         // Textures are in SRGB space so transform them to linear for all calculations

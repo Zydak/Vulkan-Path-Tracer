@@ -99,7 +99,7 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
     for (uint32_t i = 0; i < loopCount; i++)
     {
         float timeMillis = std::chrono::duration<float, std::micro>(std::chrono::high_resolution_clock::now() - timer).count() * 0.001f;
-        uint32_t seed = PCGHash(i * 2 + sampleCount + PCGHash(timeMillis));
+        uint32_t seed = PCGHash(i * 2 + sampleCount + PCGHash((uint32_t)timeMillis));
         VH_ASSERT(m_PushConstant.SetData(&seed, sizeof(uint32_t), offsetof(PipelinePushConstant, Seed)) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
         pipeline.Dispatch(commandBuffer, tableSize.x / 8 + 1, tableSize.y / 8 + 1, tableSize.z);
 

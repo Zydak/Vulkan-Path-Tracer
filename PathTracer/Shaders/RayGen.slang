@@ -55,8 +55,9 @@ void Main()
         payload.Depth = 0;
         payload.Origin = origin;
         payload.Direction = direction;
-        payload.SurfaceColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-        payload.LightColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        payload.SurfaceColor = float3(1.0f, 1.0f, 1.0f);
+        payload.LightColor = float3(0.0f, 0.0f, 0.0f);
+        payload.InMedium = false;
 
         float3 weight = 1.0f;
         float3 hitValue = 0.0f;
@@ -69,12 +70,12 @@ void Main()
             rayDesc.TMin = 0.00001f;
             rayDesc.TMax = 1000.0f;
 
-            payload.SurfaceColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-            payload.LightColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            payload.SurfaceColor = float3(1.0f, 1.0f, 1.0f);
+            payload.LightColor = float3(0.0f, 0.0f, 0.0f);
             TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
-            hitValue += payload.LightColor.rgb * weight;
-            weight *= payload.SurfaceColor.rgb;
+            hitValue += payload.LightColor * weight;
+            weight *= payload.SurfaceColor;
 
             // Russian roulette
             float p = max(weight.x, max(weight.y, weight.z));

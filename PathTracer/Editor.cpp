@@ -170,7 +170,17 @@ void Editor::RenderMaterialSettings()
         materialModified = true;
     if (ImGui::SliderFloat("Anisotropy Rotation", &selectedMaterial.AnisotropyRotation, 0.0f, 360.0f))
         materialModified = true;
-
+    ImGui::Separator();
+    if (ImGui::ColorEdit3("Medium Color", &selectedMaterial.MediumColor.r, ImGuiColorEditFlags_Float))
+        materialModified = true;
+    if (ImGui::ColorEdit3("Medium Emissive Color", &selectedMaterial.MediumEmissiveColor.r, ImGuiColorEditFlags_Float))
+        materialModified = true;
+    if (ImGui::SliderFloat("Medium Density", &selectedMaterial.MediumDensity, 0.0f, 1.0f))
+        materialModified = true;
+    if (ImGui::SliderFloat("Medium Anisotropy", &selectedMaterial.MediumAnisotropy, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp))
+        materialModified = true;
+    
+    ImGui::Separator();
 
     struct DataTex
     {

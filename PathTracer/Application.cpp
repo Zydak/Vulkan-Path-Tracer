@@ -42,7 +42,7 @@ Application::Application()
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/ReflectionLookup.bin", std::ios::binary);
-        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+        file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
     if (!std::filesystem::exists("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin"))
@@ -55,7 +55,7 @@ Application::Application()
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", std::ios::binary);
-        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+        file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
     if (!std::filesystem::exists("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin"))
@@ -68,7 +68,7 @@ Application::Application()
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", std::ios::binary);
-        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+        file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
     // Create Renderer
