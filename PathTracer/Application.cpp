@@ -1,5 +1,9 @@
 #include "Application.h"
 
+#include <stb_image_write.h>
+#include <filesystem>
+#include <fstream>
+
 Application::Application()
 {
     // Initialize Vulkan instance
@@ -28,8 +32,44 @@ Application::Application()
     
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
 
-    m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
-    m_LookupTableCalculator.CalculateReflectionEnergyLossGPU({64, 64, 64}, 1000);
+    if (!std::filesystem::exists("../../../Assets/LookupTables/ReflectionLookup.bin"))
+    {
+        // Create directory
+        std::filesystem::create_directories("../../../Assets/LookupTables/");
+
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
+        std::vector<float> data = m_LookupTableCalculator.CalculateReflectionEnergyLossGPU({64, 64, 32}, 10'000'000);
+
+        // Write lookup to file
+        std::ofstream file("../../../Assets/LookupTables/ReflectionLookup.bin", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+    }
+
+    if (!std::filesystem::exists("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin"))
+    {
+        // Create directory
+        std::filesystem::create_directories("../../../Assets/LookupTables/");
+
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
+        std::vector<float> data = m_LookupTableCalculator.CalculateRefractionEnergyLossGPU({128, 128, 32}, 1'000'000, true);
+
+        // Write lookup to file
+        std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+    }
+
+    if (!std::filesystem::exists("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin"))
+    {
+        // Create directory
+        std::filesystem::create_directories("../../../Assets/LookupTables/");
+
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
+        std::vector<float> data = m_LookupTableCalculator.CalculateRefractionEnergyLossGPU({128, 128, 32}, 1'000'000, false);
+
+        // Write lookup to file
+        std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", std::ios::binary);
+        file.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
+    }
 
     // Create Renderer
     m_Renderer = VulkanHelper::Renderer::New({m_Device, m_Window}).Value();

@@ -14,3 +14,4 @@ public static const float INV_SQRT_2        = 0.7071067811865475244f;   /* 1/sqr
 
 public static const float FLT_MAX           = 3.402823466e+38F; // max value
 public static const uint UINT_MAX           = 4294967295;
+public static const uint MAX_DEPTH          = 1000000;

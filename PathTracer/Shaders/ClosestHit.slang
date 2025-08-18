@@ -1,6 +1,7 @@
 import RTCommon;
 import Material;
 import Surface;
+import Defines;
 
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
 [[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
@@ -17,6 +18,11 @@ import Surface;
 [[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
 [[vk::binding(10, 0)]] SamplerState uSampler;
 [[vk::binding(11, 0)]] StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
+
+[[vk::image_format("r32f")]]
+[[vk::binding(12, 0)]] Texture2DArray uReflectionLookupTable;
+[[vk::binding(13, 0)]] Texture2DArray uRefractionLookupTableHitFromOutside;
+[[vk::binding(14, 0)]] Texture2DArray uRefractionLookupTableHitFromInside;
 
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
@@ -35,7 +41,10 @@ void Main(inout Payload payload, in float2 attrib)
         uBaseColorTextures[NonUniformResourceIndex(geometryIndex)],
         uRoughnessTextures[NonUniformResourceIndex(geometryIndex)],
         uMetallicTextures[NonUniformResourceIndex(geometryIndex)],
-        uEmissiveTextures[NonUniformResourceIndex(geometryIndex)]
+        uEmissiveTextures[NonUniformResourceIndex(geometryIndex)],
+        uReflectionLookupTable,
+        uRefractionLookupTableHitFromOutside,
+        uRefractionLookupTableHitFromInside
     );
 
     surface.RotateTangents(material.Properties.AnisotropyRotation);
@@ -64,7 +73,7 @@ void Main(inout Payload payload, in float2 attrib)
     V = surface.WorldToTangent(V);
 
     BxDFSample sample;
-    bool wasRefracted;
+    bool wasRefracted = false;
     if (x1 < diffuseProbability)
     {
         // Sample diffuse lobe
@@ -96,6 +105,7 @@ void Main(inout Payload payload, in float2 attrib)
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
-    bool isInvalid = (!wasRefracted && dot(newDir, surface.GetNormal()) < 0.0f) || sample.PDF < 0.0f;
-    payload.Depth += 0xFFFFFFFF * (isInvalid) + 1 * (!isInvalid);
+    // Invalid samples have to be discarded
+    bool isInvalid = (wasRefracted && sample.L.z >= 0.0f) || (!wasRefracted && sample.L.z <= 0.0f) || sample.PDF <= 0.0f;
+    payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
 }

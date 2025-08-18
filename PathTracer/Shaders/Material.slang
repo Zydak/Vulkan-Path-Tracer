@@ -36,16 +36,23 @@ public struct Material
     public float Eta;
     public float Ax;
     public float Ay;
+    Texture2DArray m_ReflectionLookupTable;
+    Texture2DArray m_RefractionLookupTableHitFromOutside;
+    Texture2DArray m_RefractionLookupTableHitFromInside;
+    SamplerState m_Sampler;
 
     [mutating]
     public void Initialize(
         in CPUMaterial materialData,
         in Surface surface,
         in SamplerState textureSampler,
-        Texture2D baseColorTexture,
-        Texture2D roughnessTexture,
-        Texture2D metallicTexture,
-        Texture2D emissiveTexture
+        in Texture2D baseColorTexture,
+        in Texture2D roughnessTexture,
+        in Texture2D metallicTexture,
+        in Texture2D emissiveTexture,
+        in Texture2DArray lookupTableReflection,
+        in Texture2DArray lookupTableRefractionHitFromOutside,
+        in Texture2DArray lookupTableRefractionHitFromInside
     )
     {
         Properties = materialData;
@@ -54,14 +61,22 @@ public struct Material
 
         Properties.IOR = max(Properties.IOR, 1.0001f);
 
-        const float d = (float)surface.WasHitFromInside();
-        Eta = (1.0 - d) * (1.0 / Properties.IOR) + d * Properties.IOR; // Invert IOR when hit from outside
+        // Eta is relative index of refraction, so ETA = IORin / IORout. If we're in air (IOR 1) and we refract into glass (IOR 1.5)
+        // ETA = 1 / 1.5 = 0.6667
+        if (surface.WasHitFromInside())
+        {
+            Eta = Properties.IOR;
+        }
+        else
+        {
+            Eta = 1.0f / Properties.IOR;
+        }
 
-        const float aspect = sqrt(1.0 - Properties.Anisotropy * 0.9);
+        const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
         Ax = max(0.001, Properties.Roughness / aspect);
         Ay = max(0.001, Properties.Roughness * aspect);
 
-        Properties.Metallic = min(Properties.Metallic, 0.999);
+        //Properties.Metallic = min(Properties.Metallic, 0.999);
 
         // Textures
 
@@ -72,6 +87,11 @@ public struct Material
         Properties.Roughness *= textureRoughness * textureRoughness; // Square roughness
         Properties.Metallic *= metallicTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
         Properties.EmissiveColor *= emissiveTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
+
+        m_ReflectionLookupTable = lookupTableReflection;
+        m_RefractionLookupTableHitFromOutside = lookupTableRefractionHitFromOutside;
+        m_RefractionLookupTableHitFromInside = lookupTableRefractionHitFromInside;
+        m_Sampler = textureSampler;
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -115,6 +135,11 @@ public struct Material
 
         BxDFEval eval = EvaluateReflection(V, L, F);
 
+        float layer = Properties.Anisotropy * 32.0;
+        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_Sampler, {V.z, Properties.Roughness, layer}, 0).r;
+        energyCompensation = (1.0f - energyCompensation) / energyCompensation;
+        eval.BxDF = (1.0 + F * float3(energyCompensation)) * eval.BxDF;
+
         return eval;
     }
 
@@ -131,6 +156,11 @@ public struct Material
     public BxDFEval EvaluateDielectric(in float3 V, in float3 L)
     {
         BxDFEval eval = EvaluateReflection(V, L, 1.0f);
+        
+        float layer = Properties.Anisotropy * 32.0;
+        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_Sampler, {V.z, Properties.Roughness, layer}, 0).r;
+        energyCompensation = (1.0f - energyCompensation) / energyCompensation;
+        eval.BxDF = (1.0 + float3(energyCompensation)) * eval.BxDF;
 
         return eval;
     }
@@ -165,6 +195,21 @@ public struct Material
             eval = EvaluateRefraction(V, L, F);
             eval.PDF *= (1.0f - F);
         }
+
+        float energyCompensation;
+        float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
+        const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
+        if (isInside)
+        {
+            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+        }
+        else
+        {
+            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+        }
+
+        energyCompensation = max(energyCompensation, 0.00001);
+        eval.BxDF = eval.BxDF / energyCompensation;
 
         return { L, eval.BxDF, eval.PDF };
     }
