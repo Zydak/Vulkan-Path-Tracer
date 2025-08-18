@@ -9,12 +9,17 @@ public:
     {
         glm::vec3 BaseColor = glm::vec3(1.0f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 MediumColor = glm::vec3(1.0f);
+        glm::vec3 MediumEmissiveColor = glm::vec3(0.0f);
         float Metallic = 0.0f;
         float Roughness = 1.0f;
         float IOR = 1.5f;
         float Transmission = 0.0f;
         float Anisotropy = 0.0f;
         float AnisotropyRotation = 0.0f;
+
+        float MediumDensity;
+        float MediumAnisotropy;
     };
 
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);

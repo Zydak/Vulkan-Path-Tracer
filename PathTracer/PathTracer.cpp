@@ -542,7 +542,7 @@ VulkanHelper::ImageView PathTracer::LoadLookupTable(const char* filepath, glm::u
 
     // Read the file contents into a buffer
     std::vector<uint8_t> buffer(tableSize.x * tableSize.y * tableSize.z * sizeof(float));
-    file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+    file.read(reinterpret_cast<char*>(buffer.data()), (std::streamsize)buffer.size());
     file.close();
 
     // Upload texture data one layer at a time
