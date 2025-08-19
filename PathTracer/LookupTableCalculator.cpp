@@ -3,8 +3,9 @@
 #include <array>
 #include <chrono>
 
-LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device)
+LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device, const std::string& shaderFilepath, const std::vector<VulkanHelper::Shader::Define>& defines)
 {
+    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     LookupTableCalculator calculator;
     calculator.m_Device = device;
 
@@ -27,26 +28,20 @@ LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device)
         .Size = sizeof(PipelinePushConstant)
     }).Value();
 
-    VulkanHelper::Shader reflectionShader = VulkanHelper::Shader::New({device, "LookupReflect", VulkanHelper::ShaderStages::COMPUTE_BIT}).Value();
-    VulkanHelper::Shader refractionShader = VulkanHelper::Shader::New({device, "LookupRefract", VulkanHelper::ShaderStages::COMPUTE_BIT}).Value();
+    VulkanHelper::Shader shader = VulkanHelper::Shader::New({device, shaderFilepath.c_str(), VulkanHelper::ShaderStages::COMPUTE_BIT}).Value();
 
     VulkanHelper::Pipeline::ComputeConfig pipelineConfig{};
     pipelineConfig.Device = device;
     pipelineConfig.PushConstant = &calculator.m_PushConstant;
-    pipelineConfig.ComputeShader = reflectionShader;
+    pipelineConfig.ComputeShader = shader;
     pipelineConfig.DescriptorSets.PushBack(calculator.m_DescriptorSet);
 
-    calculator.m_ReflectionPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
-
-    // Change shader
-    pipelineConfig.ComputeShader = refractionShader;
-
-    calculator.m_RefractionPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
+    calculator.m_Pipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
 
     return calculator;
 }
 
-std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface)
+std::vector<float> LookupTableCalculator::CalculateTable(glm::uvec3 tableSize, uint32_t sampleCount)
 {
     VulkanHelper::CommandPool commandPool = VulkanHelper::CommandPool::New({m_Device, VulkanHelper::CommandPool::Flags::RESET_COMMAND_BUFFER_BIT, m_Device.GetQueueFamilyIndices().ComputeFamily}).Value();
     VulkanHelper::CommandBuffer commandBuffer = commandPool.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
@@ -81,12 +76,10 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
     pushConstantData.TableSizeX = tableSize.x;
     pushConstantData.TableSizeY = tableSize.y;
     pushConstantData.TableSizeZ = tableSize.z;
-    pushConstantData.AboveSurface = AboveTheSurface;
 
     VH_ASSERT(m_PushConstant.SetData(&pushConstantData, sizeof(pushConstantData), 0) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
 
-    VulkanHelper::Pipeline& pipeline = reflection ? m_ReflectionPipeline : m_RefractionPipeline;
-    pipeline.Bind(commandBuffer);
+    m_Pipeline.Bind(commandBuffer);
 
     auto PCGHash = [](uint32_t input){
         uint32_t state = input * 747796405u + 2891336453u;
@@ -101,7 +94,7 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
         float timeMillis = std::chrono::duration<float, std::micro>(std::chrono::high_resolution_clock::now() - timer).count() * 0.001f;
         uint32_t seed = PCGHash(i * 2 + sampleCount + PCGHash((uint32_t)timeMillis));
         VH_ASSERT(m_PushConstant.SetData(&seed, sizeof(uint32_t), offsetof(PipelinePushConstant, Seed)) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
-        pipeline.Dispatch(commandBuffer, tableSize.x / 8 + 1, tableSize.y / 8 + 1, tableSize.z);
+        m_Pipeline.Dispatch(commandBuffer, tableSize.x / 8 + 1, tableSize.y / 8 + 1, tableSize.z);
 
         buffer.Barrier(
             commandBuffer,
@@ -122,7 +115,7 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
             VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording command buffer");
 
             // Rebind stuff
-            pipeline.Bind(commandBuffer);
+            m_Pipeline.Bind(commandBuffer);
         }
     }
 
@@ -146,14 +139,4 @@ std::vector<float> LookupTableCalculator::CalculateEnergyLossGPU(glm::uvec3 tabl
     }
 
     return result;
-}
-
-std::vector<float> LookupTableCalculator::CalculateReflectionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount)
-{
-	return CalculateEnergyLossGPU(tableSize, sampleCount, true, false);
-}
-
-std::vector<float> LookupTableCalculator::CalculateRefractionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface)
-{
-	return CalculateEnergyLossGPU(tableSize, sampleCount, false, AboveTheSurface);
 }

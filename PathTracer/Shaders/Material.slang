@@ -85,8 +85,7 @@ public struct Material
         
         // Textures
 
-        // Textures are in SRGB space so transform them to linear for all calculations
-        Properties.BaseColor *= pow(baseColorTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb, float3(2.2f));
+        Properties.BaseColor *= baseColorTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
 
         const float textureRoughness = roughnessTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
         Properties.Roughness *= textureRoughness * textureRoughness; // Square roughness

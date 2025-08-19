@@ -1,11 +1,12 @@
 import Sampler;
+import Defines;
 
 public struct Payload
 {
     public float3 Origin;
     public float3 Direction;
-    public float3 SurfaceColor;
-    public float3 LightColor;
+    public float3 Contribution; // BRDF * cosine / PDF
+    public float3 Emitted; // Surface Emitted Light
 
     public uint Depth;
     public Sampler Sampler;
@@ -24,3 +25,28 @@ public struct Vertex
     public float3 Normal;
     public float2 TexCoord;
 };
+
+public struct UniformBuffer
+{
+    public float4x4 ViewInverse;
+    public float4x4 ProjectionInverse;
+    public uint FrameCount;
+    public uint Seed;
+    public uint SampleCount;
+    public uint MaxDepth;
+    public float MaxLuminance;
+    public float FocusDistance;
+    public float DepthOfFieldStrength;
+    public float EnvMapRotationAzimuth;
+    public float EnvMapRotationAltitude;
+};
+
+public float3 Rotate(float3 v, float3 axis, float theta)
+{
+    float cosTheta = cos(theta);
+    float sinTheta = sin(theta);
+
+    float3 normalizedAxis = normalize(axis);
+
+    return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
+}

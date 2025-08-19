@@ -4,6 +4,7 @@
 
 import Material;
 import Sampler;
+import Defines;
 
 struct Push
 {
@@ -52,10 +53,10 @@ void Main(uint3 threadId: SV_DispatchThreadID)
     for (int i = 0; i < push.SampleCount; i++)
     {
         // Generate random view dir
-        float xyMagnitudeSquared = 1.0 - viewCosine * viewCosine;
-        float phiV = sampler.UniformFloat();
-        float x = sqrt(xyMagnitudeSquared) * cos(phiV);
-        float y = sqrt(xyMagnitudeSquared) * sin(phiV);
+        float xyMagnitude = sqrt(1.0 - viewCosine * viewCosine);
+        float phiV = sampler.UniformFloat() * M_2_PI;
+        float x = xyMagnitude * cos(phiV);
+        float y = xyMagnitude * sin(phiV);
 
         // leave z as viewCosine
         float z = viewCosine;

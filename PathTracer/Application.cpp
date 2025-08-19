@@ -37,8 +37,8 @@ Application::Application()
         // Create directory
         std::filesystem::create_directories("../../../Assets/LookupTables/");
 
-        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
-        std::vector<float> data = m_LookupTableCalculator.CalculateReflectionEnergyLossGPU({64, 64, 32}, 10'000'000);
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupReflect.slang", {});
+        std::vector<float> data = m_LookupTableCalculator.CalculateTable({64, 64, 32}, 1'000'000);
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/ReflectionLookup.bin", std::ios::binary);
@@ -50,8 +50,8 @@ Application::Application()
         // Create directory
         std::filesystem::create_directories("../../../Assets/LookupTables/");
 
-        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
-        std::vector<float> data = m_LookupTableCalculator.CalculateRefractionEnergyLossGPU({128, 128, 32}, 1'000'000, true);
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupRefract.slang", {VulkanHelper::Shader::Define{"ABOVE_SURFACE", ""}});
+        std::vector<float> data = m_LookupTableCalculator.CalculateTable({128, 128, 32}, 500'000);
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", std::ios::binary);
@@ -63,8 +63,8 @@ Application::Application()
         // Create directory
         std::filesystem::create_directories("../../../Assets/LookupTables/");
 
-        m_LookupTableCalculator = LookupTableCalculator::New(m_Device);
-        std::vector<float> data = m_LookupTableCalculator.CalculateRefractionEnergyLossGPU({128, 128, 32}, 1'000'000, false);
+        m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupRefract.slang", {VulkanHelper::Shader::Define{"BELOW_SURFACE", ""}});
+        std::vector<float> data = m_LookupTableCalculator.CalculateTable({128, 128, 32}, 500'000);
 
         // Write lookup to file
         std::ofstream file("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", std::ios::binary);
