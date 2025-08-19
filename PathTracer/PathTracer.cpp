@@ -4,6 +4,7 @@
 #include <chrono>
 #include <array>
 #include <fstream>
+#include <numeric>
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
@@ -103,7 +104,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
-    m_FOV = scene.Value().Cameras[0].FOV;
+    m_FOV = 90.0f;//scene.Value().Cameras[0].FOV;
     glm::mat4 cameraView = scene.Value().Cameras[0].ViewMatrix;
 
     std::array<VulkanHelper::Format, 3> vertexAttributes = {
@@ -118,6 +119,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     m_ReflectionLookup = LoadLookupTable("../../../Assets/LookupTables/ReflectionLookup.bin", {64, 64, 32}, initializationCmd);
     m_RefractionFromOutsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", {128, 128, 32}, initializationCmd);
     m_RefractionFromInsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", {128, 128, 32}, initializationCmd);
+    LoadEnvironmentMap(m_EnvMapFilepath.c_str(), initializationCmd);
 
     // Meshes
     for (const auto& mesh : scene.Value().Meshes)
@@ -143,7 +145,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         imageConfig.Device = m_Device;
         imageConfig.Width = texture.Width;
         imageConfig.Height = texture.Height;
-        imageConfig.Format = VulkanHelper::Format::R8G8B8A8_UNORM;
+        // Base color textures are usually exported in SRGB, so marking this image as SRGB will automatically "linearize" them on sampling in shaders
+        // and convert from Linear to SRGB on writing to them
+        imageConfig.Format = VulkanHelper::Format::R8G8B8A8_SRGB;
         imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
 
         VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
@@ -354,16 +358,16 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Create Output Image
     // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene is loaded
-    const int initialRes = 500;
+    const int initialRes = 1080;
     m_Width = (uint32_t)((float)initialRes * aspectRatio);
     m_Height = initialRes;
     CreateOutputImageView();
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 15> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 17> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
-        VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
-        VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
+        VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
+        VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
         VulkanHelper::DescriptorSet::BindingDescription{3, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // vertex Meshes
         VulkanHelper::DescriptorSet::BindingDescription{4, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // index Meshes
         VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneBaseColorTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
@@ -371,11 +375,13 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{7, (uint32_t)m_SceneRoughnessTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Roughness Textures
         VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
         VulkanHelper::DescriptorSet::BindingDescription{9, (uint32_t)m_SceneEmissiveTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Emissive Textures
-        VulkanHelper::DescriptorSet::BindingDescription{10, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
+        VulkanHelper::DescriptorSet::BindingDescription{10, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
         VulkanHelper::DescriptorSet::BindingDescription{11, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Materials
         VulkanHelper::DescriptorSet::BindingDescription{12, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Reflection Lookup
         VulkanHelper::DescriptorSet::BindingDescription{13, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // RefractionHitFromOutside Lookup
-        VulkanHelper::DescriptorSet::BindingDescription{14, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // ReflectionHitFromInside Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{14, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // ReflectionHitFromInside Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{15, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Env map
+        VulkanHelper::DescriptorSet::BindingDescription{16, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Alias map
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -407,6 +413,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(m_PathTracerDescriptorSet.AddImage(13, 0, m_RefractionFromOutsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add refraction hit from outside lookup texture to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddImage(14, 0, m_RefractionFromInsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection hit from inside lookup texture to descriptor set");
 
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
+
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
     glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
@@ -417,6 +426,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.MaxLuminance = m_MaxLuminance;
     pathTracerUniform.FocusDistance = m_FocusDistance;
     pathTracerUniform.DepthOfFieldStrength = m_DepthOfFieldStrength;
+    pathTracerUniform.EnvMapRotationAzimuth = m_EnvMapRotationAzimuth;
+    pathTracerUniform.EnvMapRotationAltitude = m_EnvMapRotationAltitude;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
@@ -493,7 +504,7 @@ void PathTracer::SetMaterial(uint32_t index, const Material& material, VulkanHel
     ResetPathTracing();
 }
 
-VulkanHelper::ImageView PathTracer::LoadTexture(const char* filePath, VulkanHelper::CommandBuffer commandBuffer)
+VulkanHelper::ImageView PathTracer::LoadTexture(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer)
 {
     VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
     VulkanHelper::TextureAsset textureAsset = importer.ImportTexture(filePath).get().Value();
@@ -514,6 +525,8 @@ VulkanHelper::ImageView PathTracer::LoadTexture(const char* filePath, VulkanHelp
         0,
         &commandBuffer
     ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
     VulkanHelper::ImageView::Config imageViewConfig{};
     imageViewConfig.image = textureImage;
@@ -672,20 +685,230 @@ void PathTracer::SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelpe
     ResetPathTracing();
 }
 
+void PathTracer::SetEnvMapFilepath(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_EnvMapFilepath == filePath)
+        return;
+    
+    m_EnvMapFilepath = filePath;
+
+    LoadEnvironmentMap(filePath, commandBuffer);
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
+    ResetPathTracing();
+}
+
+void PathTracer::SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_EnvMapRotationAzimuth == azimuth)
+        return;
+
+    m_EnvMapRotationAzimuth = azimuth;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&azimuth, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAzimuth), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
+void PathTracer::SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_EnvMapRotationAltitude == altitude)
+        return;
+
+    m_EnvMapRotationAltitude = altitude;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&altitude, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAltitude), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
+}
+
 void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
 {
-    VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
-    VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
-    VulkanHelper::Shader missShader = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
+    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
+    auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
+    auto hitShaderRes = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT});
+    auto missShaderRes = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT});
+
+    if (!rgenShaderRes.HasValue() || !hitShaderRes.HasValue() || !missShaderRes.HasValue())
+    {
+        return;
+    }
 
     VulkanHelper::Pipeline::RayTracingConfig pipelineConfig{};
     pipelineConfig.Device = m_Device;
-    pipelineConfig.RayGenShaders.PushBack(rgenShader);
-    pipelineConfig.HitShaders.PushBack(hitShader);
-    pipelineConfig.MissShaders.PushBack(missShader);
+    pipelineConfig.RayGenShaders.PushBack(rgenShaderRes.Value());
+    pipelineConfig.HitShaders.PushBack(hitShaderRes.Value());
+    pipelineConfig.MissShaders.PushBack(missShaderRes.Value());
     pipelineConfig.DescriptorSets.PushBack(m_PathTracerDescriptorSet);
     pipelineConfig.CommandBuffer = &commandBuffer;
 
     m_PathTracerPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
     ResetPathTracing();
+}
+
+void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
+    VulkanHelper::TextureAsset textureAsset = importer.ImportTexture(filePath).get().Value();
+
+    VulkanHelper::Image::Config imageConfig{};
+    imageConfig.Device = m_Device;
+    imageConfig.Width = textureAsset.Width;
+    imageConfig.Height = textureAsset.Height;
+    imageConfig.Format = VulkanHelper::Format::R32G32B32A32_SFLOAT;
+    imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+
+    VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
+
+    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+
+    VulkanHelper::ImageView::Config imageViewConfig{};
+    imageViewConfig.image = textureImage;
+    imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D;
+    imageViewConfig.BaseLayer = 0;
+    imageViewConfig.LayerCount = 1;
+
+    m_EnvMapTexture = VulkanHelper::ImageView::New(imageViewConfig).Value();
+
+    const uint32_t width = textureAsset.Width;
+    const uint32_t height = textureAsset.Height;
+    const uint64_t size = width * height;
+    float* pixels = (float*)textureAsset.Data.Data();
+
+    // Reference: [https://github.com/nvpro-samples/nvpro_core/blob/master/nvvkhl/hdr_env.cpp]
+    // Create Importance Buffer for Importance Sampling
+    struct AliasMapEntry
+    {
+        uint32_t Alias; // Alias pointing to another texel
+        float Importance; // Importance of the current texel
+    };
+
+    std::vector<AliasMapEntry> importanceBuffer(width * height);
+    std::vector<float> importanceData(width * height);
+
+    float cosTheta0 = 1.0F; // cosine of the up vector
+	const float stepPhi = (float)2.0F * (float)M_PI / (float)width; // azimuth step
+	const float stepTheta = (float)M_PI / (float)height; // altitude step
+
+    // For each texel of the environment map, we compute the related solid angle
+	// subtended by the texel, and store the weighted luminance in importanceData,
+	// representing the amount of energy emitted through each texel.
+    for (uint32_t y = 0; y < height; ++y)
+	{
+		const float theta1 = (float)(y + 1) * stepTheta; // altitude angle of currently sampled texel
+		const float cosTheta1 = glm::cos(theta1); // cosine of the altitude angle
+
+		// Calculate how much area does each texel take
+		// (cosTheta0 - cosTheta1) - how much of the unit sphere does texel take
+		//  * stepPhi - get solid angle
+
+		const float area = (cosTheta0 - cosTheta1) * stepPhi;  // solid angle
+		cosTheta0 = cosTheta1; // set cosine of the up vector to the altitude cosine to advance the loop
+
+		for (uint32_t x = 0; x < width; ++x)
+		{
+			const uint32_t idx = y * width + x;
+			const uint32_t idx4 = idx * 4; // texel index
+            
+			// Store the radiance of the texel into importance array, importance will be higher for brighter texels
+			importanceData[idx] = area * glm::max(pixels[idx4], glm::max(pixels[idx4 + 1], pixels[idx4 + 2]));
+		}
+	}
+
+    // Creating Alias Map
+    //
+	// Alias map is used to efficiently select texels from env map based on importance.
+	// It aims at creating a set of texel couples
+	// so that all couples emit roughly the same amount of energy. To do this,
+	// each smaller radiance texel will be assigned an "alias" with higher emitted radiance
+    std::vector<AliasMapEntry> aliasMap(size);
+
+	// Compute the integral of the emitted radiance of the environment map
+	// Since each element in data is already weighted by its solid angle it's just a sum
+    float sum = std::accumulate(importanceData.begin(), importanceData.end(), 0.0f);
+    float average = sum / float(size);
+	for (uint32_t i = 0; i < size; i++)
+	{
+		// Calculate PDF. Inside PDF average of all values must be equal to 1, that's
+		// why we divide texel importance from data by the average of all texels
+		aliasMap[i].Importance = importanceData[i] / average;
+
+		// identity, ie. each texel is its own alias
+		aliasMap[i].Alias = i;
+	}
+
+    // Partition the texels according to their importance.
+	// Texels with a value q < 1 (ie. below average) are stored incrementally from the beginning of the
+	// array, while texels emitting higher-than-average radiance are stored from the end of the array.
+	// This effectively separates the texels into two groups: one containing texels with below-average 
+	// radiance and the other containing texels with above-average radiance
+	std::vector<uint32_t> partitionTable(size);
+	uint32_t              lowEnergyCounter = 0U;
+	uint32_t              HighEnergyCounter = size;
+	for (uint32_t i = 0; i < size; ++i)
+	{
+		if (aliasMap[i].Importance < 1.F)
+		{
+			lowEnergyCounter++;
+			partitionTable[lowEnergyCounter] = i;
+		}
+		else
+		{
+			HighEnergyCounter--;
+			partitionTable[HighEnergyCounter] = i;
+		}
+	}
+
+    // Associate the lower-energy texels to higher-energy ones.
+	for (lowEnergyCounter = 0; lowEnergyCounter < HighEnergyCounter && HighEnergyCounter < size; lowEnergyCounter++)
+	{
+		const uint32_t smallEnergyIndex = partitionTable[lowEnergyCounter];
+		const uint32_t highEnergyIndex = partitionTable[HighEnergyCounter];
+
+		// Associate the texel to its higher-energy alias
+		aliasMap[smallEnergyIndex].Alias = highEnergyIndex;
+
+		// Compute the difference between the lower-energy texel and the average
+		const float differenceWithAverage = 1.F - aliasMap[smallEnergyIndex].Importance;
+
+		// The goal is to obtain texel couples whose combined intensity is close to the average.
+		// However, some texels may have low intensity, while others may have very high intensity. In this case
+		// it may not be possible to obtain a value close to average by combining only two texels.
+		// Instead, we potentially associate a single high-energy texel to many smaller-energy ones until
+		// the combined average is similar to the average of the environment map.
+		// We keep track of the combined average by subtracting the difference between the lower-energy texel and the average
+        // from the ratio stored in the high-energy texel.
+		aliasMap[highEnergyIndex].Importance -= differenceWithAverage;
+
+		// If the combined ratio to average of the higher-energy texel reaches 1, a balance has been found
+		// between a set of low-energy texels and the higher-energy one. In this case, we will use the next
+		// higher-energy texel in the partition when processing the next texel.
+		if (aliasMap[highEnergyIndex].Importance < 1.0f)
+		{
+			HighEnergyCounter++;
+		}
+	}
+
+    // The PDF of each texel is computed by normalizing its emitted radiance by the sum of all emitted radiance
+	for (uint32_t i = 0; i < width * height; ++i)
+	{
+		const uint32_t idx4 = i * 4;
+		// Store the PDF inside Alpha channel(idx4 + 3)
+		pixels[idx4 + 3] = glm::max(pixels[idx4], glm::max(pixels[idx4 + 1], pixels[idx4 + 2])) / sum;
+	}
+
+    // Upload texture data
+    VH_ASSERT(textureImage.UploadData(
+        pixels,
+        textureAsset.Data.Size() * sizeof(uint8_t),
+        0,
+        &commandBuffer
+    ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+    // Finally send the alias map to the GPU
+    VulkanHelper::Buffer::Config bufferConfig{};
+    bufferConfig.Device = m_Device;
+    bufferConfig.Size = sizeof(AliasMapEntry) * aliasMap.size();
+    bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+    bufferConfig.DebugName = "EnvAliasMap";
+
+    m_EnvAliasMap = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+    VH_ASSERT(m_EnvAliasMap.UploadData(aliasMap.data(), bufferConfig.Size, 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload environment alias map data");
 }

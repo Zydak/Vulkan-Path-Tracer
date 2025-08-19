@@ -4,6 +4,7 @@
 
 import Material;
 import Sampler;
+import Defines;
 
 struct Push
 {
@@ -13,8 +14,6 @@ struct Push
     uint TableSizeX;
     uint TableSizeY;
     uint TableSizeZ;
-
-    bool AboveSurface;
 }
 
 [[vk::binding(0, 0)]] RWStructuredBuffer<float> uTable;
@@ -44,16 +43,20 @@ void Main(uint3 threadId: SV_DispatchThreadID)
     material.Properties.IOR = ior;
     material.Ax = roughness;
     material.Ay = roughness;
-    material.Eta = push.AboveSurface ? (1.0f / ior) : ior;
+#ifdef ABOVE_SURFACE
+    material.Eta = (1.0f / ior);
+#else
+    material.Eta = ior;
+#endif
 
     float finalValue = 0.0;
     for (int i = 0; i < push.SampleCount; i++)
     {
         // Generate random view dir
-        float xyMagnitudeSquared = 1.0 - viewCosine * viewCosine;
-        float phiV = sampler.UniformFloat();
-        float x = sqrt(xyMagnitudeSquared) * cos(phiV);
-        float y = sqrt(xyMagnitudeSquared) * sin(phiV);
+        float xyMagnitude = sqrt(1.0 - viewCosine * viewCosine);
+        float phiV = sampler.UniformFloat() * M_2_PI;
+        float x = xyMagnitude * cos(phiV);
+        float y = xyMagnitude * sin(phiV);
 
         // leave z as viewCosine
         float z = viewCosine;

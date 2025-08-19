@@ -2,6 +2,11 @@ import RTCommon;
 import Material;
 import Surface;
 import Defines;
+import Sampler;
+
+[[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
+
+[[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
 
 [[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
 [[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
@@ -21,8 +26,25 @@ import Defines;
 
 [[vk::image_format("r32f")]]
 [[vk::binding(12, 0)]] Texture2DArray uReflectionLookupTable;
+[[vk::image_format("r32f")]]
 [[vk::binding(13, 0)]] Texture2DArray uRefractionLookupTableHitFromOutside;
+[[vk::image_format("r32f")]]
 [[vk::binding(14, 0)]] Texture2DArray uRefractionLookupTableHitFromInside;
+
+[[vk::image_format("rgba32f")]]
+[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
+
+[[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
+
+float BalanceHeuristics(float pdfA, float pdfB)
+{
+    return pdfA / (pdfA + pdfB);
+}
+
+float PowerHeuristics(float pdfA, float k1, float pdfB, float k2)
+{
+    return pow(pdfA, k1) / (pow(pdfA, k1) + pow(pdfB, k2));
+}
 
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
@@ -71,7 +93,7 @@ void Main(inout Payload payload, in float2 attrib)
             // If the anisotropy equals 1 the entire path through volume is perfectly straight line, in that case
             // it's pointless to simulate each scattering event since we know where we'll end up. So just use Beer's law instead which is way faster
             // and gives the same result.
-            payload.SurfaceColor *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
+            payload.Contribution *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
         }
         else
         {
@@ -90,7 +112,7 @@ void Main(inout Payload payload, in float2 attrib)
                 payload.Direction = payload.Sampler.SampleHenyeyGreenstein( payload.Direction, payload.MediumAnisotropy);
 
                 // Change weight
-                payload.SurfaceColor *= payload.MediumColor.rgb;
+                payload.Contribution *= payload.MediumColor.rgb;
 
                 // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
                 // and since the input.Payload.InMedium is still set we'll end up back here and simulate the next event
@@ -126,30 +148,49 @@ void Main(inout Payload payload, in float2 attrib)
 
     float3 V = normalize(-WorldRayDirection());
 
+    // Importance Sample Environment map
+    float3 toLightEnv;
+    float4 envMapValue;
+    payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
+    float3 envMapColor = envMapValue.rgb;
+    float envMapPDF = envMapValue.a;
+
+    float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+    float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+    toLightEnv = Rotate(toLightEnv, float3(1.0f, 0.0f, 0.0f), altitude);
+    toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
+
     // All computations are done in tangent space
     V = surface.WorldToTangent(V);
+    toLightEnv = surface.WorldToTangent(toLightEnv);
 
+    BxDFEval envMapDirectionEval = BxDFEval(0, 0);
     BxDFSample sample;
     bool wasRefracted = false;
     if (x1 < diffuseProbability)
     {
         // Sample diffuse lobe
         sample = material.SampleDiffuse(payload.Sampler, V);
+        envMapDirectionEval = material.EvaluateDiffuse(V, toLightEnv);
     }
     else if (x1 < diffuseProbability + metallicProbability)
     {
         // Sample metallic lobe
         sample = material.SampleMetallic(payload.Sampler, V);
+        envMapDirectionEval = material.EvaluateMetallic(V, toLightEnv);
     }
     else if (x1 < diffuseProbability + metallicProbability + dielectricProbability)
     {
         // Sample dielectric lobe
         sample = material.SampleDielectric(payload.Sampler, V);
+        envMapDirectionEval = material.EvaluateDielectric(V, toLightEnv);
     }
     else
     {
         // Sample glass lobe
         sample = material.SampleGlass(payload.Sampler, V, wasRefracted);
+        
+        envMapPDF = 0.0f;
 
         // Ray left the mesh
         if (wasRefracted && surface.WasHitFromInside())
@@ -178,15 +219,34 @@ void Main(inout Payload payload, in float2 attrib)
     // Everything is calculated in tangent space, so at the end we have to convert to world space
     const float3 newDir = surface.TangentToWorld(sample.L);
 
-    payload.SurfaceColor *= float3(sample.BxDF / sample.PDF);
-    payload.LightColor = float3(material.Properties.EmissiveColor);
-    payload.Direction = newDir;
-
+    payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
+    toLightEnv = surface.TangentToWorld(toLightEnv);
+    bool canHit = dot(toLightEnv, surface.GetNormal()) > 0.0f;
+    if (canHit)
+    {
+        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, surface.GetWorldPos() + surface.GetNormal() * 0.0001f, 0.0001, toLightEnv, 1000000);
+        query.Proceed();
+        if (query.CommittedStatus() != COMMITTED_NOTHING)
+        {
+            canHit = false; // If an intersection is found on the way that means the shaded point is obscured by geometry
+        }
+    }
+
+    if (canHit && envMapPDF > 0.0f)
+    {
+        payload.Emitted += envMapDirectionEval.BxDF * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, 1.0f, sample.PDF, 1.0f);
+    }
+
+    payload.Contribution *= float3(sample.BxDF / sample.PDF) * PowerHeuristics(sample.PDF, 1.0f, envMapPDF, 1.0f);
+    payload.Direction = newDir;
+
     // Invalid samples have to be discarded
     bool isInvalid = (wasRefracted && sample.L.z >= 0.0f) || (!wasRefracted && sample.L.z <= 0.0f) || sample.PDF <= 0.0f;
+    //bool isInvalid = dot(surface.GetNormal(), payload.Direction) < 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
 
     // ---------------------------------------------------------------------------------

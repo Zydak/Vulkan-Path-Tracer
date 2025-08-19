@@ -33,7 +33,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
 
     PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-        m_PostProcessor.SetTonemappingData({0.5f}, commandBuffer);
+        m_PostProcessor.SetTonemappingData({1.0f}, commandBuffer);
     });
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
@@ -98,6 +98,7 @@ void Editor::RenderSettingsTab()
     RenderMaterialSettings();
     RenderPostProcessingSettings();
     RenderPathTracingSettings();
+    RenderEnvMapSettings();
     SaveToFileSettings();
 
     ImGui::End();
@@ -376,6 +377,46 @@ void Editor::RenderPathTracingSettings()
             m_PathTracer.SetDepthOfFieldStrength(depthOfFieldStrength, commandBuffer);
             m_RenderTime = 0.0f;
         });
+    }
+}
+
+void Editor::RenderEnvMapSettings()
+{
+    if (!ImGui::CollapsingHeader("Environment Map Settings"))
+        return;
+
+    static float azimuth = m_PathTracer.GetEnvMapRotationAzimuth();
+    if (ImGui::SliderFloat("Azimuth", &azimuth, 0.0f, 360.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnvMapAzimuth(azimuth, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float altitude = m_PathTracer.GetEnvMapRotationAltitude();
+    if (ImGui::SliderFloat("Altitude", &altitude, -90.0f, 90.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnvMapAltitude(altitude, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static std::string envMapFilepath = m_PathTracer.GetEnvMapFilepath();
+
+    if(ImGui::Button(("Env Map: " + envMapFilepath).c_str()))
+    {
+        auto selection = pfd::open_file("Select Env Map").result();
+        if (!selection.empty())
+        {
+            envMapFilepath = selection[0];
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetEnvMapFilepath(envMapFilepath, commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
     }
 }
 

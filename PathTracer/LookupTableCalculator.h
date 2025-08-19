@@ -3,15 +3,12 @@
 class LookupTableCalculator
 {
 public:
-    [[nodiscard]] static LookupTableCalculator New(VulkanHelper::Device device);
+    [[nodiscard]] static LookupTableCalculator New(VulkanHelper::Device device, const std::string& shaderFilepath, const std::vector<VulkanHelper::Shader::Define>& defines);
 
-	std::vector<float> CalculateReflectionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount);
-	std::vector<float> CalculateRefractionEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool AboveTheSurface);
+	std::vector<float> CalculateTable(glm::uvec3 tableSize, uint32_t sampleCount);
 
 	void Destroy();
 private:
-
-	std::vector<float> CalculateEnergyLossGPU(glm::uvec3 tableSize, uint32_t sampleCount, bool reflection, bool AboveTheSurface);
 private:
 
 	struct PipelinePushConstant
@@ -22,12 +19,10 @@ private:
 		uint32_t TableSizeX;
 		uint32_t TableSizeY;
 		uint32_t TableSizeZ;
-		bool AboveSurface;
 	};
 	VulkanHelper::Device m_Device;
 	VulkanHelper::PushConstant m_PushConstant;
-	VulkanHelper::Pipeline m_ReflectionPipeline;
-	VulkanHelper::Pipeline m_RefractionPipeline;
+	VulkanHelper::Pipeline m_Pipeline;
 	VulkanHelper::DescriptorSet m_DescriptorSet;
 
 	bool m_Initialized = false;

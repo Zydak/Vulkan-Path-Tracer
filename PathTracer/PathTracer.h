@@ -60,6 +60,9 @@ public:
     [[nodiscard]] inline float GetMaxLuminance() const { return m_MaxLuminance; }
     [[nodiscard]] inline float GetFocusDistance() const { return m_FocusDistance; }
     [[nodiscard]] inline float GetDepthOfFieldStrength() const { return m_DepthOfFieldStrength; }
+    [[nodiscard]] inline const std::string& GetEnvMapFilepath() const { return m_EnvMapFilepath; }
+    [[nodiscard]] inline float GetEnvMapRotationAzimuth() const { return m_EnvMapRotationAzimuth; }
+    [[nodiscard]] inline float GetEnvMapRotationAltitude() const { return m_EnvMapRotationAltitude; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -67,12 +70,16 @@ public:
     void SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer commandBuffer);
     void SetFocusDistance(float focusDistance, VulkanHelper::CommandBuffer commandBuffer);
     void SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnvMapFilepath(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
     private:
     void CreateOutputImageView();
-    VulkanHelper::ImageView LoadTexture(const char* filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void LoadEnvironmentMap(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    VulkanHelper::ImageView LoadTexture(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     VulkanHelper::ImageView LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
@@ -84,6 +91,9 @@ public:
     float m_MaxLuminance = 500.0f;
     float m_FocusDistance = 1.0f;
     float m_DepthOfFieldStrength = 0.0f;
+    std::string m_EnvMapFilepath = "../../../Assets/White.hdr";
+    float m_EnvMapRotationAzimuth = 0.0f;
+    float m_EnvMapRotationAltitude = 0.0f;
 
     VulkanHelper::Device m_Device;
 
@@ -91,7 +101,10 @@ public:
     uint32_t m_Width;
     uint32_t m_Height;
     float m_FOV = 45.0f;
-    
+
+    VulkanHelper::ImageView m_EnvMapTexture;
+    VulkanHelper::Buffer m_EnvAliasMap;
+
     std::vector<VulkanHelper::ImageView> m_SceneBaseColorTextures;
     std::vector<std::string> m_SceneBaseColorTextureNames;
     std::vector<VulkanHelper::ImageView> m_SceneNormalTextures;
@@ -108,6 +121,7 @@ public:
     VulkanHelper::ImageView m_ReflectionLookup;
     VulkanHelper::ImageView m_RefractionFromOutsideLookup;
     VulkanHelper::ImageView m_RefractionFromInsideLookup;
+    VulkanHelper::ImageView m_GGXALookup;
 
     VulkanHelper::CommandPool m_CommandPool;
 
@@ -127,6 +141,8 @@ public:
         float MaxLuminance;
         float FocusDistance;
         float DepthOfFieldStrength;
+        float EnvMapRotationAzimuth;
+        float EnvMapRotationAltitude;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
 
