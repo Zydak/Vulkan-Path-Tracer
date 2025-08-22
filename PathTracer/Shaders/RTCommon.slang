@@ -50,3 +50,24 @@ public float3 Rotate(float3 v, float3 axis, float theta)
 
     return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
 }
+
+struct HitQueryPayload
+{
+    bool Hit;
+}
+
+public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
+{
+    RayDesc rayDesc;
+    rayDesc.Origin = origin;
+    rayDesc.Direction = normalize(direction);
+    rayDesc.TMin = 0.00001f;
+    rayDesc.TMax = 1000.0f;
+
+    HitQueryPayload payload;
+    payload.Hit = true;
+
+    TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
+
+    return payload.Hit;
+}

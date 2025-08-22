@@ -228,15 +228,11 @@ void Main(inout Payload payload, in float2 attrib)
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
     bool canHit = (!wasRefracted && dot(toLightDir, surface.GetNormal()) > 0.0f) || (wasRefracted && dot(toLightDir, surface.GetNormal()) < 0.0f);
+
+    // For ray queries it's faster to exclude them with if statements if they're not needed, even if it introduces branching
     if (canHit)
     {
-        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, payload.Origin, 0.0001, toLightDir, 1000000);
-        query.Proceed();
-        if (query.CommittedStatus() != COMMITTED_NOTHING)
-        {
-            canHit = false; // If an intersection is found on the way that means the shaded point is obscured by geometry
-        }
+        canHit = !DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightDir);
     }
 
     if (canHit && envMapPDF > 0.0f && envMapDirectionEval.PDF > 0.0f)
