@@ -28,6 +28,7 @@ private:
     void RenderPostProcessingSettings();
     void RenderPathTracingSettings();
     void RenderEnvMapSettings();
+    void RenderVolumeSettings();
     void SaveToFileSettings();
 
     void SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);

@@ -104,7 +104,12 @@ std::vector<float> LookupTableCalculator::CalculateTable(glm::uvec3 tableSize, u
             VulkanHelper::PipelineStages::COMPUTE_SHADER_BIT
         );
 
-    
+        // Display percentage every 5%
+        if (i % (loopCount / 20) == 0)
+        {
+            VH_LOG_DEBUG("Progress: {}%", (i + 1) * 100 / loopCount);
+        }
+
         // With some really big sample counts the GPU will stall for some time, and if the GPU is unresponsive for a couple of seconds
 	    // vulkan just crashes with VK_DEVICE_LOST, that's supposed to prevent infinite loops and dead locks. So anyway the calculation
 	    // has to be broken into multiple calls so that it doesn't stall the GPU for too long, here I end the command buffer every 50 dispatches.

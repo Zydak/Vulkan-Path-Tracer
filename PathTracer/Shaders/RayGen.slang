@@ -1,5 +1,7 @@
 import RTCommon;
 import Sampler;
+import Volume;
+import Defines;
 
 [[vk::image_format("rgba32f")]]
 [[vk::binding(0, 0)]] RWTexture2D<float4> uImage;
@@ -7,6 +9,19 @@ import Sampler;
 [[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
 
 [[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
+
+[[vk::binding(10, 0)]] SamplerState uSampler;
+
+[[vk::image_format("rgba32f")]]
+[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
+
+// Alias map is used to efficiently select texels from env map based on importance.
+// It aims at creating a set of texel couples
+// so that all couples emit roughly the same amount of energy. To do this,
+// each smaller radiance texel will be assigned an "alias" with higher emitted radiance
+[[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
+
+[[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
 [shader("raygeneration")]
 void Main()
@@ -45,6 +60,7 @@ void Main()
         payload.Contribution = float3(1.0f, 1.0f, 1.0f);
         payload.Emitted = float3(0.0f, 0.0f, 0.0f);
         payload.InMedium = false;
+        payload.QueryDistance = false;
 
         float3 pathThroughput = 1.0f;
         float3 radiance = 0.0f;
@@ -59,7 +75,12 @@ void Main()
 
             payload.Contribution = float3(1.0f, 1.0f, 1.0f);
             payload.Emitted = float3(0.0f, 0.0f, 0.0f);
-            TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
+
+            bool scatteredInVolume = ScatteredInVolume(payload);
+
+            // If ray didn't scatter inside volume trace to the geometry surface
+            if (!scatteredInVolume)
+                TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
             radiance += payload.Emitted * pathThroughput;
             pathThroughput *= payload.Contribution;
@@ -101,4 +122,66 @@ void Main()
     {
         uImage[LaunchID.xy] = float4(color, 1.0f);
     }
+}
+
+bool ScatteredInVolume(inout Payload payload)
+{
+    for (uint i = 0; i < uUBO.VolumesCount; i++)
+    {
+        Volume volume = uVolumes[i];
+        float scatterPosition = volume.DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler);
+        float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
+
+        if (scatterPosition >= 0.0f && (distanceToGeometry < 0.0f || scatterPosition < distanceToGeometry))
+        {
+            payload.Depth++;
+            payload.Origin += payload.Direction * scatterPosition;
+            const float3 newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, volume.GetAnisotropy());
+
+            // Importance sampling Env map
+            float3 toLightEnv;
+            float4 envMapValue;
+            payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
+            float3 envMapColor = envMapValue.rgb;
+            float envMapPDF = envMapValue.a;
+
+            float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+            float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+            toLightEnv = Rotate(toLightEnv, float3(1.0f, 0.0f, 0.0f), altitude);
+            toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
+
+            bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
+            float phaseLightDir = volume.EvaluateHenyeyGreenstein(newDir, toLightEnv) * (float)!isObscuredByGeometry;
+            float phaseSampledDir = volume.EvaluateHenyeyGreenstein(payload.Direction, newDir);
+
+            float3 colorSample = volume.GetColor() * phaseSampledDir;
+            float3 colorLight = volume.GetColor() * phaseLightDir;
+
+            if (!isObscuredByGeometry && phaseLightDir > 0.0f)
+            {
+                // Account for volumes in the way of the ray
+                float volumeAbsorption = 1.0f;
+                for (int i = 0; i < uUBO.VolumesCount; i++)
+                {
+                    Volume volume = uVolumes[i];
+                    VolumeIntersection volIntersection = volume.IntersectWithRay(payload.Origin, toLightEnv);
+                    if (volume.IsPointInside(payload.Origin))
+                    {
+                        volIntersection.HitPointNear = 0.0f; // Start inside the volume
+                    }
+                    float distanceThroughVolume = max(volIntersection.HitPointFar - volIntersection.HitPointNear, 0.0f);
+
+                    if (distanceThroughVolume > 0.0f)
+                        volumeAbsorption *= exp(-volume.GetDensity() * distanceThroughVolume);
+                }
+
+                payload.Emitted = volume.GetEmissiveColor() + colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
+            }
+            payload.Direction = newDir;
+            payload.Contribution = colorSample / phaseSampledDir * PowerHeuristics(phaseSampledDir, phaseLightDir);
+
+            return true;
+        }
+    }
+    return false;
 }

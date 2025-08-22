@@ -18,7 +18,6 @@ public struct Surface
     {
         uint primitiveIndex = PrimitiveIndex();
 
-        // AMD requires NonUniformResourceIndex
         const uint i1 = indices[primitiveIndex * 3 + 0];
         const uint i2 = indices[primitiveIndex * 3 + 1];
         const uint i3 = indices[primitiveIndex * 3 + 2];

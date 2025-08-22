@@ -1,13 +1,9 @@
 import RTCommon;
 import Defines;
 
-struct HitQueryPayload
-{
-    bool Hit;
-}
-
 [shader("miss")]
-void Main(inout HitQueryPayload hitPayload)
+void Main(inout Payload payload)
 {
-    hitPayload.Hit = false;
+    payload.Depth = MAX_DEPTH;
+    payload.DistanceToSurface = -1.0f;
 }

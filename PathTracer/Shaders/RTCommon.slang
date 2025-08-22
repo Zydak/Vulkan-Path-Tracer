@@ -17,6 +17,9 @@ public struct Payload
     public float MediumAnisotropy = 1.0;
     public float3 MediumColor = float3(1.0);
     public float3 MediumEmissiveColor = float3(0.0);
+
+    public bool QueryDistance = false; // If this flag is set the closest hit shader will return immediately with distance to surface
+    public float DistanceToSurface;
 };
 
 public struct Vertex
@@ -39,6 +42,7 @@ public struct UniformBuffer
     public float DepthOfFieldStrength;
     public float EnvMapRotationAzimuth;
     public float EnvMapRotationAltitude;
+    public uint VolumesCount;
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)
@@ -51,11 +55,6 @@ public float3 Rotate(float3 v, float3 axis, float theta)
     return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
 }
 
-struct HitQueryPayload
-{
-    bool Hit;
-}
-
 public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
 {
     RayDesc rayDesc;
@@ -64,10 +63,36 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
     rayDesc.TMin = 0.00001f;
     rayDesc.TMax = 1000.0f;
 
-    HitQueryPayload payload;
-    payload.Hit = true;
+    Payload payload;
+    payload.Depth = 0;
 
     TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
 
-    return payload.Hit;
+    return payload.Depth == 0;
+}
+
+public float GetDistanceToGeometry(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
+{
+    RayDesc rayDesc;
+    rayDesc.Origin = origin;
+    rayDesc.Direction = normalize(direction);
+    rayDesc.TMin = 0.00001f;
+    rayDesc.TMax = 1000.0f;
+
+    Payload payload;
+    payload.QueryDistance = true; // Set Query distance flag
+
+    TraceRay(as, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 1u, rayDesc, payload); // Use shadow miss shader
+
+    return payload.DistanceToSurface;
+}
+
+public float BalanceHeuristics(float pdfA, float pdfB)
+{
+    return pdfA / (pdfA + pdfB);
+}
+
+public float PowerHeuristics(float pdfA, float pdfB)
+{
+    return pow(pdfA, 2.0f) / (pow(pdfA, 2.0f) + pow(pdfB, 2.0f));
 }
