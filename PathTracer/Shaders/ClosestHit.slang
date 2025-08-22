@@ -34,6 +34,10 @@ import Sampler;
 [[vk::image_format("rgba32f")]]
 [[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
 
+// Alias map is used to efficiently select texels from env map based on importance.
+// It aims at creating a set of texel couples
+// so that all couples emit roughly the same amount of energy. To do this,
+// each smaller radiance texel will be assigned an "alias" with higher emitted radiance
 [[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
 float BalanceHeuristics(float pdfA, float pdfB)
@@ -41,9 +45,9 @@ float BalanceHeuristics(float pdfA, float pdfB)
     return pdfA / (pdfA + pdfB);
 }
 
-float PowerHeuristics(float pdfA, float k1, float pdfB, float k2)
+float PowerHeuristics(float pdfA, float pdfB)
 {
-    return pow(pdfA, k1) / (pow(pdfA, k1) + pow(pdfB, k2));
+    return pow(pdfA, 2.0f) / (pow(pdfA, 2.0f) + pow(pdfB, 2.0f));
 }
 
 [shader("closesthit")]
@@ -189,8 +193,7 @@ void Main(inout Payload payload, in float2 attrib)
     {
         // Sample glass lobe
         sample = material.SampleGlass(payload.Sampler, V, wasRefracted);
-        
-        envMapPDF = 0.0f;
+        envMapDirectionEval = material.EvaluateGlass(V, toLightEnv, wasRefracted);
 
         // Ray left the mesh
         if (wasRefracted && surface.WasHitFromInside())
@@ -218,17 +221,17 @@ void Main(inout Payload payload, in float2 attrib)
 
     // Everything is calculated in tangent space, so at the end we have to convert to world space
     const float3 newDir = surface.TangentToWorld(sample.L);
+    const float3 toLightDir = surface.TangentToWorld(toLightEnv);
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
-    toLightEnv = surface.TangentToWorld(toLightEnv);
-    bool canHit = dot(toLightEnv, surface.GetNormal()) > 0.0f;
+    bool canHit = (!wasRefracted && dot(toLightDir, surface.GetNormal()) > 0.0f) || (wasRefracted && dot(toLightDir, surface.GetNormal()) < 0.0f);
     if (canHit)
     {
         RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, surface.GetWorldPos() + surface.GetNormal() * 0.0001f, 0.0001, toLightEnv, 1000000);
+        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, payload.Origin, 0.0001, toLightDir, 1000000);
         query.Proceed();
         if (query.CommittedStatus() != COMMITTED_NOTHING)
         {
@@ -236,17 +239,17 @@ void Main(inout Payload payload, in float2 attrib)
         }
     }
 
-    if (canHit && envMapPDF > 0.0f)
+    if (canHit && envMapPDF > 0.0f && envMapDirectionEval.PDF > 0.0f)
     {
-        payload.Emitted += envMapDirectionEval.BxDF * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, 1.0f, sample.PDF, 1.0f);
+        payload.Emitted += envMapDirectionEval.BxDF * envMapColor / envMapPDF * PowerHeuristics(envMapPDF, envMapDirectionEval.PDF);
     }
+    envMapDirectionEval.PDF *= (float)canHit * (float)(envMapPDF > 0.0f); // set PDF to 0 if can't hit
 
-    payload.Contribution *= float3(sample.BxDF / sample.PDF) * PowerHeuristics(sample.PDF, 1.0f, envMapPDF, 1.0f);
+    payload.Contribution *= float3(sample.BxDF / sample.PDF) * PowerHeuristics(sample.PDF, envMapDirectionEval.PDF);
     payload.Direction = newDir;
 
     // Invalid samples have to be discarded
     bool isInvalid = (wasRefracted && sample.L.z >= 0.0f) || (!wasRefracted && sample.L.z <= 0.0f) || sample.PDF <= 0.0f;
-    //bool isInvalid = dot(surface.GetNormal(), payload.Direction) < 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
 
     // ---------------------------------------------------------------------------------

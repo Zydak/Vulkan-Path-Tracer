@@ -4,6 +4,9 @@
 [[vk::image_format("rgba8")]]
 [[vk::binding(1, 0)]] RWTexture2D<float4> uOutputImage;
 
+[[vk::image_format("rgba32f")]]
+[[vk::binding(3, 0)]] Texture2D<float4> uBloomImage;
+
 struct UniformBuffer
 {
     float Exposure;
@@ -50,10 +53,17 @@ float3 ACESFitted(float3 color)
 }
 
 [shader("compute")]
-[numthreads(32,32,1)]
+[numthreads(8,8,1)]
 void Main(uint3 threadID : SV_DispatchThreadID)
 {
+    uint2 size;
+    uOutputImage.GetDimensions(size.x, size.y);
+    if (threadID.x >= size.x || threadID.y >= size.y)
+        return;
+    
     float3 color = uInputImage.Load(int3(threadID.xy, 0)).rgb;
+    color += uBloomImage.Load(int3(threadID.xy, 0)).rgb;
+    
     color *= uUBO.Exposure;
     color = pow(color, float3(1.0 / uUBO.Gamma));
     color = ACESFitted(color);

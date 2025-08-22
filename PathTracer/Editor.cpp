@@ -19,6 +19,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     }).result();
     VH_ASSERT(!selection.empty(), "Failed to get scene file path, Terminating.");
 
+    m_CurrentSceneFilepath = selection[0];
     m_PathTracer.SetScene(selection[0]);
     // Create ImGui sampler
     VulkanHelper::Sampler::Config samplerConfig;
@@ -290,6 +291,31 @@ void Editor::RenderPostProcessingSettings()
             m_PostProcessor.SetTonemappingData({exposure, gamma}, commandBuffer);
         });
     }
+
+    static float bloomThreshold = 2.0f;
+    static float bloomStrength = 1.0f;
+    static int bloomMipCount = 10;
+
+    if (ImGui::SliderInt("Bloom Mip Count", &bloomMipCount, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+        });
+    }
+
+    if (ImGui::SliderFloat("Bloom Threshold", &bloomThreshold, 0.0f, 10.0f))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+        });
+    }
+
+    if (ImGui::SliderFloat("Bloom Strength", &bloomStrength, 0.0f, 2.0f))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+        });
+    }
 }
 
 void Editor::RenderInfo()
@@ -320,6 +346,25 @@ void Editor::RenderInfo()
             m_PathTracer.ReloadShaders(commandBuffer);
             m_RenderTime = 0.0f;
         });
+    }
+
+    if (ImGui::Button("Select Scene"))
+    {
+        auto selection = pfd::open_file("Select scene file", "", {
+            "Scene Files", "*.gltf"
+        }).result();
+        if (!selection.empty())
+        {
+            m_CurrentSceneFilepath = selection[0];
+
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetScene(m_CurrentSceneFilepath);
+                m_RenderTime = 0.0f;
+                m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
+                m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+            });
+        }
     }
 }
 
@@ -407,7 +452,7 @@ void Editor::RenderEnvMapSettings()
 
     if(ImGui::Button(("Env Map: " + envMapFilepath).c_str()))
     {
-        auto selection = pfd::open_file("Select Env Map").result();
+        auto selection = pfd::open_file("Select Env Map", ".", {"HDR Image Files", "*.hdr"}).result();
         if (!selection.empty())
         {
             envMapFilepath = selection[0];

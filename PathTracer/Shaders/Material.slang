@@ -116,6 +116,8 @@ public struct Material
         float PDF = L.z * M_1_OVER_PI;
         float3 BRDF = M_1_OVER_PI * Properties.BaseColor * L.z;
 
+        PDF *= (float)(L.z > 0.0f);
+
         return { BRDF, PDF };
     }
 
@@ -131,7 +133,6 @@ public struct Material
 
     public BxDFEval EvaluateMetallic(in float3 V, in float3 L)
     {
-        float PDF;
         float3 H = normalize(V + L);
 
         float schlickWeight = SchlickWeight(dot(V, H));
@@ -218,6 +219,39 @@ public struct Material
         return { L, eval.BxDF, eval.PDF };
     }
 
+    public BxDFEval EvaluateGlass(in float3 V, in float3 L, in bool refracted)
+    {
+        BxDFEval eval;
+
+        float eta = 1.0f * (float)(L.z > 0) + Eta * (float)(L.z < 0);
+        float F = DielectricFresnel(abs(dot(eta * V, L)));
+
+        BxDFEval refractEval = EvaluateRefraction(V, L, F);
+
+        BxDFEval reflectEval = EvaluateReflection(V, L, F);
+
+        const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
+        
+        eval.PDF = (1.0f - F) * refractEval.PDF + F * reflectEval.PDF;
+        eval.BxDF = (1.0f - F) * refractEval.BxDF + F * reflectEval.BxDF;
+
+        float energyCompensation;
+        float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
+        if (isInside)
+        {
+            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+        }
+        else
+        {
+            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+        }
+
+        energyCompensation = max(energyCompensation, 0.00001);
+        eval.BxDF = eval.BxDF / energyCompensation;
+
+        return eval;
+    }
+
     //
     // References
     // [https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf]
@@ -240,6 +274,8 @@ public struct Material
         float PDF = (GV * VdotH * D / V.z) / (4.0f * VdotH);
         float3 brdf = D * F * GV * GL / (4.0f * V.z);
 
+        PDF *= (float)(L.z > 0.0f);
+
         return { brdf, PDF };
     }
 
@@ -251,10 +287,13 @@ public struct Material
     //
     public BxDFEval EvaluateRefraction(in float3 V, in float3 L, in float3 F)
     {
-        float3 H = normalize(V + L);
+        float3 H = normalize(Eta * V + L);
 
-        float VdotH = abs(dot(V, H));
-        float LdotH = abs(dot(L, H));
+        if (H.z < 0.0f)
+            H = -H;
+
+        float VdotH = dot(V, H);
+        float LdotH = dot(L, H);
 
         float D = GGXDistributionAnisotropic(H);
         float GV = GGXSmithAnisotropic(V);
@@ -265,10 +304,13 @@ public struct Material
         float denominator2 = denominator * denominator;
         float eta2 = Eta * Eta;
 
-        float jacobian = (eta2 * LdotH) / denominator2;
+        float jacobian = (eta2 * abs(LdotH)) / denominator2;
 
-        float PDF = (GV * VdotH * D / V.z) * jacobian;
-        float3 bsdf = (Properties.BaseColor * (1.0f - F) * D * G * eta2 / denominator2) * (VdotH * LdotH / abs(V.z));
+        float PDF = (GV * abs(VdotH) * D / V.z) * jacobian;
+        float3 bsdf = (Properties.BaseColor * (1.0f - F) * D * G * eta2 / denominator2) * (abs(VdotH) * abs(LdotH) / (abs(V.z)));
+
+        PDF *= (float)(L.z < 0.0f);
+        bsdf *= (float)(L.z < 0.0f);
 
         return { bsdf, PDF };
     }
