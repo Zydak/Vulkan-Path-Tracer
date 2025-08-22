@@ -453,12 +453,14 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
     VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
     VulkanHelper::Shader missShader = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
+    VulkanHelper::Shader shadowMissShader = VulkanHelper::Shader::New({m_Device, "MissShadow.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
 
     VulkanHelper::Pipeline::RayTracingConfig pipelineConfig{};
     pipelineConfig.Device = m_Device;
     pipelineConfig.RayGenShaders.PushBack(rgenShader);
     pipelineConfig.HitShaders.PushBack(hitShader);
     pipelineConfig.MissShaders.PushBack(missShader);
+    pipelineConfig.MissShaders.PushBack(shadowMissShader);
     pipelineConfig.DescriptorSets.PushBack(m_PathTracerDescriptorSet);
     pipelineConfig.CommandBuffer = &initializationCmd;
 
