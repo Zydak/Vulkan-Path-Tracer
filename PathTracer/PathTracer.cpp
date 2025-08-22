@@ -95,6 +95,8 @@ bool PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
 
 void PathTracer::SetScene(const std::string& sceneFilePath)
 {
+    ResetPathTracing();
+    
     VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
@@ -104,7 +106,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
-    m_FOV = 90.0f;//scene.Value().Cameras[0].FOV;
+    m_FOV = scene.Value().Cameras[0].FOV;
     glm::mat4 cameraView = scene.Value().Cameras[0].ViewMatrix;
 
     std::array<VulkanHelper::Format, 3> vertexAttributes = {
@@ -122,6 +124,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     LoadEnvironmentMap(m_EnvMapFilepath.c_str(), initializationCmd);
 
     // Meshes
+    m_SceneMeshes.clear();
     for (const auto& mesh : scene.Value().Meshes)
     {
         VulkanHelper::Mesh::Config meshConfig{};
@@ -139,6 +142,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
     
     // Base Color Textures
+    m_SceneBaseColorTextures.clear();
+    m_SceneBaseColorTextureNames.clear();
     for (const auto& texture : scene.Value().BaseColorTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
@@ -171,6 +176,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
 
     // Normal Textures
+    m_SceneNormalTextures.clear();
+    m_SceneNormalTextureNames.clear();
     for (const auto& texture : scene.Value().NormalTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
@@ -201,6 +208,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
 
     // Roughness Textures
+    m_SceneRoughnessTextures.clear();
+    m_SceneRoughnessTextureNames.clear();
     for (const auto& texture : scene.Value().RoughnessTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
@@ -238,6 +247,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
 
     // Metallic Textures
+    m_SceneMetallicTextures.clear();
+    m_SceneMetallicTextureNames.clear();
     for (const auto& texture : scene.Value().MetallicTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
@@ -275,6 +286,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
 
     // Emissive Textures
+    m_SceneEmissiveTextures.clear();
+    m_SceneEmissiveTextureNames.clear();
     for (const auto& texture : scene.Value().EmissiveTextures)
     {
         VulkanHelper::Image::Config imageConfig{};
@@ -305,6 +318,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     }
 
     // Materials
+    m_Materials.clear();
+    m_MaterialNames.clear();
     for (const auto& material : scene.Value().Materials)
     {
         Material pathTracerMaterial{};

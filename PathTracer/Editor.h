@@ -41,6 +41,7 @@ private:
     VulkanHelper::Sampler m_ImGuiSampler;
     uint32_t m_CurrentImGuiDescriptorIndex = 0;
     float m_RenderTime = 0.0f;
+    std::string m_CurrentSceneFilepath;
 
     // A lot of vulkan commands can't be called when the render pass is active. And because ImGui
     // Is an immediate mode GUI, they have to be deferred to the beginning of the next frame.

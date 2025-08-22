@@ -64,17 +64,15 @@ void Main()
             radiance += payload.Emitted * pathThroughput;
             pathThroughput *= payload.Contribution;
 
-            // NOT WORKING!
-            //
-            // // Russian roulette
-            // float p = max(pathThroughput.x, max(pathThroughput.y, pathThroughput.z));
-            // // Because of energy compensation pathThroughput is sometimes greater than 1
-            // // and p gets compared to random variable that is between 0 and 1
-            // // so it also has to be between 0 and 1 hence the min()
-            // p = min(p, 1.0f);
-            // if (p <= payload.Sampler.UniformFloat())
-            //     break;
-            // pathThroughput /= p;
+            // Russian roulette
+            float p = max(pathThroughput.x, max(pathThroughput.y, pathThroughput.z));
+            // Because of energy compensation pathThroughput is sometimes greater than 1
+            // and p gets compared to random variable that is between 0 and 1
+            // so it also has to be between 0 and 1 hence the min()
+            p = min(p, 1.0f);
+            if (p <= payload.Sampler.UniformFloat())
+                break;
+            pathThroughput /= p;
         }
 
         accumulatedRadiance += radiance;

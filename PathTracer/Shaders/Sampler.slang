@@ -188,23 +188,23 @@ public struct Sampler
         uint size = width * height;
         uint idx = min(uint(xi.x * float(size)), size - 1);
 
-        // Fetch the sampling data for that texel, containing the importance and the texel alias
-        AliasMapEntry sample_data = uAccels[idx];
+        // Fetch the entry for that texel, containing the importance and the texel alias
+        AliasMapEntry entry = uAccels[idx];
 
         uint envIdx;
 
-        if (xi.y < sample_data.Importance)
+        if (xi.y < entry.Importance)
         {
             // If the random variable is lower than the importance, we directly pick
             // this texel, and renormalize the random variable for later use.
             envIdx = idx;
-            xi.y /= sample_data.Importance;
+            xi.y /= entry.Importance;
         }
         else
         {
             // Otherwise we pick the alias of the texel and renormalize the random variable
-            envIdx = sample_data.Alias;
-            xi.y = (xi.y - sample_data.Importance) / (1.0f - sample_data.Importance);
+            envIdx = entry.Alias;
+            xi.y = (xi.y - entry.Importance) / (1.0f - entry.Importance);
         }
 
         // Compute the 2D integer coordinates of the texel
@@ -215,17 +215,17 @@ public struct Sampler
         // Generate both the UV for texture lookup and a direction in spherical coordinates
         const float u = float(px + xi.y) / float(width);
         const float phi = u * (2.0f * M_PI) - M_PI;
-        float sin_phi = sin(phi);
-        float cos_phi = cos(phi);
+        float sinPhi = sin(phi);
+        float cosPhi = cos(phi);
 
-        const float step_theta = M_PI / float(height);
-        const float theta0 = float(py) * step_theta;
-        const float cos_theta = cos(theta0) * (1.0f - xi.z) + cos(theta0 + step_theta) * xi.z;
-        const float theta = acos(cos_theta);
-        const float sin_theta = sin(theta);
+        const float stepTheta = M_PI / float(height);
+        const float theta0 = float(py) * stepTheta;
+        const float cosTheta = cos(theta0) * (1.0f - xi.z) + cos(theta0 + stepTheta) * xi.z;
+        const float theta = acos(cosTheta);
+        const float sinTheta = sin(theta);
         const float v = theta * M_1_OVER_PI;
 
-        toLight = float3(cos_phi * sin_theta, cos_theta, sin_phi * sin_theta);
+        toLight = float3(cosPhi * sinTheta, cosTheta, sinPhi * sinTheta);
 
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
