@@ -3,6 +3,7 @@ import Material;
 import Surface;
 import Defines;
 import Sampler;
+import Volume;
 
 [[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
 
@@ -40,15 +41,7 @@ import Sampler;
 // each smaller radiance texel will be assigned an "alias" with higher emitted radiance
 [[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
-float BalanceHeuristics(float pdfA, float pdfB)
-{
-    return pdfA / (pdfA + pdfB);
-}
-
-float PowerHeuristics(float pdfA, float pdfB)
-{
-    return pow(pdfA, 2.0f) / (pow(pdfA, 2.0f) + pow(pdfB, 2.0f));
-}
+[[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
@@ -58,10 +51,20 @@ void Main(inout Payload payload, in float2 attrib)
     // Initialize Geometry Data
     //
 
+    // I'm not sure if it's possible to use multiple hit shaders like it is with miss shaders, so I also use this shader
+    // to query the distance to surface. I could use ray queries but they have really low hardware coverage, I think that's
+    // because they aren't emulated in software if RT cores are absent in the GPU
+    if (payload.QueryDistance)
+    {
+        payload.DistanceToSurface = RayTCurrent();
+        return;
+    }
+
     float3 barycentrics = float3(1.0f - attrib.x - attrib.y, attrib.x, attrib.y);
     uint geometryIndex = GeometryIndex();
 
     Surface surface;
+    // AMD requires NonUniformResourceIndex
     surface.Initialize(uVertices[NonUniformResourceIndex(geometryIndex)], uIndices[NonUniformResourceIndex(geometryIndex)], barycentrics);
 
     Material material;
@@ -97,7 +100,7 @@ void Main(inout Payload payload, in float2 attrib)
             // If the anisotropy equals 1 the entire path through volume is perfectly straight line, in that case
             // it's pointless to simulate each scattering event since we know where we'll end up. So just use Beer's law instead which is way faster
             // and gives the same result.
-            payload.Contribution *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
+            payload.Contribution *= exp(-material.Properties.MediumDensity * geometryHitDistance);
         }
         else
         {
@@ -228,18 +231,36 @@ void Main(inout Payload payload, in float2 attrib)
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
 
     bool canHit = (!wasRefracted && dot(toLightDir, surface.GetNormal()) > 0.0f) || (wasRefracted && dot(toLightDir, surface.GetNormal()) < 0.0f);
+    canHit = (bool)((float)canHit * (float)(envMapDirectionEval.PDF > 0.0f) * (float)(envMapPDF > 0.0f));
+
+    // Account for volumes in the way of the ray
+    float volumeAbsorption = 1.0f;
 
     // For ray queries it's faster to exclude them with if statements if they're not needed, even if it introduces branching
     if (canHit)
     {
         canHit = !DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightDir);
-    }
 
-    if (canHit && envMapPDF > 0.0f && envMapDirectionEval.PDF > 0.0f)
-    {
-        payload.Emitted += envMapDirectionEval.BxDF * envMapColor / envMapPDF * PowerHeuristics(envMapPDF, envMapDirectionEval.PDF);
+        if (canHit)
+        {
+            for (int i = 0; i < uUBO.VolumesCount; i++)
+            {
+                Volume volume = uVolumes[i];
+                VolumeIntersection volIntersection = volume.IntersectWithRay(payload.Origin, toLightDir);
+                if (volume.IsPointInside(payload.Origin))
+                {
+                    volIntersection.HitPointNear = 0.0f; // Start inside the volume
+                }
+                float distanceThroughVolume = max(volIntersection.HitPointFar - volIntersection.HitPointNear, 0.0f);
+
+                if (distanceThroughVolume > 0.0f)
+                    volumeAbsorption *= exp(-volume.GetDensity() * distanceThroughVolume);
+            }
+        }
     }
-    envMapDirectionEval.PDF *= (float)canHit * (float)(envMapPDF > 0.0f); // set PDF to 0 if can't hit
+    payload.Emitted += volumeAbsorption * envMapDirectionEval.BxDF * envMapColor / envMapPDF * PowerHeuristics(envMapPDF, envMapDirectionEval.PDF) * (float)canHit;
+
+    envMapDirectionEval.PDF *= (float)canHit; // set PDF to 0 if can't hit
 
     payload.Contribution *= float3(sample.BxDF / sample.PDF) * PowerHeuristics(sample.PDF, envMapDirectionEval.PDF);
     payload.Direction = newDir;

@@ -22,6 +22,18 @@ public:
         float MediumAnisotropy;
     };
 
+    struct Volume
+    {
+        // AABB
+        glm::vec3 CornerMin = glm::vec3(-1.0f);
+        glm::vec3 CornerMax = glm::vec3(1.0f);
+
+        glm::vec3 Color = glm::vec3(0.8f);
+        glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        float Density = 1.0f;
+        float Anisotropy = 0.0f;
+    };
+
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);
 
     void SetScene(const std::string& sceneFilePath);
@@ -63,6 +75,8 @@ public:
     [[nodiscard]] inline const std::string& GetEnvMapFilepath() const { return m_EnvMapFilepath; }
     [[nodiscard]] inline float GetEnvMapRotationAzimuth() const { return m_EnvMapRotationAzimuth; }
     [[nodiscard]] inline float GetEnvMapRotationAltitude() const { return m_EnvMapRotationAltitude; }
+    [[nodiscard]] inline uint32_t GetVolumesCount() const { return (uint32_t)m_Volumes.size(); }
+    [[nodiscard]] inline const std::vector<Volume>& GetVolumes() const { return m_Volumes; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -73,10 +87,13 @@ public:
     void SetEnvMapFilepath(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer);
+    void AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
+    void RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer);
+    void SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
-    private:
+private:
     void CreateOutputImageView();
     void LoadEnvironmentMap(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     VulkanHelper::ImageView LoadTexture(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
@@ -143,6 +160,7 @@ public:
         float DepthOfFieldStrength;
         float EnvMapRotationAzimuth;
         float EnvMapRotationAltitude;
+        uint32_t VolumesCount;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
 
@@ -153,4 +171,7 @@ public:
     VulkanHelper::Sampler m_TextureSampler;
 
     VulkanHelper::ThreadPool* m_ThreadPool;
+
+    std::vector<Volume> m_Volumes;
+    VulkanHelper::Buffer m_VolumesBuffer;
 };

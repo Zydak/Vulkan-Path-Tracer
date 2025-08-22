@@ -179,6 +179,8 @@ void PostProcessor::SetInputImage(const VulkanHelper::ImageView& inputImageView)
 
 void PostProcessor::PostProcess(VulkanHelper::CommandBuffer& commandBuffer)
 {
+    m_MipCount = glm::clamp(m_MipCount, 1u, (uint32_t)m_BloomViews.size());
+
     // Bloom
     {
         m_InputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
@@ -239,5 +241,4 @@ void PostProcessor::SetBloomData(const BloomData& data)
 {
     m_BloomPushData.BloomThreshold = data.BloomThreshold;
     m_BloomPushData.BloomStrength = data.BloomStrength;
-    m_MipCount = glm::clamp(data.MipCount, 1u, MAX_BLOOM_LEVELS);
 }

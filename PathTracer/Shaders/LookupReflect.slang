@@ -34,12 +34,12 @@ void Main(uint3 threadId: SV_DispatchThreadID)
     Sampler sampler = Sampler(threadId.y + threadId.x * threadId.x + push.Seed);
 
     // Set all values
-    float viewCosine = clamp(float(threadId.x) / push.TableSizeX, 0.001, 0.999);
-    float roughness = clamp(float(threadId.y) / push.TableSizeY, 0.001, 1.0);
+    float viewCosine = clamp(float(threadId.x) / push.TableSizeX, 0.0001, 0.9999);
+    float roughness = clamp(float(threadId.y) / push.TableSizeY, 0.0001, 1.0);
     float anisotropy = float(threadId.z) / push.TableSizeZ;
     const float aspect = sqrt(1.0 - sqrt(anisotropy) * 0.9);
-    float ax = max(0.001, roughness / aspect);
-    float ay = max(0.001, roughness * aspect);
+    float ax = max(0.0001, roughness / aspect);
+    float ay = max(0.0001, roughness * aspect);
 
     // Prepare material
     Material material;

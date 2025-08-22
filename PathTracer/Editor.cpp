@@ -100,6 +100,7 @@ void Editor::RenderSettingsTab()
     RenderPostProcessingSettings();
     RenderPathTracingSettings();
     RenderEnvMapSettings();
+    RenderVolumeSettings();
     SaveToFileSettings();
 
     ImGui::End();
@@ -528,4 +529,77 @@ void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer
 
     buffer.Unmap();
     VulkanHelper::Buffer imageBuffer;
+}
+
+void Editor::RenderVolumeSettings()
+{
+    if (!ImGui::CollapsingHeader("Volume Settings"))
+        return;
+
+    if (ImGui::Button("Add Volume"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.AddVolume({}, commandBuffer);
+        });
+    }
+
+    if (m_PathTracer.GetVolumes().empty())
+    {
+        ImGui::Text("No volumes in the scene.");
+        return;
+    }
+    
+    static int selectedVolumeIndex = 0;
+
+    if (ImGui::Button("Remove Volume"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.RemoveVolume((uint32_t)selectedVolumeIndex, commandBuffer);
+            selectedVolumeIndex = 0;
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    const auto& volumes = m_PathTracer.GetVolumes();
+    std::vector<std::string> volumeNames;
+    std::vector<const char*> volumeNamesCStr;
+    volumeNames.reserve(volumes.size());
+    for (uint32_t i = 0; i < volumes.size(); i++)
+    {
+        volumeNames.push_back(std::to_string(i));
+        volumeNamesCStr.push_back(volumeNames[i].c_str());
+    }
+
+    ImGui::ListBox("Volumes", &selectedVolumeIndex, volumeNamesCStr.data(), volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
+
+    bool volumeModified = false;
+    static PathTracer::Volume selectedVolume;
+    selectedVolume = volumes[(size_t)selectedVolumeIndex];
+
+    if (ImGui::InputFloat3("Corner Min", &selectedVolume.CornerMin.x))
+        volumeModified = true;
+    if (ImGui::InputFloat3("Corner Max", &selectedVolume.CornerMax.x))
+        volumeModified = true;
+
+    if (ImGui::ColorEdit3("Color", &selectedVolume.Color.r, ImGuiColorEditFlags_Float))
+        volumeModified = true;
+    if (ImGui::ColorEdit3("Emissive Color", &selectedVolume.EmissiveColor.r, ImGuiColorEditFlags_Float))
+        volumeModified = true;
+    if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
+        volumeModified = true;
+    if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp))
+        volumeModified = true;
+
+    if (volumeModified)
+    {
+        struct DataVol
+        {
+            PathTracer::Volume vol;
+            int volumeIndex;
+        };
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
+            m_PathTracer.SetVolume((uint32_t)selectedVolumeIndex, selectedVolume, cmd);
+            m_RenderTime = 0.0f;
+        });
+    }
 }

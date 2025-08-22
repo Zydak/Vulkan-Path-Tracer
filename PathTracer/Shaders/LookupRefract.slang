@@ -74,7 +74,7 @@ void Main(uint3 threadId: SV_DispatchThreadID)
             // Reflection
             float3 L = normalize(reflect(-V, H));
 
-            if (L.z > 0.000)
+            if (L.z > 0.0)
             {
                 BxDFEval eval = material.EvaluateReflection(V, L, F);
                 eval.PDF *= F;
@@ -88,7 +88,7 @@ void Main(uint3 threadId: SV_DispatchThreadID)
             // Refraction
             float3 L = normalize(refract(-V, H, material.Eta));
 
-            if (L.z < 0.000)
+            if (L.z < 0.0)
             {
                 BxDFEval eval = material.EvaluateRefraction(V, L, F);
                 eval.PDF *= (1.0f - F);

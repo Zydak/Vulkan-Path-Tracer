@@ -230,4 +230,10 @@ public struct Sampler
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
     }
+
+    [mutating]
+    public float SampleScatteringDistance(float density)
+    {
+        return -log(UniformFloat()) / density;
+    }
 }
