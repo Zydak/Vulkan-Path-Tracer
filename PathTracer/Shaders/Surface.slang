@@ -14,7 +14,13 @@ public struct Surface
     bool m_HitFromInside;
 
     [mutating]
-    public void Initialize(in StructuredBuffer<Vertex, ScalarDataLayout> vertices, in StructuredBuffer<uint> indices, in float3 barycentrics)
+    public void Initialize(
+        in StructuredBuffer<Vertex, ScalarDataLayout> vertices,
+        in StructuredBuffer<uint> indices,
+        in float3 barycentrics,
+        in SamplerState textureSampler,
+        in Texture2D normalTexture
+    )
     {
         uint primitiveIndex = PrimitiveIndex();
 
@@ -31,10 +37,10 @@ public struct Surface
 
         // Don't use model normals, they're often transformed which causes rays to go under the geometry
         // The same goes for normal textures, they are not supported for now since it's quite hard to get them working properly
-        //m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
+        m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
 
         // Instead compute geometric normals
-        m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
+        //m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
         m_Normal = mul(m_Normal, WorldToObject()).xyz;
 
         if (dot(m_Normal, WorldRayDirection()) > 0.0f)
@@ -54,6 +60,10 @@ public struct Surface
         float3 up = abs(m_Normal.z) < 0.9999999 ? float3(0, 0, 1) : float3(1, 0, 0);
         m_Tangent = normalize(cross(up, m_Normal));
         m_Bitangent = cross(m_Normal, m_Tangent);
+
+        float3 normalMapValue = normalTexture.SampleLevel(textureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
+        normalMapValue = TangentToWorld(normalMapValue);
+        m_Normal = normalize(normalMapValue);
     }
 
     public float3 TangentToWorld(in float3 vec)

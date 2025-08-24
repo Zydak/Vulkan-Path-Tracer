@@ -44,13 +44,14 @@ public struct Material
     Texture2DArray m_ReflectionLookupTable;
     Texture2DArray m_RefractionLookupTableHitFromOutside;
     Texture2DArray m_RefractionLookupTableHitFromInside;
-    SamplerState m_Sampler;
+    SamplerState m_LookupTableSampler;
 
     [mutating]
     public void Initialize(
         in CPUMaterial materialData,
         in Surface surface,
         in SamplerState textureSampler,
+        in SamplerState lookupTableSampler,
         in Texture2D baseColorTexture,
         in Texture2D roughnessTexture,
         in Texture2D metallicTexture,
@@ -76,12 +77,6 @@ public struct Material
         {
             Eta = 1.0f / Properties.IOR;
         }
-
-        const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
-        Ax = max(0.001, Properties.Roughness / aspect);
-        Ay = max(0.001, Properties.Roughness * aspect);
-
-        //Properties.Metallic = min(Properties.Metallic, 0.999);
         
         // Textures
 
@@ -95,7 +90,11 @@ public struct Material
         m_ReflectionLookupTable = lookupTableReflection;
         m_RefractionLookupTableHitFromOutside = lookupTableRefractionHitFromOutside;
         m_RefractionLookupTableHitFromInside = lookupTableRefractionHitFromInside;
-        m_Sampler = textureSampler;
+        m_LookupTableSampler = lookupTableSampler;
+
+        const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
+        Ax = max(0.001, Properties.Roughness / aspect);
+        Ay = max(0.001, Properties.Roughness * aspect);
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -141,7 +140,7 @@ public struct Material
         BxDFEval eval = EvaluateReflection(V, L, F);
 
         float layer = Properties.Anisotropy * 32.0;
-        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_Sampler, {V.z, Properties.Roughness, layer}, 0).r;
+        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
         energyCompensation = (1.0f - energyCompensation) / energyCompensation;
         eval.BxDF = (1.0 + F * float3(energyCompensation)) * eval.BxDF;
 
@@ -163,7 +162,7 @@ public struct Material
         BxDFEval eval = EvaluateReflection(V, L, 1.0f);
         
         float layer = Properties.Anisotropy * 32.0;
-        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_Sampler, {V.z, Properties.Roughness, layer}, 0).r;
+        float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
         energyCompensation = (1.0f - energyCompensation) / energyCompensation;
         eval.BxDF = (1.0 + float3(energyCompensation)) * eval.BxDF;
 
@@ -206,11 +205,11 @@ public struct Material
         const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
         if (isInside)
         {
-            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
         }
         else
         {
-            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
         }
 
         energyCompensation = max(energyCompensation, 0.00001);
@@ -239,11 +238,11 @@ public struct Material
         float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
         if (isInside)
         {
-            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
         }
         else
         {
-            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_Sampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
         }
 
         energyCompensation = max(energyCompensation, 0.00001);
@@ -260,6 +259,9 @@ public struct Material
     //
     public BxDFEval EvaluateReflection(in float3 V, in float3 L, in float3 F)
     {
+        if (L.z <= 0.01f)
+            return { float3(0.0f, 0.0f, 0.0f), 0.0f };
+        
         float3 H = normalize(V + L);
 
         float LdotH = max(0.0f, dot(L, H));
@@ -287,6 +289,9 @@ public struct Material
     //
     public BxDFEval EvaluateRefraction(in float3 V, in float3 L, in float3 F)
     {
+        if (L.z >= 0.01f)
+            return { float3(0.0f, 0.0f, 0.0f), 0.0f };
+
         float3 H = normalize(Eta * V + L);
 
         if (H.z < 0.0f)
@@ -308,9 +313,6 @@ public struct Material
 
         float PDF = (GV * abs(VdotH) * D / V.z) * jacobian;
         float3 bsdf = (Properties.BaseColor * (1.0f - F) * D * G * eta2 / denominator2) * (abs(VdotH) * abs(LdotH) / (abs(V.z)));
-
-        PDF *= (float)(L.z < 0.0f);
-        bsdf *= (float)(L.z < 0.0f);
 
         return { bsdf, PDF };
     }

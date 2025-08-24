@@ -91,7 +91,7 @@ void Application::Run()
 
             m_Editor.Draw(commandBuffer);
 
-            VH_ASSERT(m_Renderer.EndFrame(nullptr) == VulkanHelper::VHResult::OK, "Failed to end frame rendering");
+            (void)m_Renderer.EndFrame(nullptr);
         }
     }
 
