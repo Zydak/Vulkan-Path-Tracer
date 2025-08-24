@@ -59,11 +59,13 @@ public:
     [[nodiscard]] inline std::string& GetMetallicTextureName(uint32_t index) { return m_SceneMetallicTextureNames[index]; }
     [[nodiscard]] inline std::string& GetEmissiveTextureName(uint32_t index) { return m_SceneEmissiveTextureNames[index]; }
 
-    void SetBaseColorTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetNormalTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetRoughnessTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetMetallicTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEmissiveTexture(uint32_t index, std::string filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetBaseColorTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetNormalTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetRoughnessTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetMetallicTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
 
     [[nodiscard]] inline uint32_t GetSamplesAccumulated() const { return m_SamplesAccumulated; }
     [[nodiscard]] inline uint32_t GetSamplesPerFrame() const { return m_SamplesPerFrame; }
@@ -77,6 +79,8 @@ public:
     [[nodiscard]] inline float GetEnvMapRotationAltitude() const { return m_EnvMapRotationAltitude; }
     [[nodiscard]] inline uint32_t GetVolumesCount() const { return (uint32_t)m_Volumes.size(); }
     [[nodiscard]] inline const std::vector<Volume>& GetVolumes() const { return m_Volumes; }
+    [[nodiscard]] inline bool IsEnvMapMISEnabled() const { return m_EnableEnvMapMIS; }
+    [[nodiscard]] inline bool IsEnvMapShownDirectly() const { return m_ShowEnvMapDirectly; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -98,6 +102,7 @@ private:
     void LoadEnvironmentMap(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     VulkanHelper::ImageView LoadTexture(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     VulkanHelper::ImageView LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer);
+    VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
     uint32_t m_FrameCount = 0;
@@ -108,9 +113,11 @@ private:
     float m_MaxLuminance = 500.0f;
     float m_FocusDistance = 1.0f;
     float m_DepthOfFieldStrength = 0.0f;
-    std::string m_EnvMapFilepath = "../../../Assets/White.hdr";
+    std::string m_EnvMapFilepath = "../../../Assets/meadow_2_4k.hdr";
     float m_EnvMapRotationAzimuth = 0.0f;
     float m_EnvMapRotationAltitude = 0.0f;
+    bool m_EnableEnvMapMIS = true;
+    bool m_ShowEnvMapDirectly = true;
 
     VulkanHelper::Device m_Device;
 
@@ -169,6 +176,7 @@ private:
     VulkanHelper::Buffer m_MaterialsBuffer;
 
     VulkanHelper::Sampler m_TextureSampler;
+    VulkanHelper::Sampler m_LookupTableSampler;
 
     VulkanHelper::ThreadPool* m_ThreadPool;
 

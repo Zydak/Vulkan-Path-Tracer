@@ -86,10 +86,8 @@ public struct Volume
         }
     }
 
-    [mutating]
     public float EvaluateHenyeyGreenstein(float3 V, float3 L)
     {
-        m_Anisotropy = clamp(m_Anisotropy, -0.999f, 0.999f);
         return (1.0f / (4.0f * M_PI)) * ((1.0f - m_Anisotropy * m_Anisotropy) / pow(1.0f + m_Anisotropy * m_Anisotropy - 2.0f * m_Anisotropy * dot(V, L), 1.5f));
     }
 };

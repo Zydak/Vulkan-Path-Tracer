@@ -22,7 +22,7 @@ import Volume;
 [[vk::binding(8, 0)]] Texture2D uMetallicTextures[];
 [[vk::image_format("rgba8")]]
 [[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
-[[vk::binding(10, 0)]] SamplerState uSampler;
+[[vk::binding(10, 0)]] SamplerState uTextureSampler;
 [[vk::binding(11, 0)]] StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
 
 [[vk::image_format("r32f")]]
@@ -43,6 +43,8 @@ import Volume;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
+[[vk::binding(18, 0)]] SamplerState uLookupTableSampler;
+
 [shader("closesthit")]
 void Main(inout Payload payload, in float2 attrib)
 {
@@ -54,24 +56,31 @@ void Main(inout Payload payload, in float2 attrib)
     // I'm not sure if it's possible to use multiple hit shaders like it is with miss shaders, so I also use this shader
     // to query the distance to surface. I could use ray queries but they have really low hardware coverage, I think that's
     // because they aren't emulated in software if RT cores are absent in the GPU
-    if (payload.QueryDistance)
-    {
-        payload.DistanceToSurface = RayTCurrent();
-        return;
-    }
+    // if (payload.QueryDistance)
+    // {
+    //     payload.DistanceToSurface = RayTCurrent();
+    //     return;
+    // }
 
     float3 barycentrics = float3(1.0f - attrib.x - attrib.y, attrib.x, attrib.y);
-    uint geometryIndex = GeometryIndex();
+    uint geometryIndex = InstanceIndex();
 
     Surface surface;
     // AMD requires NonUniformResourceIndex
-    surface.Initialize(uVertices[NonUniformResourceIndex(geometryIndex)], uIndices[NonUniformResourceIndex(geometryIndex)], barycentrics);
+    surface.Initialize(
+        uVertices[NonUniformResourceIndex(geometryIndex)],
+        uIndices[NonUniformResourceIndex(geometryIndex)],
+        barycentrics,
+        uTextureSampler,
+        uNormalTextures[NonUniformResourceIndex(geometryIndex)]
+    );
 
     Material material;
     material.Initialize(
         uMaterials[NonUniformResourceIndex(geometryIndex)],
         surface,
-        uSampler,
+        uTextureSampler,
+        uLookupTableSampler,
         uBaseColorTextures[NonUniformResourceIndex(geometryIndex)],
         uRoughnessTextures[NonUniformResourceIndex(geometryIndex)],
         uMetallicTextures[NonUniformResourceIndex(geometryIndex)],
@@ -132,7 +141,41 @@ void Main(inout Payload payload, in float2 attrib)
 
     // ---------------------------------------------------------------------------------
     //
-    // Sample BxDFs
+    // Importance Sample Env map
+    //
+
+    float3 toEnvMapDirectionWorld;
+    float3 toEnvMapDirectionTangent;
+    float4 envMapValue;
+    bool canHitEnvMap = false;
+    #ifdef ENABLE_ENV_MAP_MIS
+    {
+        payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
+
+        float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+        float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(1.0f, 0.0f, 0.0f), altitude);
+        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(0.0f, 1.0f, 0.0f), azimuth);
+
+        toEnvMapDirectionTangent = surface.WorldToTangent(toEnvMapDirectionWorld);
+        canHitEnvMap = toEnvMapDirectionTangent.z > 0.0f;
+
+        if (canHitEnvMap)
+        {
+            RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+            query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, surface.GetWorldPos(), 0.0001, toEnvMapDirectionWorld, 1000000);
+            query.Proceed();
+            if (query.CommittedStatus() != COMMITTED_NOTHING)
+            {
+                canHitEnvMap = false; // If an intersection is found on the way that means the shaded point is obscured by geometry
+            }
+        }
+    }
+    #endif
+
+    // ---------------------------------------------------------------------------------
+    //
+    // Importance Sample BxDFs
     //
 
     // Choose sampling probabilities for each lobe
@@ -155,21 +198,8 @@ void Main(inout Payload payload, in float2 attrib)
 
     float3 V = normalize(-WorldRayDirection());
 
-    // Importance Sample Environment map
-    float3 toLightEnv;
-    float4 envMapValue;
-    payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
-    float3 envMapColor = envMapValue.rgb;
-    float envMapPDF = envMapValue.a;
-
-    float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
-    float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-    toLightEnv = Rotate(toLightEnv, float3(1.0f, 0.0f, 0.0f), altitude);
-    toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
-
     // All computations are done in tangent space
     V = surface.WorldToTangent(V);
-    toLightEnv = surface.WorldToTangent(toLightEnv);
 
     BxDFEval envMapDirectionEval = BxDFEval(0, 0);
     BxDFSample sample;
@@ -178,25 +208,41 @@ void Main(inout Payload payload, in float2 attrib)
     {
         // Sample diffuse lobe
         sample = material.SampleDiffuse(payload.Sampler, V);
-        envMapDirectionEval = material.EvaluateDiffuse(V, toLightEnv);
+
+        #ifdef ENABLE_ENV_MAP_MIS
+        if (canHitEnvMap)
+            envMapDirectionEval = material.EvaluateDiffuse(V, toEnvMapDirectionTangent);
+        #endif
     }
     else if (x1 < diffuseProbability + metallicProbability)
     {
         // Sample metallic lobe
         sample = material.SampleMetallic(payload.Sampler, V);
-        envMapDirectionEval = material.EvaluateMetallic(V, toLightEnv);
+
+        #ifdef ENABLE_ENV_MAP_MIS
+        if (canHitEnvMap)
+            envMapDirectionEval = material.EvaluateMetallic(V, toEnvMapDirectionTangent);
+        #endif
     }
     else if (x1 < diffuseProbability + metallicProbability + dielectricProbability)
     {
         // Sample dielectric lobe
         sample = material.SampleDielectric(payload.Sampler, V);
-        envMapDirectionEval = material.EvaluateDielectric(V, toLightEnv);
+
+        #ifdef ENABLE_ENV_MAP_MIS
+        if (canHitEnvMap)
+            envMapDirectionEval = material.EvaluateDielectric(V, toEnvMapDirectionTangent);
+        #endif
     }
     else
     {
         // Sample glass lobe
         sample = material.SampleGlass(payload.Sampler, V, wasRefracted);
-        envMapDirectionEval = material.EvaluateGlass(V, toLightEnv, wasRefracted);
+
+        #ifdef ENABLE_ENV_MAP_MIS
+        if (canHitEnvMap)
+            envMapDirectionEval = material.EvaluateGlass(V, toEnvMapDirectionTangent, wasRefracted);
+        #endif
 
         // Ray left the mesh
         if (wasRefracted && surface.WasHitFromInside())
@@ -224,46 +270,45 @@ void Main(inout Payload payload, in float2 attrib)
 
     // Everything is calculated in tangent space, so at the end we have to convert to world space
     const float3 newDir = surface.TangentToWorld(sample.L);
-    const float3 toLightDir = surface.TangentToWorld(toLightEnv);
+
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
+    payload.Direction = newDir;
 
-    bool canHit = (!wasRefracted && dot(toLightDir, surface.GetNormal()) > 0.0f) || (wasRefracted && dot(toLightDir, surface.GetNormal()) < 0.0f);
-    canHit = (bool)((float)canHit * (float)(envMapDirectionEval.PDF > 0.0f) * (float)(envMapPDF > 0.0f));
+    payload.Contribution *= float3(sample.BxDF / sample.PDF);
 
-    // Account for volumes in the way of the ray
-    float volumeAbsorption = 1.0f;
-
-    // For ray queries it's faster to exclude them with if statements if they're not needed, even if it introduces branching
-    if (canHit)
+    #ifdef ENABLE_ENV_MAP_MIS
     {
-        canHit = !DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightDir);
-
-        if (canHit)
+        if (canHitEnvMap)
         {
-            for (int i = 0; i < uUBO.VolumesCount; i++)
+            // Transmittance along the ray how to be accounted for so that volumes will cast shadows
+            float transmittance = 1.0f;
+            for (uint i = 0; i < uUBO.VolumesCount; i++)
             {
-                Volume volume = uVolumes[i];
-                VolumeIntersection volIntersection = volume.IntersectWithRay(payload.Origin, toLightDir);
+                const Volume volume = uVolumes[i];
+                VolumeIntersection intersection = volume.IntersectWithRay(payload.Origin, toEnvMapDirectionWorld);
+
                 if (volume.IsPointInside(payload.Origin))
                 {
-                    volIntersection.HitPointNear = 0.0f; // Start inside the volume
+                    intersection.HitPointNear = 0.0f;
                 }
-                float distanceThroughVolume = max(volIntersection.HitPointFar - volIntersection.HitPointNear, 0.0f);
 
-                if (distanceThroughVolume > 0.0f)
-                    volumeAbsorption *= exp(-volume.GetDensity() * distanceThroughVolume);
+                float pathThroughVolumeLength = intersection.HitPointFar - intersection.HitPointNear;
+                transmittance *= exp(-volume.GetDensity() * pathThroughVolumeLength);
             }
+
+            const float envMapPDF = envMapValue.a;
+            const float3 envMapColor = envMapValue.rgb;
+            envMapDirectionEval.PDF *= transmittance;
+            
+            payload.Emitted += transmittance * envMapDirectionEval.BxDF * envMapColor / envMapPDF * PowerHeuristics(envMapPDF, envMapDirectionEval.PDF) * (float)canHitEnvMap;
+
+            payload.Contribution *= PowerHeuristics(sample.PDF, envMapDirectionEval.PDF);
         }
     }
-    payload.Emitted += volumeAbsorption * envMapDirectionEval.BxDF * envMapColor / envMapPDF * PowerHeuristics(envMapPDF, envMapDirectionEval.PDF) * (float)canHit;
-
-    envMapDirectionEval.PDF *= (float)canHit; // set PDF to 0 if can't hit
-
-    payload.Contribution *= float3(sample.BxDF / sample.PDF) * PowerHeuristics(sample.PDF, envMapDirectionEval.PDF);
-    payload.Direction = newDir;
+    #endif
 
     // Invalid samples have to be discarded
     bool isInvalid = (wasRefracted && sample.L.z >= 0.0f) || (!wasRefracted && sample.L.z <= 0.0f) || sample.PDF <= 0.0f;

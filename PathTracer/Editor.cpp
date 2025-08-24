@@ -190,7 +190,8 @@ void Editor::RenderMaterialSettings()
         uint32_t MaterialIndex;
         std::string FilePath;
     };
-    if(ImGui::Button(("Base Color: " + m_PathTracer.GetBaseColorTextureName((uint32_t)selectedMaterialIndex)).c_str()))
+    std::string baseColorName = m_PathTracer.GetBaseColorTextureName((uint32_t)selectedMaterialIndex);
+    if(ImGui::Button(("Base Color: " + baseColorName).c_str()))
     {
         auto selection = pfd::open_file("Select texture", "", {"Image Files","*.png *.jpg *.jpeg"}).result();
         if (!selection.empty())
@@ -203,7 +204,23 @@ void Editor::RenderMaterialSettings()
             });
         }
     }
-    if(ImGui::Button(("Normal: " + m_PathTracer.GetNormalTextureName((uint32_t)selectedMaterialIndex)).c_str()))
+    if (baseColorName != "Default White Texture")
+    {
+        ImGui::SameLine();
+        ImGui::PushID("BaseColorTexture");
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetBaseColorTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+        ImGui::PopID();
+    }
+
+    std::string normalMapName = m_PathTracer.GetNormalTextureName((uint32_t)selectedMaterialIndex);
+    if(ImGui::Button(("Normal: " + normalMapName).c_str()))
     {
         auto selection = pfd::open_file("Select texture").result();
         if (!selection.empty())
@@ -216,7 +233,23 @@ void Editor::RenderMaterialSettings()
             });
         }
     }
-    if(ImGui::Button(("Roughness: " + m_PathTracer.GetRoughnessTextureName((uint32_t)selectedMaterialIndex)).c_str()))
+    if (normalMapName != "Default Normal Texture")
+    {
+        ImGui::SameLine();
+        ImGui::PushID("NormalTexture");
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetNormalTexture((uint32_t)selectedMaterialIndex, "Default Normal Texture", commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+        ImGui::PopID();
+    }
+
+    std::string roughnessTextureName = m_PathTracer.GetRoughnessTextureName((uint32_t)selectedMaterialIndex);
+    if(ImGui::Button(("Roughness: " + roughnessTextureName).c_str()))
     {
         auto selection = pfd::open_file("Select texture").result();
         if (!selection.empty())
@@ -229,7 +262,23 @@ void Editor::RenderMaterialSettings()
             });
         }
     }
-    if(ImGui::Button(("Metallic: " + m_PathTracer.GetMetallicTextureName((uint32_t)selectedMaterialIndex)).c_str()))
+    if (roughnessTextureName != "Default White Texture")
+    {
+        ImGui::SameLine();
+        ImGui::PushID("RoughnessTexture");
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetRoughnessTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+        ImGui::PopID();
+    }
+
+    std::string metallicTextureName = m_PathTracer.GetMetallicTextureName((uint32_t)selectedMaterialIndex);
+    if(ImGui::Button(("Metallic: " + metallicTextureName).c_str()))
     {
         auto selection = pfd::open_file("Select texture").result();
         if (!selection.empty())
@@ -242,7 +291,23 @@ void Editor::RenderMaterialSettings()
             });
         }
     }
-    if(ImGui::Button(("Emissive: " + m_PathTracer.GetEmissiveTextureName((uint32_t)selectedMaterialIndex)).c_str()))
+    if (metallicTextureName != "Default White Texture")
+    {
+        ImGui::SameLine();
+        ImGui::PushID("MetallicTexture");
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetMetallicTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+        ImGui::PopID();
+    }
+
+    std::string emissiveTextureName = m_PathTracer.GetEmissiveTextureName((uint32_t)selectedMaterialIndex);
+    if(ImGui::Button(("Emissive: " + emissiveTextureName).c_str()))
     {
         auto selection = pfd::open_file("Select texture").result();
         if (!selection.empty())
@@ -254,6 +319,20 @@ void Editor::RenderMaterialSettings()
                 m_RenderTime = 0.0f;
             });
         }
+    }
+    if (emissiveTextureName != "Default White Texture")
+    {
+        ImGui::SameLine();
+        ImGui::PushID("EmissiveTexture");
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_Device.WaitUntilIdle();
+                m_PathTracer.SetEmissiveTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+        ImGui::PopID();
     }
 
     if (materialModified)
@@ -424,6 +503,24 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static bool enableEnvMapMIS = m_PathTracer.IsEnvMapMISEnabled();
+    if (ImGui::Checkbox("Enable Environment Map MIS", &enableEnvMapMIS))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnvMapMIS(enableEnvMapMIS, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static bool showEnvMapDirectly = m_PathTracer.IsEnvMapShownDirectly();
+    if (ImGui::Checkbox("Show Environment Map Directly", &showEnvMapDirectly))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnvMapShownDirectly(showEnvMapDirectly, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderEnvMapSettings()
@@ -576,6 +673,8 @@ void Editor::RenderVolumeSettings()
     static PathTracer::Volume selectedVolume;
     selectedVolume = volumes[(size_t)selectedVolumeIndex];
 
+    ImGui::PushID("VolumeSettings");
+
     if (ImGui::InputFloat3("Corner Min", &selectedVolume.CornerMin.x))
         volumeModified = true;
     if (ImGui::InputFloat3("Corner Max", &selectedVolume.CornerMax.x))
@@ -589,6 +688,8 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp))
         volumeModified = true;
+
+    ImGui::PopID();
 
     if (volumeModified)
     {
