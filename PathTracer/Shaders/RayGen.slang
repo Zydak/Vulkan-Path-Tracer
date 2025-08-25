@@ -57,7 +57,8 @@ void Main()
         payload.Depth = 0;
         payload.Origin = origin;
         payload.Direction = direction;
-        payload.Contribution = float3(1.0f, 1.0f, 1.0f);
+        payload.BxDF = float3(1.0f, 1.0f, 1.0f);
+        payload.PDF = 1.0f;
         payload.Emitted = float3(0.0f, 0.0f, 0.0f);
         payload.InMedium = false;
         payload.QueryDistance = false;
@@ -73,7 +74,6 @@ void Main()
             rayDesc.TMin = 0.00001f;
             rayDesc.TMax = 1000.0f;
 
-            payload.Contribution = float3(1.0f, 1.0f, 1.0f);
             payload.Emitted = float3(0.0f, 0.0f, 0.0f);
 
             bool scatteredInVolume = ScatteredInVolume(payload);
@@ -83,7 +83,7 @@ void Main()
                 TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
             radiance += payload.Emitted * pathThroughput;
-            pathThroughput *= payload.Contribution;
+            pathThroughput *= payload.BxDF / payload.PDF;
 
             // Russian roulette
             float p = max(pathThroughput.x, max(pathThroughput.y, pathThroughput.z));
@@ -182,8 +182,6 @@ bool ScatteredInVolume(inout Payload payload)
                         transmittance *= exp(-volume.GetDensity() * pathThroughVolumeLength);
                     }
 
-                    phaseLightDir *= transmittance;
-
                     float3 colorSample = volume.GetColor() * phaseSampledDir;
                     float3 colorLight = volume.GetColor() * phaseLightDir;
 
@@ -192,7 +190,14 @@ bool ScatteredInVolume(inout Payload payload)
                        payload.Emitted = volume.GetEmissiveColor() + transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
                     }
                     payload.Direction = newDir;
-                    payload.Contribution = colorSample / phaseSampledDir * PowerHeuristics(phaseSampledDir, phaseLightDir);
+                    payload.BxDF = colorSample;// / phaseSampledDir * PowerHeuristics(phaseSampledDir, phaseLightDir);
+                    payload.PDF = phaseSampledDir;
+                }
+                #else
+                {
+                    payload.Direction = newDir;
+                    payload.BxDF = volume.GetColor();
+                    payload.PDF = 1.0f;
                 }
                 #endif
 

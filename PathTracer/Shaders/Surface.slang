@@ -35,12 +35,17 @@ public struct Surface
         m_WorldPos = v1.Position * barycentrics.x + v2.Position * barycentrics.y + v3.Position * barycentrics.z;
         m_WorldPos = mul(ObjectToWorld3x4(), float4(m_WorldPos, 1.0f)).xyz;
 
-        // Don't use model normals, they're often transformed which causes rays to go under the geometry
-        // The same goes for normal textures, they are not supported for now since it's quite hard to get them working properly
-        m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
-
-        // Instead compute geometric normals
-        //m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
+        #ifdef USE_ONLY_GEOMETRY_NORMALS
+        {
+            m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
+        }
+        #else
+        {
+            // Transformed normals often cause rays to go under the geometry the same goes for normal textures.
+            // They aren't implemented properly yet so there is no compensation for that
+            m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
+        }
+        #endif
         m_Normal = mul(m_Normal, WorldToObject()).xyz;
 
         if (dot(m_Normal, WorldRayDirection()) > 0.0f)
@@ -61,9 +66,13 @@ public struct Surface
         m_Tangent = normalize(cross(up, m_Normal));
         m_Bitangent = cross(m_Normal, m_Tangent);
 
-        float3 normalMapValue = normalTexture.SampleLevel(textureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
-        normalMapValue = TangentToWorld(normalMapValue);
-        m_Normal = normalize(normalMapValue);
+        #ifndef USE_ONLY_GEOMETRY_NORMALS
+        {
+            float3 normalMapValue = normalTexture.SampleLevel(textureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
+            normalMapValue = TangentToWorld(normalMapValue);
+            m_Normal = normalize(normalMapValue);
+        }
+        #endif
     }
 
     public float3 TangentToWorld(in float3 vec)

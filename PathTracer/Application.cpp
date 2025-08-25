@@ -29,8 +29,6 @@ Application::Application()
             break;
         }
     }
-    
-    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/");
 
     if (!std::filesystem::exists("../../../Assets/LookupTables/ReflectionLookup.bin"))
     {

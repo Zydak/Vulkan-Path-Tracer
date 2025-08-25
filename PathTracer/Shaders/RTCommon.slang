@@ -5,7 +5,8 @@ public struct Payload
 {
     public float3 Origin;
     public float3 Direction;
-    public float3 Contribution; // BRDF * cosine / PDF
+    public float3 BxDF; // Also contains cosine term
+    public float PDF;
     public float3 Emitted; // Surface Emitted Light
 
     public uint Depth;
@@ -67,7 +68,7 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
     payload.Depth = 0;
 
     TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
-
+    
     return payload.Depth == 0;
 }
 

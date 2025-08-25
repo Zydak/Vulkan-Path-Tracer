@@ -108,7 +108,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     ResetPathTracing();
 
     m_Volumes.clear();
-    
+    m_TotalVertexCount = 0;
+    m_TotalIndexCount = 0;
+
     VulkanHelper::AssetImporter importer = VulkanHelper::AssetImporter::New({m_ThreadPool}).Value();
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
@@ -151,6 +153,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         meshConfig.CommandBuffer = &initializationCmd;
 
         m_SceneMeshes.push_back(VulkanHelper::Mesh::New(meshConfig).Value());
+
+        m_TotalVertexCount += mesh.Vertices.Size();
+        m_TotalIndexCount += mesh.Indices.Size();
     }
     
     // Base Color Textures
@@ -474,6 +479,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_Volumes.size() > 0)
         defines.push_back({"ENABLE_VOLUMES", "1"});
+    if (m_UseOnlyGeometryNormals)
+        defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
@@ -811,6 +818,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_Volumes.size() > 0)
         defines.push_back({"ENABLE_VOLUMES", "1"});
+    if (m_UseOnlyGeometryNormals)
+        defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
@@ -1117,6 +1126,16 @@ void PathTracer::SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer 
         return;
 
     m_ShowEnvMapDirectly = value;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_UseOnlyGeometryNormals == useOnlyGeometryNormals)
+        return;
+
+    m_UseOnlyGeometryNormals = useOnlyGeometryNormals;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
 }
