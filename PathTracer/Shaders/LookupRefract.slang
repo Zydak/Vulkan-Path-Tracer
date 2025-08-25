@@ -76,8 +76,7 @@ void Main(uint3 threadId: SV_DispatchThreadID)
 
             if (L.z > 0.0)
             {
-                BxDFEval eval = material.EvaluateReflection(V, L, F);
-                eval.PDF *= F;
+                BxDFEval eval = material.EvaluateReflection(V, L, 1.0f);
 
                 if (eval.PDF > 0.0 && !isnan(eval.BxDF.x) && !isinf(eval.BxDF.x))
                     val += eval.BxDF.x / eval.PDF;
@@ -90,8 +89,7 @@ void Main(uint3 threadId: SV_DispatchThreadID)
 
             if (L.z < 0.0)
             {
-                BxDFEval eval = material.EvaluateRefraction(V, L, F);
-                eval.PDF *= (1.0f - F);
+                BxDFEval eval = material.EvaluateRefraction(V, L, 0.0f);
 
                 if (eval.PDF > 0.0 && !isnan(eval.BxDF.x) && !isinf(eval.BxDF.x))
                     val += eval.BxDF.x / eval.PDF;

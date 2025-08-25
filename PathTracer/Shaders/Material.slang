@@ -101,16 +101,8 @@ public struct Material
     // BxDF Functions
     //
     //
-    public BxDFSample SampleDiffuse(inout Sampler sampler, in float3 V)
-    {
-        float3 L = sampler.RandomSphereVecCosineWeight(float3(0.0f, 0.0f, 1.0f)); // Tangent space
 
-        BxDFEval eval = EvaluateDiffuse(V, L);
-
-        return { L, eval.BxDF, eval.PDF };
-    }
-
-    public BxDFEval EvaluateDiffuse(in float3 V, in float3 L)
+    public BxDFEval EvaluateDiffuse(in float3 V, in float3 H, in float3 L)
     {
         float PDF = L.z * M_1_OVER_PI;
         float3 BRDF = M_1_OVER_PI * Properties.BaseColor * L.z;
@@ -120,22 +112,9 @@ public struct Material
         return { BRDF, PDF };
     }
 
-    public BxDFSample SampleMetallic(inout Sampler sampler, in float3 V)
+    public BxDFEval EvaluateMetallic(in float3 V, in float3 H, in float3 L)
     {
-        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
-        float3 L = normalize(reflect(-V, H));
-
-        BxDFEval eval = EvaluateMetallic(V, L);
-
-        return { L, eval.BxDF, eval.PDF };
-    }
-
-    public BxDFEval EvaluateMetallic(in float3 V, in float3 L)
-    {
-        float3 H = normalize(V + L);
-
-        float schlickWeight = SchlickWeight(dot(V, H));
-        float3 F = lerp(Properties.BaseColor.xyz, 1.0f, schlickWeight);
+        float3 F = SchlickFresnel(dot(V, H), Properties.BaseColor.xyz);
 
         BxDFEval eval = EvaluateReflection(V, L, F);
 
@@ -147,106 +126,13 @@ public struct Material
         return eval;
     }
 
-    public BxDFSample SampleDielectric(inout Sampler sampler, in float3 V)
-    {
-        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
-        float3 L = normalize(reflect(-V, H));
-
-        BxDFEval eval = EvaluateDielectric(V, L);
-
-        return { L, eval.BxDF, eval.PDF };
-    }
-
-    public BxDFEval EvaluateDielectric(in float3 V, in float3 L)
+    public BxDFEval EvaluateDielectricReflection(in float3 V, in float3 H, in float3 L)
     {
         BxDFEval eval = EvaluateReflection(V, L, 1.0f);
-        
+
         float layer = Properties.Anisotropy * 32.0;
         float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
-        energyCompensation = (1.0f - energyCompensation) / energyCompensation;
-        eval.BxDF = (1.0 + float3(energyCompensation)) * eval.BxDF;
-
-        return eval;
-    }
-
-    public BxDFSample SampleGlass(inout Sampler sampler, in float3 V, out bool refracted)
-    {
-        float3 H = sampler.GGXSampleAnisotopic(V, Ax, Ay);
-
-        float F = DielectricFresnel(abs(dot(V, H)));
-
-        float x1 = sampler.UniformFloat();
-
-        BxDFEval eval;
-        float3 L;
-        if (x1 < F)
-        {
-            // Reflect
-            refracted = false;
-
-            L = normalize(reflect(-V, H));
-
-            eval = EvaluateReflection(V, L, F);
-            eval.PDF *= F;
-        }
-        else
-        {
-            // Refract
-            refracted = true;
-
-            L = normalize(refract(-V, H, Eta));
-
-            eval = EvaluateRefraction(V, L, F);
-            eval.PDF *= (1.0f - F);
-        }
-
-        float energyCompensation;
-        float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
-        const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
-        if (isInside)
-        {
-            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
-        }
-        else
-        {
-            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
-        }
-
-        energyCompensation = max(energyCompensation, 0.00001);
-        eval.BxDF = eval.BxDF / energyCompensation;
-
-        return { L, eval.BxDF, eval.PDF };
-    }
-
-    public BxDFEval EvaluateGlass(in float3 V, in float3 L, in bool refracted)
-    {
-        BxDFEval eval;
-
-        float eta = 1.0f * (float)(L.z > 0) + Eta * (float)(L.z < 0);
-        float F = DielectricFresnel(abs(dot(eta * V, L)));
-
-        BxDFEval refractEval = EvaluateRefraction(V, L, F);
-
-        BxDFEval reflectEval = EvaluateReflection(V, L, F);
-
-        const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
-        
-        eval.PDF = (1.0f - F) * refractEval.PDF + F * reflectEval.PDF;
-        eval.BxDF = (1.0f - F) * refractEval.BxDF + F * reflectEval.BxDF;
-
-        float energyCompensation;
-        float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
-        if (isInside)
-        {
-            energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
-        }
-        else
-        {
-            energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
-        }
-
-        energyCompensation = max(energyCompensation, 0.00001);
-        eval.BxDF = eval.BxDF / energyCompensation;
+        eval.BxDF /= energyCompensation;
 
         return eval;
     }
@@ -264,8 +150,8 @@ public struct Material
         
         float3 H = normalize(V + L);
 
-        float LdotH = max(0.0f, dot(L, H));
-        float VdotH = max(0.0f, dot(V, H));
+        float LdotH = dot(L, H);
+        float VdotH = dot(V, H);
 
         float D = GGXDistributionAnisotropic(H);
 
@@ -273,7 +159,7 @@ public struct Material
         float GL = GGXSmithAnisotropic(L);
         float G = GV * GL;
 
-        float PDF = (GV * VdotH * D / V.z) / (4.0f * VdotH);
+        float PDF = (GV * max(VdotH, 0.0f) * D / V.z) / (4.0f * VdotH);
         float3 brdf = D * F * GV * GL / (4.0f * V.z);
 
         PDF *= (float)(L.z > 0.0f);
@@ -289,7 +175,7 @@ public struct Material
     //
     public BxDFEval EvaluateRefraction(in float3 V, in float3 L, in float3 F)
     {
-        if (L.z >= 0.01f)
+        if (L.z >= 0.0f)
             return { float3(0.0f, 0.0f, 0.0f), 0.0f };
 
         float3 H = normalize(Eta * V + L);
@@ -355,11 +241,11 @@ public struct Material
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    float SchlickWeight(float VdotH)
+    public static float3 SchlickFresnel(float VdotH, float3 F0)
     {
         float m = clamp(1.0 - VdotH, 0.0, 1.0);
         float m2 = m * m;
-        return m2 * m2 * m;
+        return F0 + (1.0f - F0) * (m2 * m2 * m);
     }
 
     public float DielectricFresnel(float VdotH)

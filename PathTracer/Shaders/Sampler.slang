@@ -116,7 +116,7 @@ public struct Sampler
     }
 
     [mutating]
-    public float3 RandomSphereVecCosineWeight(in float3 normal)
+    public float3 RandomHemisphereVecCosineWeight(in float3 normal)
     {
         return normalize(RandomSphereVec() + normal);
     }

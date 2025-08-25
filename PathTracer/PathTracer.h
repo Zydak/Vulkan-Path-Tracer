@@ -81,6 +81,9 @@ public:
     [[nodiscard]] inline const std::vector<Volume>& GetVolumes() const { return m_Volumes; }
     [[nodiscard]] inline bool IsEnvMapMISEnabled() const { return m_EnableEnvMapMIS; }
     [[nodiscard]] inline bool IsEnvMapShownDirectly() const { return m_ShowEnvMapDirectly; }
+    [[nodiscard]] inline uint64_t GetTotalVertexCount() const { return m_TotalVertexCount; }
+    [[nodiscard]] inline uint64_t GetTotalIndexCount() const { return m_TotalIndexCount; }
+    [[nodiscard]] inline bool UseOnlyGeometryNormals() const { return m_UseOnlyGeometryNormals; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -94,6 +97,7 @@ public:
     void AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
     void RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer);
     void SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
+    void SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -116,8 +120,12 @@ private:
     std::string m_EnvMapFilepath = "../../../Assets/meadow_2_4k.hdr";
     float m_EnvMapRotationAzimuth = 0.0f;
     float m_EnvMapRotationAltitude = 0.0f;
-    bool m_EnableEnvMapMIS = true;
+    bool m_EnableEnvMapMIS = false;
     bool m_ShowEnvMapDirectly = true;
+    bool m_UseOnlyGeometryNormals = false;
+
+    uint64_t m_TotalVertexCount = 0;
+    uint64_t m_TotalIndexCount = 0;
 
     VulkanHelper::Device m_Device;
 

@@ -20,7 +20,7 @@ float2 getSphericalUv(float3 v)
 [shader("miss")]
 void Main(inout Payload payload)
 {
-    float3 color;
+    float4 colorPdf;
     #ifdef SHOW_ENV_MAP_DIRECTLY
     {
         uint2 textureSize;
@@ -35,7 +35,7 @@ void Main(inout Payload payload)
         float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
         rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
 
-        color = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0).rgb;
+        colorPdf = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0);
     }
     #else // Show env map only indirectly (bounced from object)
     {
@@ -53,15 +53,21 @@ void Main(inout Payload payload)
             float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
             rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
 
-            color = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0).rgb;
+            colorPdf = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0);
         }
         else
         {
-            color = float3(0.0f, 0.0f, 0.0f);
+            colorPdf = float4(0.0f, 0.0f, 0.0f, 1.0f);
         }
     }
     #endif
 
-    payload.Emitted = color;
+    payload.Emitted = colorPdf.rgb;
+    #ifdef ENABLE_ENV_MAP_MIS
+    {
+        payload.Emitted *= PowerHeuristics(payload.PDF, colorPdf.a);
+    }
+    #endif
+
     payload.Depth = MAX_DEPTH; // Set depth to max value to indicate no hit
 }

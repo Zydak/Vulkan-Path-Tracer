@@ -413,6 +413,9 @@ void Editor::RenderInfo()
     uint32_t samplesAccumulated = glm::min(m_PathTracer.GetSamplesAccumulated(), m_PathTracer.GetMaxSamplesAccumulated());
     ImGui::Text("Estimated Time: %.3f s", m_RenderTime * (m_PathTracer.GetMaxSamplesAccumulated() - samplesAccumulated) / samplesAccumulated);
 
+    ImGui::Text("Total Vertex Count: %u", (uint)m_PathTracer.GetTotalVertexCount());
+    ImGui::Text("Total Index Count: %u", (uint)m_PathTracer.GetTotalIndexCount());
+
     if(ImGui::Button("Reset Path Tracing"))
     {
         m_PathTracer.ResetPathTracing();
@@ -521,6 +524,15 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static bool useOnlyGeometryNormals = m_PathTracer.UseOnlyGeometryNormals();
+    if (ImGui::Checkbox("Use Only Geometry Normals", &useOnlyGeometryNormals))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetUseOnlyGeometryNormals(useOnlyGeometryNormals, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderEnvMapSettings()
@@ -571,6 +583,9 @@ void Editor::SaveToFileSettings()
     static char fileName[256] = "output";
     ImGui::InputText("File Name", fileName, sizeof(fileName));
 
+    static char savedFilename[256] = "output";
+
+    static bool imageSaved = false;
     if (ImGui::Button("Save"))
     {
         std::string filePath;
@@ -594,8 +609,12 @@ void Editor::SaveToFileSettings()
         PushDeferredTask(std::make_shared<std::string>(filePath), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
             SaveToFile(*(std::string*)data.get(), commandBuffer);
         });
-        ImGui::Text("File saved to: RenderedImages/%s", fileName);
+        imageSaved = true;
+        strcpy(savedFilename, fileName);
     }
+
+    if (imageSaved)
+        ImGui::Text("File saved to: RenderedImages/%s", savedFilename);
 }
 
 void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
