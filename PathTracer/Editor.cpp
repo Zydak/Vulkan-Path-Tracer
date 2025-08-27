@@ -161,6 +161,8 @@ void Editor::RenderMaterialSettings()
         materialModified = true;
     if (ImGui::ColorEdit3("Emissive Color", &selectedMaterial.EmissiveColor.r, ImGuiColorEditFlags_Float))
         materialModified = true;
+    if (ImGui::ColorEdit3("Specular Color", &selectedMaterial.SpecularColor.r, ImGuiColorEditFlags_Float))
+        materialModified = true;
     if (ImGui::SliderFloat("Metallic", &selectedMaterial.Metallic, 0.0f, 1.0f))
         materialModified = true;
     if (ImGui::SliderFloat("Roughness", &selectedMaterial.Roughness, 0.0f, 1.0f))
@@ -530,6 +532,15 @@ void Editor::RenderPathTracingSettings()
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetUseOnlyGeometryNormals(useOnlyGeometryNormals, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static bool useEnergyCompensation = m_PathTracer.UseEnergyCompensation();
+    if (ImGui::Checkbox("Use Energy Compensation", &useEnergyCompensation))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetUseEnergyCompensation(useEnergyCompensation, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }

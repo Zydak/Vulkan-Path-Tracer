@@ -64,6 +64,7 @@ void Main(inout Payload payload)
 
     payload.Emitted = colorPdf.rgb;
     #ifdef ENABLE_ENV_MAP_MIS
+    if (payload.Depth > 0)
     {
         payload.Emitted *= PowerHeuristics(payload.PDF, colorPdf.a);
     }

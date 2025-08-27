@@ -110,7 +110,7 @@ void Main(inout Payload payload, in float2 attrib)
 
     // ---------------------------------------------------------------------------------
     //
-    // Handle Volumes
+    // Handle Volume Inside Mesh
     //
 
     if (payload.InMedium)
@@ -176,13 +176,7 @@ void Main(inout Payload payload, in float2 attrib)
 
         if (canHitEnvMap)
         {
-            RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-            query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, surface.GetWorldPos(), 0.0001, toEnvMapDirectionWorld + surface.GetNormal() * 0.001f, 1000000);
-            query.Proceed();
-            if (query.CommittedStatus() != COMMITTED_NOTHING)
-            {
-                canHitEnvMap = false; // If an intersection is found on the way that means the shaded point is obscured by geometry
-            }
+            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 0.001f, toEnvMapDirectionWorld);
         }
     }
     #endif
@@ -201,115 +195,20 @@ void Main(inout Payload payload, in float2 attrib)
     float3 H = payload.Sampler.GGXSampleAnisotopic(V, material.Ax, material.Ay);
 
     // Choose sampling probabilities for each lobe
-    float F0 = (1.0 - material.Eta) / (1.0f + material.Eta);
-    F0 *= F0;
-    float FSchlick = Material::SchlickFresnel(V.z, F0).x;
     float FDielectric = material.DielectricFresnel(dot(V, H));
+    
+    // Sample and evaluate scattering
+    BxDFSample scatterSample = material.SampleBSDF(payload.Sampler, V, H, FDielectric);
+    bool wasRefracted = scatterSample.L.z < 0.0f;
 
-    float metallicProbability = material.Properties.Metallic;
-    float diffuseProbability = (1.0f - material.Properties.Metallic) * (1.0f - FDielectric) * (1.0f - material.Properties.Transmission);
-    float dielectricProbability = (1.0 - material.Properties.Metallic) * FDielectric * (1.0f - material.Properties.Transmission);
-    float glassProbability = (1.0 - material.Properties.Metallic) * material.Properties.Transmission;
-
-    // Normalize probabilities so they sum up to 1
-    float probabilitySum = metallicProbability + diffuseProbability + dielectricProbability + glassProbability;
-    metallicProbability /= probabilitySum;
-    diffuseProbability /= probabilitySum;
-    dielectricProbability /= probabilitySum;
-    glassProbability /= probabilitySum;
-
-    float x1 = payload.Sampler.UniformFloat();
-
-    BxDFEval envMapDirectionEval = BxDFEval(0, 1);
-    BxDFEval scatterDirectionEval = BxDFEval(0, 1);
-    float3 L;
-    bool wasRefracted = false;
-    if (x1 < metallicProbability)
+    // Evaluate environment map direction
+    BxDFEval envMapDirectionEval = BxDFEval(0, 0);
+    #ifdef ENABLE_ENV_MAP_MIS
+    if (canHitEnvMap)
     {
-        // Sample metallic lobe
-
-        L = normalize(reflect(-V, H));
-        
-        scatterDirectionEval = material.EvaluateMetallic(V, H, L);
-
-        #ifdef ENABLE_ENV_MAP_MIS
-        if (canHitEnvMap)
-            envMapDirectionEval = material.EvaluateMetallic(V, H, toEnvMapDirectionTangent);
-        #endif
+        envMapDirectionEval = material.EvaluateBSDF(V, H, toEnvMapDirectionTangent, FDielectric);
     }
-    else if (x1 < metallicProbability + diffuseProbability)
-    {
-        // Sample diffuse lobe
-
-        L = payload.Sampler.RandomHemisphereVecCosineWeight(float3(0.0f, 0.0f, 1.0f));
-        scatterDirectionEval = material.EvaluateDiffuse(V, H, L);
-
-        #ifdef ENABLE_ENV_MAP_MIS
-        if (canHitEnvMap)
-            envMapDirectionEval = material.EvaluateDiffuse(V, H, toEnvMapDirectionTangent);
-        #endif
-    }
-    else if (x1 < metallicProbability + diffuseProbability + dielectricProbability)
-    {
-        // Sample dielectric reflection lobe
-        L = normalize(reflect(-V, H));
-        scatterDirectionEval = material.EvaluateDielectricReflection(V, H, L);
-
-        #ifdef ENABLE_ENV_MAP_MIS
-        if (canHitEnvMap)
-            envMapDirectionEval = material.EvaluateDielectricReflection(V, H, toEnvMapDirectionTangent);
-        #endif
-    }
-    else
-    {
-        // Sample glass lobe
-        float x2 = payload.Sampler.UniformFloat();
-        if (x2 < FDielectric)
-        {
-            // Reflect
-            L = normalize(reflect(-V, H));
-
-            scatterDirectionEval = material.EvaluateReflection(V, L, 1.0f);
-
-            #ifdef ENABLE_ENV_MAP_MIS
-            if (canHitEnvMap)
-                envMapDirectionEval = material.EvaluateReflection(V, toEnvMapDirectionTangent, 1.0f);
-            #endif
-        }
-        else
-        {
-            // Refract
-            wasRefracted = true;
-            L = normalize(refract(-V, H, material.Eta));
-
-            scatterDirectionEval = material.EvaluateRefraction(V, L, 0.0f);
-
-            #ifdef ENABLE_ENV_MAP_MIS
-            if (canHitEnvMap)
-                envMapDirectionEval = material.EvaluateRefraction(V, toEnvMapDirectionTangent, 0.0f);
-            #endif
-        }
-
-        const bool isInside = NonUniformResourceIndex(material.Eta) > 1.0f;
-        float energyCompensation;
-        float layer = (clamp(material.Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
-        if (isInside)
-        {
-            energyCompensation = uRefractionLookupTableHitFromInside.SampleLevel(uLookupTableSampler, {pow(V.z, 1.0f / 2.0f), material.Properties.Roughness, layer}, 0).r;
-        }
-        else
-        {
-            energyCompensation = uRefractionLookupTableHitFromOutside.SampleLevel(uLookupTableSampler, {pow(V.z, 1.0f / 2.0f), material.Properties.Roughness, layer}, 0).r;
-        }
-
-        if (energyCompensation > 0.01f)
-        {
-            scatterDirectionEval.BxDF /= energyCompensation;
-            #ifdef ENABLE_ENV_MAP_MIS
-                envMapDirectionEval.BxDF /= energyCompensation;
-            #endif
-        }
-    }
+    #endif
 
     // ---------------------------------------------------------------------------------
 
@@ -319,15 +218,15 @@ void Main(inout Payload payload, in float2 attrib)
     //
 
     // Everything is calculated in tangent space, so at the end we have to convert to world space
-    const float3 newDir = surface.TangentToWorld(L);
+    const float3 newDir = surface.TangentToWorld(scatterSample.L);
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
     payload.Direction = newDir;
 
-    payload.BxDF *= scatterDirectionEval.BxDF;
-    payload.PDF *= scatterDirectionEval.PDF;
+    payload.BxDF *= scatterSample.BxDF;
+    payload.PDF *= scatterSample.PDF;
 
     #ifdef ENABLE_ENV_MAP_MIS
     {
@@ -358,7 +257,7 @@ void Main(inout Payload payload, in float2 attrib)
     #endif
 
     // Invalid samples have to be discarded
-    bool isInvalid = scatterDirectionEval.PDF <= 0.0f;
+    bool isInvalid = scatterSample.PDF <= 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
 
     // ---------------------------------------------------------------------------------

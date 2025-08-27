@@ -5,7 +5,9 @@
 [[vk::binding(1, 0)]] RWTexture2D<float4> uOutputImage;
 
 [[vk::image_format("rgba32f")]]
-[[vk::binding(3, 0)]] RWTexture2D<float4> uBloomImage;
+[[vk::binding(3, 0)]] Texture2D<float4> uBloomImage;
+
+[[vk::binding(4, 0)]] SamplerState uSampler;
 
 struct UniformBuffer
 {
@@ -62,7 +64,7 @@ void Main(uint3 threadID : SV_DispatchThreadID)
         return;
     
     float3 color = uInputImage.Load(int3(threadID.xy, 0)).rgb;
-    color += uBloomImage.Load(int2(threadID.xy)).rgb;
+    color += uBloomImage.SampleLevel(uSampler, float2(threadID.xy) / float2(size), 0).rgb;
 
     color *= uUBO.Exposure;
     color = pow(color, float3(1.0 / uUBO.Gamma));

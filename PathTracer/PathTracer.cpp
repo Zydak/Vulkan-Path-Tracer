@@ -342,6 +342,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         Material pathTracerMaterial{};
         pathTracerMaterial.BaseColor = material.BaseColor;
         pathTracerMaterial.EmissiveColor = material.EmissiveColor;
+        pathTracerMaterial.SpecularColor = material.SpecularColor;
         pathTracerMaterial.Metallic = material.Metallic;
         pathTracerMaterial.Roughness = material.Roughness;
         pathTracerMaterial.IOR = material.IOR;
@@ -481,6 +482,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         defines.push_back({"ENABLE_VOLUMES", "1"});
     if (m_UseOnlyGeometryNormals)
         defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
+    if (m_UseEnergyCompensation)
+        defines.push_back({"USE_ENERGY_COMPENSATION", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
@@ -820,6 +823,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         defines.push_back({"ENABLE_VOLUMES", "1"});
     if (m_UseOnlyGeometryNormals)
         defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
+    if (m_UseEnergyCompensation)
+        defines.push_back({"USE_ENERGY_COMPENSATION", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
@@ -1136,6 +1141,16 @@ void PathTracer::SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHe
         return;
 
     m_UseOnlyGeometryNormals = useOnlyGeometryNormals;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_UseEnergyCompensation == useEnergyCompensation)
+        return;
+
+    m_UseEnergyCompensation = useEnergyCompensation;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
 }

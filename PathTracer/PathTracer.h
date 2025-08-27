@@ -9,6 +9,7 @@ public:
     {
         glm::vec3 BaseColor = glm::vec3(1.0f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 SpecularColor = glm::vec3(1.0f);
         glm::vec3 MediumColor = glm::vec3(1.0f);
         glm::vec3 MediumEmissiveColor = glm::vec3(0.0f);
         float Metallic = 0.0f;
@@ -84,6 +85,7 @@ public:
     [[nodiscard]] inline uint64_t GetTotalVertexCount() const { return m_TotalVertexCount; }
     [[nodiscard]] inline uint64_t GetTotalIndexCount() const { return m_TotalIndexCount; }
     [[nodiscard]] inline bool UseOnlyGeometryNormals() const { return m_UseOnlyGeometryNormals; }
+    [[nodiscard]] inline bool UseEnergyCompensation() const { return m_UseEnergyCompensation; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -98,6 +100,7 @@ public:
     void RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer);
     void SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer);
+    void SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -120,9 +123,10 @@ private:
     std::string m_EnvMapFilepath = "../../../Assets/meadow_2_4k.hdr";
     float m_EnvMapRotationAzimuth = 0.0f;
     float m_EnvMapRotationAltitude = 0.0f;
-    bool m_EnableEnvMapMIS = false;
+    bool m_EnableEnvMapMIS = true;
     bool m_ShowEnvMapDirectly = true;
     bool m_UseOnlyGeometryNormals = false;
+    bool m_UseEnergyCompensation = true;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
