@@ -96,6 +96,16 @@ public struct Material
         const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
         Ax = max(0.001, Properties.Roughness / aspect);
         Ay = max(0.001, Properties.Roughness * aspect);
+
+        #ifdef FURNACE_TEST_MODE
+        {
+            Properties.BaseColor = 1.0f;
+            Properties.EmissiveColor = 0.0f;
+            Properties.SpecularColor = 1.0f;
+            Properties.MediumColor = 1.0f;
+            Properties.MediumEmissiveColor = 0.0f;
+        }
+        #endif
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -258,7 +268,7 @@ public struct Material
             float layer = Properties.Anisotropy * 32.0;
             float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
             energyCompensation = (1.0f - energyCompensation) / energyCompensation;
-            eval.BxDF = (1.0 + F * float3(energyCompensation)) * eval.BxDF;
+            eval.BxDF = (1.0 + Properties.BaseColor * float3(energyCompensation)) * eval.BxDF;
         }
         #endif
 

@@ -86,6 +86,7 @@ public:
     [[nodiscard]] inline uint64_t GetTotalIndexCount() const { return m_TotalIndexCount; }
     [[nodiscard]] inline bool UseOnlyGeometryNormals() const { return m_UseOnlyGeometryNormals; }
     [[nodiscard]] inline bool UseEnergyCompensation() const { return m_UseEnergyCompensation; }
+    [[nodiscard]] inline bool IsInFurnaceTestMode() const { return m_FurnaceTestMode; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -101,6 +102,7 @@ public:
     void SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer);
+    void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -127,6 +129,7 @@ private:
     bool m_ShowEnvMapDirectly = true;
     bool m_UseOnlyGeometryNormals = false;
     bool m_UseEnergyCompensation = true;
+    bool m_FurnaceTestMode = false;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
