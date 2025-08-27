@@ -70,5 +70,11 @@ void Main(inout Payload payload)
     }
     #endif
 
+    #ifdef FURNACE_TEST_MODE
+    {
+        payload.Emitted = float3(1.0f);
+    }
+    #endif
+
     payload.Depth = MAX_DEPTH; // Set depth to max value to indicate no hit
 }

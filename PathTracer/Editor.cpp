@@ -544,6 +544,15 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static bool furnaceTestMode = m_PathTracer.IsInFurnaceTestMode();
+    if (ImGui::Checkbox("Furnace Test Mode", &furnaceTestMode))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetFurnaceTestMode(furnaceTestMode, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderEnvMapSettings()
