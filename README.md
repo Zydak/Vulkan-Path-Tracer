@@ -6,11 +6,11 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 # System Requirements
 - [TODO]
 - Either NVIDIA RTX 2000+ series or AMD RX 6000+ series to support all of the extensions below. You may check whether they're present on your device [here](https://vulkan.gpuinfo.org/listdevices.php), maybe it's possible to run on older hardware.
-- - VK_KHR_ray_query,
-- - VK_KHR_acceleration_structure,
-- - VK_KHR_ray_tracing_pipeline,
-- - VK_KHR_swapchain,
-- - VK_KHR_deferred_host_operations,
+  - VK_KHR_ray_query
+  - VK_KHR_acceleration_structure
+  - VK_KHR_ray_tracing_pipeline
+  - VK_KHR_swapchain
+  - VK_KHR_deferred_host_operations
 - Visual Studio 2022 (older versions might work but aren't tested).
 
 # Running
@@ -47,7 +47,7 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 ![Dogs](./Gallery/Dogs.png)
 ![CornellBox](./Gallery/CornellBox.png)
 ![Mustang0](./Gallery/Mustang0.png)
-![Mustang1](./Gallery/Fog.png)
+![Fog](./Gallery/Fog.png)
 ![TeapotMarble](./Gallery/TeapotMarble.png)
 ![TeapotTiled](./Gallery/TeapotTiled.png)
 ![SubsurfaceBall](./Gallery/SubsurfaceBall.png)
@@ -55,12 +55,10 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 
 # In Depth Project Overview
 
-In this section I'll be going over the entire project in depth. Starting from file structure and gradually explaining each feature.
-
-**Note**: This section describes my specific implementation choices and approach. Path tracing can be implemented in many different ways - this represents one possible solution.
+**Disclaimer**: This section describes my specific implementation choices and approach to path tracing. I'll be going over the entire project in depth. Starting from file structure and gradually explaining each feature. The mathematical formulations and techniques described here represent my interpretation and implementation of various published papers and methods. But for authoritative and complete information, please refer to the original papers cited throughout this readme.
 
 ## Code Structure
-This path tracer is built on [VulkanHelper](https://github.com/Zydak/VulkanHelper), my vulkan abstraction to get rid of the explicitness but keep the performance and features of vulkan. I use it for all my project to minimize the boilerplate code.
+This path tracer is built on [VulkanHelper](https://github.com/Zydak/VulkanHelper), my vulkan abstraction to get rid of the explicitness but keep the performance and features of vulkan. I use it for all my projects to minimize the boilerplate code.
 
 The project is split into 5 main components:
 - Application
@@ -73,11 +71,11 @@ The project is split into 5 main components:
 
 Application is simple, it creates window and vulkan instance, and then delegates the rendering into the Editor component.
 
-Editor manages the UI rendering as well as path tracer and post processor componenets. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behaviour.
+Editor manages the UI rendering as well as path tracer and post processor components. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behaviour.
 
 Path tracer is an isolated component, it has no knowledge of the editor. The data to it is passed by get/set functions. This way the communication happens through these small defined channels so there is no coupling between the two, the editor can be easily swapped out. The component itself manages the path tracing, as an input it takes scene filepath and spits out path traced image as an output. It creates and manages all resources needed for path tracing (materials, cameras, mesh buffers). The only way to interact with it (apart from previously mentioned get/set functions) is calling `PathTrace()` which will schedule the work on the GPU.
 
-Post processor also is an isolated component, it has not knowledge of the editor. As an input it takes HDR image and as output it gives post processed LDR image. The only way to interact with it is a set of get/set functions and `PostProcess()` function which does the actual post processing. Right now it doesn't do much, there's just bloom, exposure, gamma and ACES tonemapping.
+Post processor also is an isolated component, it has no knowledge of the editor. As an input it takes HDR image and as output it gives post processed LDR image. The only way to interact with it is a set of get/set functions and `PostProcess()` function which does the actual post processing. Right now it doesn't do much, there's just bloom, exposure, gamma and ACES tonemapping.
 
 Shaders are where all actual work happens. For a shading language I chose Slang since it has good compatibility with Vulkan and is generally nice to work with. The structure here is your classic RT pipeline in any API with the main 3 shaders dictating the code flow:
 
@@ -99,111 +97,140 @@ and some utilities that don't really fit anywhere in particular:
 Then there's also Lookup Table Calculator but it could really be a separate application altogether, it isn't really tied to anything and nothing is really tied to it. So I'll go over it in the [Energy Compensation] section.
 
 ## Ray Tracing Pipeline
-The acceleration structure for ray tracing as well as all mesh intersection tests are handled through the Vulkan RT pipeline, and that part of the code is handled by [VulkanHelper](https://github.com/Zydak/VulkanHelper). I decided to use Vulkan RT pipeline for the simplicity and performance. It allows for utilizing RT cores on the newer GPUs so it's a lot faster than doing everything in compute. And of course you don't have to set up your own acceleration structure so it's way simpler. Although I wonder if using ray queries inside a compute shader would be faster or slower. I never got to test that out. The only thing that's worth noting here is that I do loop based approach for generating rays instead of recursion (I don't spawn new rays from hit shader), I found it around 2x-3x faster. I guess the GPU doesn't like recursion. Also with loop based approach there's no depth limit. Last time I checked vulkan only guarantess that the recursion limit is at least 1, anything above that varies per GPU.
+The acceleration structure for ray tracing as well as all mesh intersection tests are handled through the Vulkan RT pipeline, and that part of the code is handled by [VulkanHelper](https://github.com/Zydak/VulkanHelper). I decided to use Vulkan RT pipeline for the simplicity and performance. It allows for utilizing RT cores on the newer GPUs so it's a lot faster than doing everything in compute. And of course you don't have to set up your own acceleration structure so it's way simpler. Although I wonder if using ray queries inside a compute shader would be faster or slower. I never got to test that out. The only thing that's worth noting here is that I do loop based approach for generating rays instead of recursion (I don't spawn new rays from hit shader), I found it around 2x-3x faster. I guess the GPU doesn't like recursion. Also with loop based approach there's no depth limit. Last time I checked vulkan only guarantees that the recursion limit is at least 1, anything above that varies per GPU.
 
 ## BSDF
-For simulating surface shading materials use principled BSDF (Bidirectional scattering distribution function), which means that there is no material type per se. You edit the material properties values (like metallicness) and the lobes are blended between for you. So to put it into words nicely: it's a **multi-lobe BSDF with scalar-weighted blending**. It's useful because it allows for a lot of artistic control. I can also really easily import materials from different file formats like GLTF or OBJ, so that I don't have to roll my own format.
+Materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a **multi-lobe BSDF with scalar-weighted blending**. This approach is useful because it allows for a lot of artistic control. I can also really easily import materials from different file formats like glTF or OBJ, so that I don't have to roll my own format.
 
-#### Code conventions
-Each path tracer has slightly different notation and assumptions when it comes to the directions. A popular notation is $\omega_o$ for direction from a given point to a viewing point, and $\omega_i$ for the direction from a given point to the light source. But this is a backward path tracer (it traces rays from camera to the scene), so saying that incoming direction ($\omega_i$) is the direction we're actually going in seemed confusing to me. So in code, the **incoming direction** (from a point on surface to view point) is denoted as $V$ (for view), and **outgoing direction** (from a point on surface to a light source) is denoted as $L$ (for light), the same goes for this readme. Also please note that all calculations on material data inside `Material.slang` are done in **tangent space**, not world space. That's for performance reasons, in tangent space there's no need for calculating the cosine of the angle between vector and surface normal. You can get it right away with $\hat{v}.z$
+Currently supported material properties are:
+- Base Color
+- Emissive Color
+- Specular Color
+- Metallic
+- Roughness
+- IOR
+- Transmission
+- Anisotropy
+- Anisotropy Rotation
+- Base Color Texture
+- Normal Texture
+- Metallic Texture
+- Roughness Texture
+- Emissive Texture
 
-### BSDF
-#### Lobes
-The BSDF $f(V, L)$ consists of 4 different lobes
-- Diffuse
+### Code conventions
+Each path tracer has slightly different notation and assumptions when it comes to the directions. A popular notation is $\omega_o$ for direction from a given point to a viewing point, and $\omega_i$ for the direction from a given point to the light source. But this is a backward path tracer (it traces rays from camera to the scene), so saying that incoming direction ($\omega_i$) is the direction we're actually going in seemed confusing to me. So in my code, the **incoming direction** (from a point on surface to view point) is denoted as $\mathbf{V}$ (for view), and **outgoing direction** (from a point on surface to a light source) is denoted as $\mathbf{L}$ (for light), the same notation is used throughout this readme. Also please note all calculations in code on material data inside `Material.slang` are done in **tangent space**, not world space. I chose this for performance reasons, in tangent space there's no need for calculating the cosine of the angle between vector and surface normal. You can get it right away with $\hat{v}_z$.
+
+### Microsurface
+
+I wanted the path tracer to be physically based, so I use microfacet theory to simulate surface scattering. When a ray hits the surface, the microsurface $\mathbf{H}$ is sampled according to the VNDF for GGX. Sampling implementation follows the method described in [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/paper.pdf).
+
+$$
+\text{VNDF} = \frac{G_1(\mathbf{V}) \cdot \text{max}(0, \mathbf{V} \cdot \mathbf{H})\cdot D}{\mathbf{V} \cdot \mathbf{N}}
+$$
+
+### Lobes
+I split materials into 3 different types
 - Metallic
 - Dielectric
 - Glass
 
-When ray hits the surface one of these 4 lobes is sampled stochastically based on their sampling probabilities $p_{\text{diffuse}}$, $p_{\text{metallic}}$, $p_{\text{dielectric}}$, $p_{\text{glass}}$ such that
+When a ray hits the surface, one of these 3 types is sampled stochastically based on their sampling weights $w_{\text{metallic}}$, $w_{\text{dielectric}}$, $w_{\text{glass}}$. These weights are chosen more or less arbitrarily and then are normalized so that they sum up to 1.
 
-$$
-\sum_{i=1}^4 p_i = 1
-$$
+A direction is then sampled from the selected type to determine the outgoing direction $\mathbf{L}$, and the BSDF is evaluated to determine how much radiance is reflected or refracted towards $\mathbf{V}$ from $\mathbf{L}$.
 
-A direction is then sampled from the selected lobe to determine the outgoing direction $L$, and the BSDF is evaluated to determine how much radiance is reflected or refracted towards $V$ from $L$.
-
-In code the probabilites are chosen as follows:
-
-```
-float F0 = (1.0 - material.Eta) / (1.0f + material.Eta);
-F0 *= F0;
-
-float diffuseProbability = (1.0 - material.Properties.Metallic) * (1.0 - material.Properties.Transmission);
-float metallicProbability = material.Properties.Metallic;
-float dielectricProbability = (1.0 - material.Properties.Metallic) * F0 * (1.0 - material.Properties.Transmission);
-float glassProbability = (1.0 - material.Properties.Metallic) * material.Properties.Transmission;
-
-// Normalize probabilities so they sum up to 1
-float probabilitySum = diffuseProbability + metallicProbability + dielectricProbability + glassProbability;
-diffuseProbability /= probabilitySum;
-metallicProbability /= probabilitySum;
-dielectricProbability /= probabilitySum;
-glassProbability /= probabilitySum;
-```
-
-#### Diffuse
-Diffuse is a simple lobe, I decided to use lambertian reflectance here since it's simple and looks okay. It's also perfectly energy conserving.
-
-$$
-f_{\text{diffuse}}(V, L) = \bold{C} \cdot \frac{1}{\pi}
-$$
-
-Outgoing direction $L$ is picked by sampling a cosine weighted distribution. It's done by choosing a random direction on a hemisphere based on 2 random numbers $\xi_1, \xi_2$, multiplying it by normal vector and normalizing the sum. Because the distribution is cosine weighted the PDF must also reflect that:
-
-$$
-p_{\text{diffuse}}(L) = \frac{1}{\pi} \cdot \cos\theta_L
-$$
-
-where $\cos\theta_L$ is $N \cdot L$ and $\bold{C}$ is surface base color
-
-Also please note that in code I bake the cosine term from rendering equation directly into the BxDF calculations for simplicity. So in code you'll see additional $\cos\theta_L$ in the BxDF calculations.
-
-So instead of
-
-```
-float3 BRDF = Properties.BaseColor * M_1_OVER_PI;
-```
-
-you'll find
-
-```
-float3 BRDF = M_1_OVER_PI * Properties.BaseColor * L.z;
-```
-
-the same goes for all other lobes.
+### Sampling
+The BSDF is divided into two parts, sampling the direction (`SampleBSDF(V, H, F)`) and evaluation of that direction (`EvaluateBSDF(V, H, L, F)`). First let's focus on sampling the outgoing direction.
 
 #### Metallic
-Metallic lobe is using anisotropic GGX distribution implemented according to [Sampling the GGX Distribution of Visible Normals by Eric Heitz](https://jcgt.org/published/0007/04/01/paper.pdf).
-
-First the microsurface normal $H$ has to be sampled, for that please refer to the paper above, it even provides full code for the sampling function. The most important thing there is that it uses VNDF given by
-
-$$
-\text{VNDF}(V, H) = \frac{G_1(V)\; \text{max}(0, V \cdot H)\; D(H)}{\cos\theta_V}
-$$
-
-That is the probability of sampling the microsurface normal given $V$.
-
-After $H$ has been sampled $L$ can be computed as
+The sampling weight is simple here: $w_\text{metallic} = metallic$.
+The outgoing direction $\mathbf{L}$ can be computed as
 
 $$
-L = \text{reflect}(-V, H)
+\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})
 $$
 
-With $V$, $L$ and $H$ in place the BRDF can be evaluated.
+Note that it is possible for $\mathbf{L}$ to go below the surface. In that case I discard the sample. That leads to an energy loss which I then fix with energy compensation lookup tables so that everything is energy conserving. The alternative would be to properly simulate multiple surface scattering according to [Heitz 2016](https://jo.dreggn.org/home/2016_microfacets.pdf). I'll touch on that later.
+
+#### Dielectric
+
+Sampling weight is $w_\text{dielectric} = (1 - metallic) * (1 - transmission)$.
+
+Unlike metals, where I only simulate reflection, the dielectrics are a little bit more complicated. I basically simulate 2 cases here: the light can either reflect from the surface, or transmit into it.
+
+The probability of ray being reflected is given by the fresnel equation
 
 $$
-f_{\text{metallic}}(V, L) = \frac{F(V, H) D(H) G(V, L)}{4 \cos\theta_V \cos\theta_L}
+\text{Given:} \quad \eta = \frac{n_i}{n_t}, \quad \cos\theta_i = \mathbf{V} \cdot \mathbf{H} \\[6pt]
+\sin^2\theta_t = \eta^2 \left(1 - \cos^2\theta_i\right) \\[6pt]
+\text{If } \sin^2\theta_t > 1: \quad F_D = 1\\[6pt]
+\text{Else:} \quad \cos\theta_t = \sqrt{1 - \sin^2\theta_t} \\[6pt]
+r_s = \frac{\eta \cos\theta_t - \cos\theta_i}{\eta \cos\theta_t + \cos\theta_i} \\[6pt]
+r_p = \frac{\eta \cos\theta_i - \cos\theta_t}{\eta \cos\theta_i + \cos\theta_t} \\[6pt]
+F_D = \frac{1}{2} \left( r_s^2 + r_p^2 \right)
+$$
+
+A random value $\xi \sim \mathcal{U}(0, 1)$ is sampled and
+
+$$
+\text{If} \;\; \xi < F_D: \quad \text{Reflect} \\[6pt]
+\text{Else}: \quad \text{Transmit}
+$$
+
+If ray got reflected, outgoing direction is computed the same way as for metallic.
+
+$$
+\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})
+$$
+
+If ray got transmitted, I scatter it diffusely, for that I use Lambertian reflection. Outgoing direction $\mathbf{L}$ is computed by sampling a random vector on a hemisphere with cosine weighted distribution.
+
+###
+
+#### Glass
+Sampling weight is $w_\text{glass} = (1 - metallic) * transmission$.
+
+Ideally, I could have implemented glass as part of the dielectric (since glass is also a dielectric material), then I could choose between scattering diffusely and refracting based on material's $\text{transmission}$ value, but I had to make it a separate thing due to a constraint with the energy compensation system.
+
+The problem is that the [[Turquin 2019]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) paper doesn't provide a method to calculate energy compensation separately for just the transmission component, it only gives the combined reflection + transmission compensation. According to it, the energy compensation lookup tables need to account for all possible light paths, and for refractive materials like glass, this includes both reflected and transmitted rays: $E_\text{ss}^S = E_\text{ss}^R + E_\text{ss}^T$. This means I need to apply the same energy compensation to both the reflection and transmission parts of the glass BSDF. So reflecting ray requires knowing whether the material will be refractive or not. I have to know whether to apply only reflection compensation (like in dielectric) or reflection + transmission compensation.
+
+I had an attempt at making refractive only lookup table but it failed miserably. I'm not really sure whether it's not possible at all or I had made some mistake along the way because they didn't really expand on that in the paper. So anyway, that's why I have glass as a separate type alongside dielectric. I hope that made any sense.
+
+To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled and
+
+$$
+\text{If} \;\; \xi < F_D: \quad \text{Reflect} \\[6pt]
+\text{Else}: \quad \text{Refract}
+$$
+
+If ray got reflected, outgoing direction is computed the same way as for dielectric and metallic.
+$$
+\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})\\[6pt]
+$$
+
+And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
+
+$$
+\mathbf{L} = \text{refract}(-\mathbf{V}, \mathbf{H}, \eta) \\[6pt]
+$$
+
+### Evaluation
+With $\mathbf{V}$, $\mathbf{H}$ and $\mathbf{L}$ in place the BSDF can be evaluated. Everything here is based on [Sampling the GGX Distribution of Visible Normals](https://dl.acm.org/doi/pdf/10.1145/357290.357293) & [Microfacet Models for Refraction through Rough Surfaces](https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf).
+
+#### Metallic
+
+$$
+f_{\text{metallic}} = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N})(\mathbf{V} \cdot \mathbf{L})}
 $$
 
 where
 
 $$
-D(H) = \frac{1}{\pi \alpha_x \alpha_y (\frac{x_h^2}{\alpha_x^2} + \frac{y_h^2}{\alpha_y^2} + z_n^2)^2}
+D = \frac{1}{\pi \alpha_x \alpha_y (\frac{x_h^2}{\alpha_x^2} + \frac{y_h^2}{\alpha_y^2} + z_n^2)^2}
 $$
 
 $$
-G(V, L) = G_1(V) \cdot G_1(L)
+G = G_1(\mathbf{V}) \cdot G_1(\mathbf{L})
 $$
 
 $$
@@ -211,18 +238,84 @@ G_1(\hat{v}) = \frac{1}{1 + \Lambda(\hat{v})} \text{, where }
 \Lambda(\hat{v}) = \frac{-1 + \sqrt{1 + \frac{\alpha_x^2 x_{\hat{v}}^2+\alpha_y^2 y_{\hat{v}}^2}{z_{\hat{v}}^2}}}{2} 
 $$
 
-and for fresnel I use a simple schlick approximation.
+Now for fresnel, I don't have complex indices of refraction, so I decided to just do what Blender does: blend between surface base color and specular tint color based on Schlick fresnel approximation.
 
 $$
-F(\cos\theta, F_0) = F_0 + (1 - F_0)(1 - \cos\theta)^5 \text{, where } F_0 = \bold{C}
+F = \text{lerp}(\mathbf{C}, \mathbf{S}, 1 - \mathbf{V} \cdot \mathbf{H})^5
 $$
-Finally, the PDF is given by weighting VNDF by the jacobian of reflect operator.
+
+The PDF is given by weighting VNDF (probability of sampling $\mathbf{H}$ given direction $\mathbf{V}$) by the jacobian of the reflect operator.
 
 $$
-p_\text{metallic}(V, L, H) = \frac{\text{VNDF}}{4\; (V \cdot H)}
+p_\text{metallic} = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}
 $$
 
 #### Dielectric
+
+Reflection is evaluated in pretty much the same way as metallic.
+
+$$
+f_{\text{dielectric}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\[6pt]
+p_\text{dielectric}^R = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}
+$$
+
+with the only difference being that instead of using Schlick, the $F$ factor gets changed to the specular tint color of the surface.
+
+$$
+F = \text{specularTint}
+$$
+
+It isn't equal to $F_D$ because the actual fresnel equation is already included in the sampling probability, so I use $F$ factor in the equation just for tinting the color.
+
+And refraction is just simple Labertian reflection so:
+
+$$
+f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\[6pt]
+p_\text{dielectric}^T = \frac{\mathbf{L} \cdot \mathbf{N}}{\pi}
+$$
+
+Where $\mathbf{C}$ is the surface base color.
+
+#### Glass
+
+BRDF and PDF for reflection stay the same as in dielectric, nothing is different here.
+$$
+f_{\text{glass}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\[6pt]
+p_\text{glass}^R = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}\\[6pt]
+F = \text{specularTint}
+$$
+
+For refraction, instead of BRDF, BTDF is computed
+
+$$
+f_\text{glass}^T = \frac{|\mathbf{V} \cdot \mathbf{H}| |\mathbf{L} \cdot \mathbf{H}|}{|\mathbf{V} \cdot \mathbf{N}| |\mathbf{L} \cdot \mathbf{N}|} \cdot \frac{\eta^2 \cdot F \cdot G \cdot D}{(\eta(\mathbf{V} \cdot \mathbf{H}) + (\mathbf{L} \cdot \mathbf{H}))^2}
+$$
+
+With fresnel being the surface base color since I want the color to be tinted on refraction.
+
+$$
+F = \mathbf{C}
+$$
+
+The PDF also slightly changes, we still use the same VNDF but this time instead of weighting by the jacobian of $\text{reflect}$ we weight by the jacobian of $\text{refract}$
+
+$$
+p_\text{glass}^T = \frac{\text{VNDF}}{\frac{\eta^2 |\mathbf{L} \cdot \mathbf{H}|}{(\eta(\mathbf{V} \cdot \mathbf{H}) + \mathbf{L} \cdot \mathbf{H})^2}}
+$$
+
+#### Final BSDF
+
+After every lobes' BxDF and PDF have been evaluated they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled and then add them all together.
+
+$$
+f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D) \\[6pt]
+p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
+$$
+
+And that gives me the final BSDF $f$ and it's PDF $p$.
+
+That's how the entire BSDF presents:
+![BSDF](./Gallery/BSDF.png)
 
 
 # References

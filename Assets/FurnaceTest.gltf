@@ -15,10 +15,6 @@
 	],
 	"nodes":[
 		{
-			"mesh":0,
-			"name":"Icosphere"
-		},
-		{
 			"camera":0,
 			"name":"Camera",
 			"rotation":[
@@ -32,6 +28,10 @@
 				0,
 				-3
 			]
+		},
+		{
+			"mesh":0,
+			"name":"Icosphere"
 		}
 	],
 	"cameras":[
@@ -48,7 +48,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Icosphere",
+			"name":"Icosphere.002",
 			"primitives":[
 				{
 					"attributes":{
@@ -65,29 +65,29 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":3840,
+			"count":729,
 			"max":[
-				0.8832535743713379,
-				0.9004919528961182,
-				0.8843232989311218
+				0.877707302570343,
+				0.8950847387313843,
+				0.878422737121582
 			],
 			"min":[
-				-0.8832535743713379,
-				-0.9004919528961182,
-				-0.8843232989311218
+				-0.8777073621749878,
+				-0.8950846195220947,
+				-0.878422737121582
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":3840,
+			"count":729,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":3840,
+			"count":729,
 			"type":"VEC2"
 		},
 		{
@@ -100,32 +100,32 @@
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":46080,
+			"byteLength":8748,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":46080,
-			"byteOffset":46080,
+			"byteLength":8748,
+			"byteOffset":8748,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":30720,
-			"byteOffset":92160,
+			"byteLength":5832,
+			"byteOffset":17496,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":7680,
-			"byteOffset":122880,
+			"byteOffset":23328,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":130560,
+			"byteLength":31008,
 			"uri":"FurnaceTest.bin"
 		}
 	]

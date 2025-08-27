@@ -58,18 +58,31 @@ public float3 Rotate(float3 v, float3 axis, float theta)
 
 public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
 {
-    RayDesc rayDesc;
-    rayDesc.Origin = origin;
-    rayDesc.Direction = normalize(direction);
-    rayDesc.TMin = 0.00001f;
-    rayDesc.TMax = 1000.0f;
+    #define USE_RAY_QUERIES
 
-    Payload payload;
-    payload.Depth = 0;
+    #ifdef USE_RAY_QUERIES
+    {
+        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+        query.__rayQueryInitializeEXT(as, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin, 0.0001, direction, 1000000);
+        query.Proceed();
+        return query.CommittedStatus() != COMMITTED_NOTHING;
+    }
+    #else
+    {
+        RayDesc rayDesc;
+        rayDesc.Origin = origin;
+        rayDesc.Direction = normalize(direction);
+        rayDesc.TMin = 0.00001f;
+        rayDesc.TMax = 1000.0f;
 
-    TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
-    
-    return payload.Depth == 0;
+        Payload payload;
+        payload.Depth = 0;
+
+        TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
+        
+        return payload.Depth == 0;
+    }
+    #endif
 }
 
 public float GetDistanceToGeometry(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)

@@ -22,11 +22,12 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
 
     // Tonemapping
     {
-        std::array<VulkanHelper::DescriptorSet::BindingDescription, 4> bindingDescriptions = {
+        std::array<VulkanHelper::DescriptorSet::BindingDescription, 5> bindingDescriptions = {
             VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE},
             VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
             VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
-            VulkanHelper::DescriptorSet::BindingDescription{3, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE} // Bloom image
+            VulkanHelper::DescriptorSet::BindingDescription{3, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Bloom image
+            VulkanHelper::DescriptorSet::BindingDescription{4, 1, VulkanHelper::ShaderStages::COMPUTE_BIT, VulkanHelper::DescriptorType::SAMPLER} // Sampler
         };
 
         postProcessor.m_TonemappingDescriptorSet = postProcessor.m_DescriptorPool.AllocateDescriptorSet({bindingDescriptions.data(), static_cast<uint32_t>(bindingDescriptions.size())}).Value();
@@ -53,6 +54,9 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
         postProcessor.m_TonemappingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
         VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddBuffer(2, 0, postProcessor.m_TonemappingBuffer) == VulkanHelper::VHResult::OK, "Failed to add tonemapping buffer to descriptor set");
+    
+        VulkanHelper::Sampler sampler = VulkanHelper::Sampler::New({ device }).Value();
+        VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddSampler(4, 0, sampler) == VulkanHelper::VHResult::OK, "Failed to add sampler to tonemapping descriptor set");
     }
 
     // Bloom
