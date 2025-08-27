@@ -161,20 +161,24 @@ Unlike metals, where I only simulate reflection, the dielectrics are a little bi
 The probability of ray being reflected is given by the fresnel equation
 
 $$
-\text{Given:} \quad \eta = \frac{n_i}{n_t}, \quad \cos\theta_i = \mathbf{V} \cdot \mathbf{H} \\[6pt]
-\sin^2\theta_t = \eta^2 \left(1 - \cos^2\theta_i\right) \\[6pt]
-\text{If } \sin^2\theta_t > 1: \quad F_D = 1\\[6pt]
-\text{Else:} \quad \cos\theta_t = \sqrt{1 - \sin^2\theta_t} \\[6pt]
-r_s = \frac{\eta \cos\theta_t - \cos\theta_i}{\eta \cos\theta_t + \cos\theta_i} \\[6pt]
-r_p = \frac{\eta \cos\theta_i - \cos\theta_t}{\eta \cos\theta_i + \cos\theta_t} \\[6pt]
+\begin{gather*}
+\text{Given:} \quad \eta = \frac{n_i}{n_t}, \quad \cos\theta_i = \mathbf{V} \cdot \mathbf{H} \\
+\sin^2\theta_t = \eta^2 \left(1 - \cos^2\theta_i\right) \\
+\text{If } \sin^2\theta_t > 1: \quad F_D = 1\\
+\text{Else:} \quad \cos\theta_t = \sqrt{1 - \sin^2\theta_t} \\
+r_s = \frac{\eta \cos\theta_t - \cos\theta_i}{\eta \cos\theta_t + \cos\theta_i} \\
+r_p = \frac{\eta \cos\theta_i - \cos\theta_t}{\eta \cos\theta_i + \cos\theta_t} \\
 F_D = \frac{1}{2} \left( r_s^2 + r_p^2 \right)
+\end{gather*}
 $$
 
 A random value $\xi \sim \mathcal{U}(0, 1)$ is sampled and
 
 $$
-\text{If} \;\; \xi < F_D: \quad \text{Reflect} \\[6pt]
+\begin{gather*}
+\text{If} \quad \xi < F_D: \quad \text{Reflect} \\
 \text{Else}: \quad \text{Transmit}
+\end{gather*}
 $$
 
 If ray got reflected, outgoing direction is computed the same way as for metallic.
@@ -199,19 +203,23 @@ I had an attempt at making refractive only lookup table but it failed miserably.
 To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled and
 
 $$
-\text{If} \;\; \xi < F_D: \quad \text{Reflect} \\[6pt]
+\begin{gather*}
+\text{If} \quad \xi < F_D: \quad \text{Reflect}\\
 \text{Else}: \quad \text{Refract}
+\end{gather*}
 $$
 
 If ray got reflected, outgoing direction is computed the same way as for dielectric and metallic.
 $$
-\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})\\[6pt]
+\begin{gather*}
+\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})\\
+\end{gather*}
 $$
 
 And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
 
 $$
-\mathbf{L} = \text{refract}(-\mathbf{V}, \mathbf{H}, \eta) \\[6pt]
+\mathbf{L} = \text{refract}(-\mathbf{V}, \mathbf{H}, \eta) \\
 $$
 
 ### Evaluation
@@ -247,7 +255,7 @@ $$
 The PDF is given by weighting VNDF (probability of sampling $\mathbf{H}$ given direction $\mathbf{V}$) by the jacobian of the reflect operator.
 
 $$
-p_\text{metallic} = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}
+p_\text{metallic} = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
 $$
 
 #### Dielectric
@@ -255,8 +263,10 @@ $$
 Reflection is evaluated in pretty much the same way as metallic.
 
 $$
-f_{\text{dielectric}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\[6pt]
-p_\text{dielectric}^R = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}
+\begin{gather*}
+f_{\text{dielectric}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
+p_\text{dielectric}^R = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
+\end{gather*}
 $$
 
 with the only difference being that instead of using Schlick, the $F$ factor gets changed to the specular tint color of the surface.
@@ -270,8 +280,10 @@ It isn't equal to $F_D$ because the actual fresnel equation is already included 
 And refraction is just simple Labertian reflection so:
 
 $$
-f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\[6pt]
+\begin{gather*}
+f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\
 p_\text{dielectric}^T = \frac{\mathbf{L} \cdot \mathbf{N}}{\pi}
+\end{gather*}
 $$
 
 Where $\mathbf{C}$ is the surface base color.
@@ -280,9 +292,11 @@ Where $\mathbf{C}$ is the surface base color.
 
 BRDF and PDF for reflection stay the same as in dielectric, nothing is different here.
 $$
-f_{\text{glass}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\[6pt]
-p_\text{glass}^R = \frac{\text{VNDF}}{4\; (\mathbf{V} \cdot \mathbf{H})}\\[6pt]
+\begin{gather*}
+f_{\text{glass}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
+p_\text{glass}^R = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}\\
 F = \text{specularTint}
+\end{gather*}
 $$
 
 For refraction, instead of BRDF, BTDF is computed
@@ -308,8 +322,10 @@ $$
 After every lobes' BxDF and PDF have been evaluated they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled and then add them all together.
 
 $$
-f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D) \\[6pt]
+\begin{gather*}
+f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
 p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
+\end{gather*}
 $$
 
 And that gives me the final BSDF $f$ and it's PDF $p$.
