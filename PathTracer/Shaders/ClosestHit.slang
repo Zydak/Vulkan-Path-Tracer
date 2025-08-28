@@ -123,7 +123,7 @@ void Main(inout Payload payload, in float2 attrib)
             // If the anisotropy equals 1 the entire path through volume is perfectly straight line, in that case
             // it's pointless to simulate each scattering event since we know where we'll end up. So just use Beer's law instead which is way faster
             // and gives the same result.
-            payload.BxDF *= exp(-material.Properties.MediumDensity * geometryHitDistance);
+            payload.BxDF *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
         }
         else
         {
@@ -200,6 +200,19 @@ void Main(inout Payload payload, in float2 attrib)
     // Sample and evaluate scattering
     BxDFSample scatterSample = material.SampleBSDF(payload.Sampler, V, H, FDielectric);
     bool wasRefracted = scatterSample.L.z < 0.0f;
+
+    if (wasRefracted && surface.WasHitFromInside())
+    {
+        payload.InMedium = false;
+    }
+    else if (wasRefracted && !surface.WasHitFromInside())
+    {
+        payload.InMedium = true;
+        payload.MediumColor = material.Properties.MediumColor;
+        payload.MediumEmissiveColor = material.Properties.MediumEmissiveColor;
+        payload.MediumAnisotropy = material.Properties.MediumAnisotropy;
+        payload.MediumDensity = material.Properties.MediumDensity;
+    }
 
     // Evaluate environment map direction
     BxDFEval envMapDirectionEval = BxDFEval(0, 0);

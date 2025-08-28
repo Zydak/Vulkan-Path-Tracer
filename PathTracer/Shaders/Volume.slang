@@ -57,15 +57,11 @@ public struct Volume
     public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler)
     {
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);
-        if (IsPointInside(rayOrigin))
-        {
-            intersection.HitPointNear = 0.0f; // Start inside the volume
-        }
 
-        if (intersection.HitPointNear < 0.0f)
+        if (intersection.HitPointFar < 0.0f)
             return -1.0f; // No intersection
 
-        float tEnter = max(intersection.HitPointNear, 0.0f); // Clamp to 0 to avoid going backwards
+        float tEnter = max(intersection.HitPointNear, 0.0f); // Clamp to 0, ray is inside AABB
         float tExit = intersection.HitPointFar;
 
         float distanceInsideVolume = tExit - tEnter;
