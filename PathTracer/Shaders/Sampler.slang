@@ -166,8 +166,8 @@ public struct Sampler
         float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
         float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
 
-        // new dir is created in incidentDir tangent space, so transform it to the world space
-        float3 up = abs(incidentDir.z) < 0.9999999 ? float3(0, 0, 1) : float3(1, 0, 0);
+        // new dir is created in tangent space, so rotate it by incidentDir
+        float3 up = abs(incidentDir.y) < 0.9999999 ? float3(0, 1, 0) : float3(0, 0, 1);
         float3 tangent = normalize(cross(up, incidentDir));
         float3 bitangent = cross(incidentDir, tangent);
         float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
