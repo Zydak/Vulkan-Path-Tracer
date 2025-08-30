@@ -202,24 +202,12 @@ $$
 p_\text{metallic} = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
 $$
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicR00.png" />
-    <p>Roughness = 0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicR02.png" />
-    <p>Roughness = 0.2</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicR04.png" />
-    <p>Roughness = 0.4</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicAniso.png" />
-    <p>Roughness = 0.4 Anisotropy = 1.0</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/MetallicR00.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/MetallicR02.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/MetallicR04.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/MetallicAniso.png" width="22%" />
+</p>
 
 #### Dielectric
 
@@ -282,24 +270,12 @@ $$
 
 Where $\mathbf{C}$ is the surface base color.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/DielectricIOR0.png" />
-    <p>IOR = 1.0 fully diffuse material</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/DielectricIOR15.png" />
-    <p>IOR = 1.5 roughness = 0.0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/DielectricIOR15R02.png" />
-    <p>IOR = 1.5 Roughness = 0.2</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/DielectricIOR15R04.png" />
-    <p>IOR = 1.5 Roughness = 0.4</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/DielectricIOR0.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/DielectricIOR15.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/DielectricIOR15R02.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/DielectricIOR15R04.png" width="22%" />
+</p>
 
 #### Glass
 
@@ -349,39 +325,18 @@ $$
 p_\text{glass}^T = \frac{\text{VNDF}}{\frac{\eta^2 |\mathbf{L} \cdot \mathbf{H}|}{(\eta(\mathbf{V} \cdot \mathbf{H}) + \mathbf{L} \cdot \mathbf{H})^2}}
 $$
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR110.png" />
-    <p>IOR = 1.10</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR125.png" />
-    <p>IOR = 1.25</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR150.png" />
-    <p>IOR = 1.50</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR175.png" />
-    <p>IOR = 1.75</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/GlassIOR110.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/GlassIOR125.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/GlassIOR150.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/GlassIOR175.png" width="22%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR150.png" />
-    <p>IOR = 1.50 Roughness = 0.0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR150R02.png" />
-    <p>IOR = 1.50 Roughness = 0.2</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassIOR150R04.png" />
-    <p>IOR = 1.50 Roughness = 0.4</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/GlassIOR150.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/GlassIOR150R02.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/GlassIOR150R04.png" width="22%" />
+</p>
 
 #### Final BSDF
 
@@ -402,31 +357,19 @@ Here's a little presentation of the entire BSDF with varying parameters for each
 ## Energy compensation
 After finishing the BSDF, I noticed a signifact color darkerning as roughness increased. The issue was that single scatter GGX that I use is not energy conserving, that's because of two reasons. First, when the $L$ is sampled, it is possible for ray to bounce into the surface instead of out of it (or the other way around for refraction). In that case I just discard the sample, which means that the energy is lost completely. And the second reason, the masking function destroys light occluded by other microfacets. That's bad because increasing roughness of a surface introduces visible darkening of the color. This is especially visible in rough glass where light bounces multiple times. If I increase the roughness on previously showcased materials it's clearly visible.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" />
-    <p>Metallic surface with Roughness = 1.0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassCompensationOff.png" />
-    <p>Glass surface with IOR = 1.50 Roughness = 1.0</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" width="40%" />
+  <img src="./Gallery/MaterialShowcase/GlassCompensationOff.png" width="40%" />
+</p>
 
 This is a known issue, and one way to fix this is simulating multiple surface scattering, accounting for the fact that light can bounce multiple times on a microsurface, just like [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) suggests. The problem is that: 1. it's not that easy to implement, and 2. according to [[Turquin 2019]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) properly simulating multiple scattering can be from 7x to even 15x slower. So instead I decided to use energy compensation lookup tables implemented according to [[Turquin 2019]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf). They're easy to compute and implement, but most importantly, they're fast.
 
 So first of all, to have a way of verifying my implementation, I something called *Furnace Test*. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceMetalNoCompensation.png" />
-    <p>Metallic surface with Roughness = 1.0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceGlassNoCompensation.png" />
-    <p>Glass surface with IOR = 1.50 Roughness = 1.0</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/FurnaceMetalNoCompensation.png" width="40%" />
+  <img src="./Gallery/FurnaceGlassNoCompensation.png" width="40%" />
+</p>
 
 ### Lookup Energy Calculator
 The CPU code for generating LUTs (Lookup Tables) is in the `LookupTableCalculator.cpp`. The class itself is pretty simple, you give it a shader alongside the LUT size, it executes that shader repeatedly until all samples have been accumulated, and then it returns the lookup table as a vector of floats. Computing these LUTs can take some time depending on the precision you want, so I decided to cache them on disk `Assets/LookupTables` as binary files and later load them as textures for the path tracer to use. The computation of the samples is done fully on the GPU, it could be just as easily implemented on the CPU, but of course it would be much much slower.
@@ -474,86 +417,39 @@ $$
 
 And that's it. To verify whether the compensation is actually working a furnace test can be used again. Here's side by side comparison, on the left, no compensation is applied, and on the right the compensation is applied.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" />
-    <p>Metallic surface with Roughness = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicCompensationOn.png" />
-    <p>Metallic surface with Roughness = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" width="40%" />
+  <img src="./Gallery/MaterialShowcase/MetallicCompensationOn.png" width="40%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceMetalNoCompensation.png" />
-    <p>Metallic surface with Roughness = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceMetalCompensation.png" />
-    <p>Metallic surface with Roughness = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/FurnaceMetalNoCompensation.png" width="40%" />
+  <img src="./Gallery/FurnaceMetalCompensation.png" width="40%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceMetalNoCompensation.png" />
-    <p>Metallic surface with Roughness = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceMetalCompensation.png" />
-    <p>Metallic surface with Roughness = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/GlassCompensationOff.png" width="40%" />
+  <img src="./Gallery/MaterialShowcase/GlassCompensationOn.png" width="40%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassCompensationOff.png" />
-    <p>Glass surface with Roughness = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/GlassCompensationOn.png" />
-    <p>Glass surface with Roughness = 1.0, energy compensation applied</p>
-  </div>
-</div>
-
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceGlassNoCompensation.png" />
-    <p>Glass surface with Roughness = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceGlassCompensation.png" />
-    <p>Glass surface with Roughness = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/FurnaceGlassNoCompensation.png" width="40%" />
+  <img src="./Gallery/FurnaceGlassCompensation.png" width="40%" />
+</p>
 
 Now, the metallic furnace test is pretty much indistinguishable without turning up the contrast, but in the glass furnace test, if you look closely, you'll see that the compensation is not perfect. That's because the tables are just approximations, they have limited dimensions, and a limited number of samples are taken, and that's causing some issues down the line. But that's okay, the couple percent of energy loss or gain are barely visible even in the furnace tests, let alone in complex scenes, and the simplicity of the solution along with its speed make it a much more preferable option from [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) approach. Making path tracer 100% energy conserving and preserving has almost no benefits, and the amount of performance that's sacrificed in the process is very noticeable. The only important thing to me, is that there is no longer any color darkening visible with a naked eye. Rough glass was impossible to simulate since it turned black really fast. And the color on the metal surface was very saturated and darkened. Now there's none of that. So the key point is that both problems are solved.
 
 And even though anisotropy is not computed correctly (the viewing direction is not accounted for), it still looks quite good, most of the energy lost is being retrieved back.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicAnisoCompensationOff.png" />
-    <p>Metallic surface roughness = 0.8 anisotropy = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/MetallicAnisoCompensationOn.png" />
-    <p>Metallic surface roughness = 0.8 anisotropy = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/MetallicAnisoCompensationOff.png" width="40%" />
+  <img src="./Gallery/MaterialShowcase/MetallicAnisoCompensationOn.png" width="40%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceAnisotropyNoCompensation.png" />
-    <p>Metallic surface roughness = 0.8 anisotropy = 1.0, no energy compensation applied</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/FurnaceAnisotropyCompensation.png" />
-    <p>Metallic surface roughness = 0.8 anisotropy = 1.0, energy compensation applied</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/FurnaceAnisotropyNoCompensation.png" width="40%" />
+  <img src="./Gallery/FurnaceAnisotropyCompensation.png" width="40%" />
+</p>
 
 ## Anti Aliasing
 AA in path tracers is basically free since multiple samples across frames are already being taken, the only thing that needs to be done is slightly offseting the ray direction and origin each time so that the ray's starting position covers the entire pixel across multiple samples. So when choosing pixel position on a screen, I just add small random offset for AA.
@@ -586,16 +482,10 @@ RayOrigin = origin.xyz + cameraRight * randomOffset.x + cameraUp * randomOffset.
 RayDirection = normalize(focalPoint - origin.xyz);
 ```
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/DoFOff.png" />
-    <p>Depth of field disabled</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/DoFOn.png" />
-    <p>Depth of field enabled</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/DoFOff.png" width="45%" />
+  <img src="./Gallery/DoFOn.png" width="45%" />
+</p>
 
 ## Russian roulette
 
@@ -619,18 +509,12 @@ $$
 
 This of course introduces more variance, but as long as probability of ray continuation $p$ is chosen correctly, and rays aren't terminated too often, the performance boost will easily outweight small variance.
 
-Here's a comparison
+Here's a comparison:
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/RouletteOff.png" />
-    <p>Russian Roulette disabled</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/RouletteOn.png" />
-    <p>Russian Roulette enabled</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/RouletteOff.png" width="45%" />
+  <img src="./Gallery/RouletteOn.png" width="45%" />
+</p>
 
 Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K samples per pixel (10'000'000'000 samples in total) were taken, bounce limit was set to 20. It took 45s to compute. Image on the right has russian roulette enabled, dimensions and sample count are identical, but this time it took only 20s to compute. It is visually identical to one on the left but the render time has been cut in half. And the performance boost of the russian roulette only increases as the scenes become more complex, and more bounces are needed.
 
@@ -728,52 +612,26 @@ The rest was easy. Since both $\mathbf{V}$ and $\mathbf{L}$ were in place, all t
 
 This gives materials a more waxy look because light can penetrate the surface and exit on the same side but in a different location, as opposed to reflecting immediately. It's a pretty expensive simulation since the medium has to be really dense, and a lot of scattering events have to be simulated. So usually for rendering, subsurface scattering is just approximated using different and more efficient methods. But with this, it's almost as accurate as you can get.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/DiffuseDragonHead.png" style="width: 50vw;" />
-    <p>Fully diffuse surface</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/DragonHead.png" style="width: 50vw;" />
-    <p>Subsurface scattering</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/DiffuseDragonHead.png" width="45%" />
+  <img src="./Gallery/DragonHead.png" width="45%" />
+</p>
 
 Among other effects that are possible to simulate, is volumetric glass. It's basically a glass object filled volume of anisotropy 1.0, so the ray will travel in a straght line. This way, instead of tinting the color on refraction, the color is tinted as ray travels through the object. So the color is less saturated in thin areas and more saturated in thick ones. It's just an opinion but, I think it looks way better than normal glass.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR110.png" />
-    <p>Medium Anisotropy = 1.0 IOR = 1.10</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR125.png" />
-    <p>Medium Anisotropy = 1.0 IOR = 1.25</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" />
-    <p>Medium Anisotropy = 1.0 IOR = 1.50</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR175.png" />
-    <p>Medium Anisotropy = 1.0 IOR = 1.75</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR110.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR125.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR175.png" width="22%" />
+</p>
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" />
-    <p>IOR = 1.50 Roughness = 0.0</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R02.png" />
-    <p>IOR = 1.50 Roughness = 0.2</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R04.png" />
-    <p>IOR = 1.50 Roughness = 0.4</p>
-  </div>
-</div>
+
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" width="30%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R02.png" width="30%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R04.png" width="30%" />
+</p>
 
 When it comes to AABB volumes there's really not much to see without any light sampling. The most you can do, is place fog around the scene and wait eternity for it to converge. Probability of a light ray bouncing in a volume multiple times and then hitting a light source is abysmally low, most of the paths won't contribute anything. Image below is an example of that, it took 1 millions samples **per pixel** (2 073 600 000 000 samples in total, that's a scary number, god bless GPUs) to look somewhat decent, I had to path trace this for almost 2 hours, which is quite long considering how simple the scene is.
 
@@ -879,17 +737,10 @@ float luminance = dot(pixelValue, float3(0.212671f, 0.715160f, 0.072169f));
 float scale = MaxLuminance / max(luminance, MaxLuminance);
 pixelValue *= scale;
 ```
-
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/BreakfastFireflies.png" style="width: 40vw;" />
-    <p>Luminance is not limited</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/BreakfastFirefliesDeleted.png" style="width: 40vw;" />
-    <p>Limited Luminance</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/BreakfastFireflies.png" width="45%" />
+  <img src="./Gallery/BreakfastFirefliesDeleted.png" width="45%" />
+</p>
 
 With this final improvement, I added some subtle depth of field effect into the scene, focusing on the teapot on the table, bumped the resolution to 4K (3840x2160), and rendered the final image you can find in [Gallery](#gallery):
 
