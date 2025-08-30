@@ -44,6 +44,7 @@ public struct UniformBuffer
     public float EnvMapRotationAzimuth;
     public float EnvMapRotationAltitude;
     public uint VolumesCount;
+    public float EnvironmentIntensity;
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)

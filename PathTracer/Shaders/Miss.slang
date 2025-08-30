@@ -62,17 +62,19 @@ void Main(inout Payload payload)
     }
     #endif
 
-    payload.Emitted = colorPdf.rgb;
-    #ifdef ENABLE_ENV_MAP_MIS
-    if (payload.Depth > 0)
-    {
-        payload.Emitted *= PowerHeuristics(payload.PDF, colorPdf.a);
-    }
-    #endif
+    payload.Emitted = colorPdf.rgb * uUBO.EnvironmentIntensity;
+    //colorPdf.a *= 1.0f / (4.0f * M_PI); // PDF for uniform sphere sampling
 
     #ifdef FURNACE_TEST_MODE
     {
         payload.Emitted = float3(1.0f);
+    }
+    #endif
+
+    #ifdef ENABLE_ENV_MAP_MIS
+    if (payload.Depth > 0)
+    {
+        payload.Emitted *= PowerHeuristics(payload.PDF, colorPdf.a);
     }
     #endif
 

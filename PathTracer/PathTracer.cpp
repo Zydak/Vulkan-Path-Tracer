@@ -466,6 +466,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.EnvMapRotationAzimuth = m_EnvMapRotationAzimuth;
     pathTracerUniform.EnvMapRotationAltitude = m_EnvMapRotationAltitude;
     pathTracerUniform.VolumesCount = 0; // Starts empty
+    pathTracerUniform.EnvironmentIntensity = m_EnvironmentIntensity;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
@@ -883,7 +884,6 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
     const uint64_t size = width * height;
     float* pixels = (float*)textureAsset.Data.Data();
 
-    // Reference: [https://github.com/nvpro-samples/nvpro_core/blob/master/nvvkhl/hdr_env.cpp]
     // Create Importance Buffer for Importance Sampling
     struct AliasMapEntry
     {
@@ -898,17 +898,13 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 	const float stepPhi = (float)2.0F * (float)M_PI / (float)width; // azimuth step
 	const float stepTheta = (float)M_PI / (float)height; // altitude step
 
-    // For each texel of the environment map, we compute the related solid angle
-	// subtended by the texel, and store the weighted luminance in importanceData,
-	// representing the amount of energy emitted through each texel.
+    // For each texel of the environment map, compute its solid angle on the unit sphere
+    // Then store its energy contribution in 'importanceData',
+    // approximated as solid angle * max(R, G, B).
     for (uint32_t y = 0; y < height; ++y)
 	{
 		const float theta1 = (float)(y + 1) * stepTheta; // altitude angle of currently sampled texel
-		const float cosTheta1 = glm::cos(theta1); // cosine of the altitude angle
-
-		// Calculate how much area does each texel take
-		// (cosTheta0 - cosTheta1) - how much of the unit sphere does texel take
-		//  * stepPhi - get solid angle
+		const float cosTheta1 = glm::cos(theta1);
 
 		const float area = (cosTheta0 - cosTheta1) * stepPhi;  // solid angle
 		cosTheta0 = cosTheta1; // set cosine of the up vector to the altitude cosine to advance the loop
@@ -918,41 +914,49 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 			const uint32_t idx = y * width + x;
 			const uint32_t idx4 = idx * 4; // texel index
             
-			// Store the radiance of the texel into importance array, importance will be higher for brighter texels
+			// Store the importance of the texel into importance array, importance will be higher for brighter texels
 			importanceData[idx] = area * glm::max(pixels[idx4], glm::max(pixels[idx4 + 1], pixels[idx4 + 2]));
 		}
 	}
 
     // Creating Alias Map
     //
-	// Alias map is used to efficiently select texels from env map based on importance.
-	// It aims at creating a set of texel couples
-	// so that all couples emit roughly the same amount of energy. To do this,
-	// each smaller radiance texel will be assigned an "alias" with higher emitted radiance
+    // The alias map allows efficient sampling of texels from the environment map
+    // based on their importance. The goal is to ensure each texel is selected
+    // with probability proportional to its contribution.
+    //
+    // To build the alias map, we group texels so each group has approximately the same total importance.
+    // Lower importance texels are paired with higher importance ones ("aliases")
+    // to balance the sampling distribution.
     std::vector<AliasMapEntry> aliasMap(size);
 
-	// Compute the integral of the emitted radiance of the environment map
-	// Since each element in data is already weighted by its solid angle it's just a sum
+	// Compute the total importance of the environment map.
+    // Each entry in importanceData is already weighted by the texel's solid angle,
+    // so we simply sum them to get the total unnormalized importance.
     float sum = std::accumulate(importanceData.begin(), importanceData.end(), 0.0f);
+
+    // Normalize the importance values so their average becomes 1.
+    // This is required for building the alias map, which assumes
+    // all values are scaled relative to the average.
     float average = sum / float(size);
-	for (uint32_t i = 0; i < size; i++)
-	{
-		// Calculate PDF. Inside PDF average of all values must be equal to 1, that's
-		// why we divide texel importance from data by the average of all texels
-		aliasMap[i].Importance = importanceData[i] / average;
+    for (uint32_t i = 0; i < size; i++)
+    {
+        aliasMap[i].Importance = importanceData[i] / average;
 
-		// identity, ie. each texel is its own alias
-		aliasMap[i].Alias = i;
-	}
+        // Initialize the alias index to self
+        aliasMap[i].Alias = i;
+    }
 
-    // Partition the texels according to their importance.
-	// Texels with a value q < 1 (ie. below average) are stored incrementally from the beginning of the
-	// array, while texels emitting higher-than-average radiance are stored from the end of the array.
-	// This effectively separates the texels into two groups: one containing texels with below-average 
-	// radiance and the other containing texels with above-average radiance
+    // Partition the texels according to their normalized importance.
+    // Texels with Importance < 1 (i.e. below the average) are added from the beginning of the array,
+    // and texels with Importance ≥ 1 (i.e. above the average) are added from the end.
+    //
+    // This separates the texels into two groups:
+    // - "low energy" texels: below average importance
+    // - "high energy" texels: above average importance
 	std::vector<uint32_t> partitionTable(size);
 	uint32_t              lowEnergyCounter = 0U;
-	uint32_t              HighEnergyCounter = size;
+	uint32_t              highEnergyCounter = size;
 	for (uint32_t i = 0; i < size; ++i)
 	{
 		if (aliasMap[i].Importance < 1.F)
@@ -962,42 +966,43 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 		}
 		else
 		{
-			HighEnergyCounter--;
-			partitionTable[HighEnergyCounter] = i;
+			highEnergyCounter--;
+			partitionTable[highEnergyCounter] = i;
 		}
 	}
 
-    // Associate the lower-energy texels to higher-energy ones.
-	for (lowEnergyCounter = 0; lowEnergyCounter < HighEnergyCounter && HighEnergyCounter < size; lowEnergyCounter++)
+    // Associate low energy texels (Importance < 1) with high energy texels (Importance > 1).
+    // The alias map requires that each entry represents a group with total normalized importance of 1,
+    // so we pair low importance texels with high importance ones to balance them.
+    //
+    // A single high energy texel may compensate for several low energy ones.
+    // For each pairing, we subtract the "missing" importance (1 - low energy) from the high energy texel.
+    // Once an high energy texel's importance drops below 1, it's fully used and we move to the next one.
+	for (lowEnergyCounter = 0; lowEnergyCounter < highEnergyCounter && highEnergyCounter < size; lowEnergyCounter++)
 	{
-		const uint32_t smallEnergyIndex = partitionTable[lowEnergyCounter];
-		const uint32_t highEnergyIndex = partitionTable[HighEnergyCounter];
+		const uint32_t lowEnergyIndex = partitionTable[lowEnergyCounter];
+		const uint32_t highEnergyIndex = partitionTable[highEnergyCounter];
 
-		// Associate the texel to its higher-energy alias
-		aliasMap[smallEnergyIndex].Alias = highEnergyIndex;
+		// Associate the low energy texel to its higher energy alias
+		aliasMap[lowEnergyIndex].Alias = highEnergyIndex;
 
-		// Compute the difference between the lower-energy texel and the average
-		const float differenceWithAverage = 1.F - aliasMap[smallEnergyIndex].Importance;
+		// Compute the amount needed to bring the low energy texel up to a normalized importance of 1
+		const float differenceWithAverage = 1.F - aliasMap[lowEnergyIndex].Importance;
 
-		// The goal is to obtain texel couples whose combined intensity is close to the average.
-		// However, some texels may have low intensity, while others may have very high intensity. In this case
-		// it may not be possible to obtain a value close to average by combining only two texels.
-		// Instead, we potentially associate a single high-energy texel to many smaller-energy ones until
-		// the combined average is similar to the average of the environment map.
-		// We keep track of the combined average by subtracting the difference between the lower-energy texel and the average
-        // from the ratio stored in the high-energy texel.
+		// Subtract this amount from the high energy texel
 		aliasMap[highEnergyIndex].Importance -= differenceWithAverage;
 
-		// If the combined ratio to average of the higher-energy texel reaches 1, a balance has been found
-		// between a set of low-energy texels and the higher-energy one. In this case, we will use the next
-		// higher-energy texel in the partition when processing the next texel.
+		// If the combined ratio to average of the high energy texel reaches 1, a balance has been found
+		// between a set of low energy texels and the high energy one. In this case, move to the next high energy texel
 		if (aliasMap[highEnergyIndex].Importance < 1.0f)
 		{
-			HighEnergyCounter++;
+			highEnergyCounter++;
 		}
 	}
 
-    // The PDF of each texel is computed by normalizing its emitted radiance by the sum of all emitted radiance
+    // Compute normalized importance weights for each texel based on a brightness.
+    // These normalized values approximate a discrete PDF over the environment map,
+    // and are stored in the alpha channel (pixels[idx4 + 3]) for use in shaders.
 	for (uint32_t i = 0; i < width * height; ++i)
 	{
 		const uint32_t idx4 = i * 4;
@@ -1167,4 +1172,14 @@ void PathTracer::SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandB
     m_FurnaceTestMode = furnaceTestMode;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_EnvironmentIntensity == environmentIntensity)
+        return;
+
+    m_EnvironmentIntensity = environmentIntensity;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_EnvironmentIntensity, sizeof(float), offsetof(PathTracerUniform, EnvironmentIntensity), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload environment intensity");
+    ResetPathTracing();
 }

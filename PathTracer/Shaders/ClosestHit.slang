@@ -38,7 +38,7 @@ import Volume;
 // Alias map is used to efficiently select texels from env map based on importance.
 // It aims at creating a set of texel couples
 // so that all couples emit roughly the same amount of energy. To do this,
-// each smaller radiance texel will be assigned an "alias" with higher emitted radiance
+// each lower energy texel will be assigned an "alias" with higher energy
 [[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
@@ -165,6 +165,7 @@ void Main(inout Payload payload, in float2 attrib)
     #ifdef ENABLE_ENV_MAP_MIS
     {
         payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
+        envMapValue.rgb *= uUBO.EnvironmentIntensity;
 
         float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
         float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
@@ -264,7 +265,9 @@ void Main(inout Payload payload, in float2 attrib)
             }
 
             if (envMapValue.a > 0.0f && envMapDirectionEval.PDF > 0.0f)
-                payload.Emitted += transmittance * envMapDirectionEval.BxDF / envMapValue.a * envMapValue.rgb * PowerHeuristics(envMapValue.a, envMapDirectionEval.PDF);
+            {
+                payload.Emitted += (envMapDirectionEval.BxDF * transmittance * envMapValue.rgb / envMapValue.a) * PowerHeuristics(envMapValue.a, envMapDirectionEval.PDF);
+            }
         }
     }
     #endif
