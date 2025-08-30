@@ -578,6 +578,15 @@ void Editor::RenderEnvMapSettings()
         });
     }
 
+    static float envMapIntensity = m_PathTracer.GetEnvironmentIntensity();
+    if (ImGui::SliderFloat("Environment Map Intensity", &envMapIntensity, 0.0f, 10.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnvironmentIntensity(envMapIntensity, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
     static std::string envMapFilepath = m_PathTracer.GetEnvMapFilepath();
 
     if(ImGui::Button(("Env Map: " + envMapFilepath).c_str()))
