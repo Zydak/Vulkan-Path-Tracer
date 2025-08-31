@@ -5,6 +5,7 @@
 #include <array>
 #include <fstream>
 #include <numeric>
+#include <numbers>
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
@@ -909,8 +910,8 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
     std::vector<float> importanceData(width * height);
 
     float cosTheta0 = 1.0F; // cosine of the up vector
-	const float stepPhi = (float)2.0F * (float)M_PI / (float)width; // azimuth step
-	const float stepTheta = (float)M_PI / (float)height; // altitude step
+	const float stepPhi = (float)2.0F * (float)std::numbers::pi / (float)width; // azimuth step
+	const float stepTheta = (float)std::numbers::pi / (float)height; // altitude step
 
     // For each texel of the environment map, compute its solid angle on the unit sphere
     // Then store its energy contribution in 'importanceData',

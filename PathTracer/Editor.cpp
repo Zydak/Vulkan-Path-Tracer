@@ -415,8 +415,8 @@ void Editor::RenderInfo()
     uint32_t samplesAccumulated = glm::min(m_PathTracer.GetSamplesAccumulated(), m_PathTracer.GetMaxSamplesAccumulated());
     ImGui::Text("Estimated Time: %.3f s", m_RenderTime * (m_PathTracer.GetMaxSamplesAccumulated() - samplesAccumulated) / samplesAccumulated);
 
-    ImGui::Text("Total Vertex Count: %u", (uint)m_PathTracer.GetTotalVertexCount());
-    ImGui::Text("Total Index Count: %u", (uint)m_PathTracer.GetTotalIndexCount());
+    ImGui::Text("Total Vertex Count: %u", (uint32_t)m_PathTracer.GetTotalVertexCount());
+    ImGui::Text("Total Index Count: %u", (uint32_t)m_PathTracer.GetTotalIndexCount());
 
     if(ImGui::Button("Reset Path Tracing"))
     {

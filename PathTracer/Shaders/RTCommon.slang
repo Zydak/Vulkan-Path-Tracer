@@ -13,13 +13,13 @@ public struct Payload
     public Sampler Sampler;
 
     // For tracking the medium the ray is in
-    public bool InMedium = false;
-    public float MediumDensity = 0.0;
-    public float MediumAnisotropy = 1.0;
-    public float3 MediumColor = float3(1.0);
-    public float3 MediumEmissiveColor = float3(0.0);
+    public bool InMedium;
+    public float MediumDensity;
+    public float MediumAnisotropy;
+    public float3 MediumColor;
+    public float3 MediumEmissiveColor;
 
-    public bool QueryDistance = false; // If this flag is set the closest hit shader will return immediately with distance to surface
+    public bool QueryDistance; // If this flag is set the closest hit shader will return immediately with distance to surface
     public float DistanceToSurface;
 };
 
