@@ -32,8 +32,8 @@ void Main(uint3 threadId: SV_DispatchThreadID)
     Sampler sampler = Sampler(threadId.y + threadId.x * threadId.x + push.Seed);
 
     // Set all values
-    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 2.0), 0.0001, 0.9999); // Stored as ViewCosine^2 for more precision near 0
-    float roughness = clamp(float(threadId.y) / (push.TableSizeY - 1.0f), 0.0001, 1.0);
+    float viewCosine = clamp(pow(float(threadId.x) / (push.TableSizeX - 1.0f), 2.0), 0.01, 0.9999); // Stored as ViewCosine^2 for more precision near 0
+    float roughness = clamp(pow(float(threadId.y) / (push.TableSizeY - 1.0f), 1.0f / 1.0), 0.01, 1.0);
     float ior = 1.0f + clamp(float(threadId.z) / (push.TableSizeZ - 1.0f), 0.0001, 1.0);
 
     // Prepare material
@@ -89,7 +89,7 @@ void Main(uint3 threadId: SV_DispatchThreadID)
 
             if (L.z < 0.0)
             {
-                BxDFEval eval = material.EvaluateRefraction(V, L, 0.0f);
+                BxDFEval eval = material.EvaluateRefraction(V, L, 1.0f);
 
                 if (eval.PDF > 0.0 && !isnan(eval.BxDF.x) && !isinf(eval.BxDF.x))
                     val += eval.BxDF.x / eval.PDF;

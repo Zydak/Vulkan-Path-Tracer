@@ -181,18 +181,18 @@ public struct Material
 
         BxDFEval scatterDirectionEval = {0, 0};
         {
-            float energyCompensation;
+            float glassEnergyCompensation;
             #ifdef USE_ENERGY_COMPENSATION
             {
                 const bool isInside = NonUniformResourceIndex(Eta) > 1.0f;
                 float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
                 if (isInside)
                 {
-                    energyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+                    glassEnergyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
                 }
                 else
                 {
-                    energyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+                    glassEnergyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
                 }
             }
             #endif
@@ -220,9 +220,9 @@ public struct Material
                 BxDFEval glassEval = EvaluateReflection(V, L, Properties.SpecularColor);
 
                 #ifdef USE_ENERGY_COMPENSATION
-                if (energyCompensation > 0.01f)
+                if (glassEnergyCompensation > 0.01f)
                 {
-                    glassEval.BxDF /= energyCompensation;
+                    glassEval.BxDF /= glassEnergyCompensation;
                 }
                 #endif
 
@@ -234,9 +234,9 @@ public struct Material
                 BxDFEval glassEval = EvaluateRefraction(V, L, Properties.BaseColor);
 
                 #ifdef USE_ENERGY_COMPENSATION
-                if (energyCompensation > 0.01f)
+                if (glassEnergyCompensation > 0.01f)
                 {
-                    glassEval.BxDF /= energyCompensation;
+                    glassEval.BxDF /= glassEnergyCompensation;
                 }
                 #endif
 

@@ -54,6 +54,7 @@ public struct Volume
         return all(point >= m_CornerMin) && all(point <= m_CornerMax);
     }
 
+    // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
     public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler)
     {
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);

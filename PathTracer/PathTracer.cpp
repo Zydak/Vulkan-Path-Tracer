@@ -64,6 +64,16 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     volumesBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT | VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
     pathTracer.m_VolumesBuffer = VulkanHelper::Buffer::New(volumesBufferConfig).Value();
 
+    if (device.AreRayQueriesSupported())
+    {
+        pathTracer.m_UseRayQueries = true;
+    }
+    else
+    {
+        VH_LOG_WARN("Ray queries are not supported by the current device. Falling back to normal RT pipeline.");
+        pathTracer.m_UseRayQueries = false;
+    }
+
     return pathTracer;
 }
 
@@ -487,6 +497,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         defines.push_back({"USE_ENERGY_COMPENSATION", "1"});
     if (m_FurnaceTestMode)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
+    if (m_UseRayQueries)
+        defines.push_back({"USE_RAY_QUERIES", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
@@ -830,6 +842,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         defines.push_back({"USE_ENERGY_COMPENSATION", "1"});
     if (m_FurnaceTestMode)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
+    if (m_UseRayQueries)
+        defines.push_back({"USE_RAY_QUERIES", "1"});
 
     VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
@@ -1182,4 +1196,14 @@ void PathTracer::SetEnvironmentIntensity(float environmentIntensity, VulkanHelpe
     m_EnvironmentIntensity = environmentIntensity;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_EnvironmentIntensity, sizeof(float), offsetof(PathTracerUniform, EnvironmentIntensity), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload environment intensity");
     ResetPathTracing();
+}
+
+void PathTracer::SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_UseRayQueries == useRayQueries)
+        return;
+
+    m_UseRayQueries = useRayQueries;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
 }

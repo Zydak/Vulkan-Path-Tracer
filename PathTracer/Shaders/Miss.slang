@@ -8,15 +8,6 @@ import Defines;
 [[vk::image_format("rgba32f")]]
 [[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
 
-float2 getSphericalUv(float3 v)
-{
-    float gamma = asin(-v.y);
-    float theta = atan2(v.z, v.x);
-
-    float2 uv = float2(theta * M_1_OVER_PI * 0.5F, gamma * M_1_OVER_PI) + 0.5F;
-    return uv;
-}
-
 [shader("miss")]
 void Main(inout Payload payload)
 {
@@ -35,7 +26,7 @@ void Main(inout Payload payload)
         float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
         rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
 
-        colorPdf = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0);
+        colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
     }
     #else // Show env map only indirectly (bounced from object)
     {
@@ -53,7 +44,7 @@ void Main(inout Payload payload)
             float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
             rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
 
-            colorPdf = uEnvMapTexture.SampleLevel(uSampler, getSphericalUv(rotatedDirection), 0);
+            colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
         }
         else
         {
@@ -63,7 +54,6 @@ void Main(inout Payload payload)
     #endif
 
     payload.Emitted = colorPdf.rgb * uUBO.EnvironmentIntensity;
-    //colorPdf.a *= 1.0f / (4.0f * M_PI); // PDF for uniform sphere sampling
 
     #ifdef FURNACE_TEST_MODE
     {

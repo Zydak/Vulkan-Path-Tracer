@@ -16,9 +16,6 @@ import Defines;
 [[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
 
 // Alias map is used to efficiently select texels from env map based on importance.
-// It aims at creating a set of texel couples
-// so that all couples emit roughly the same amount of energy. To do this,
-// each lower energy texel will be assigned an "alias" with higher energy
 [[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
@@ -128,14 +125,7 @@ bool ScatteredInVolume(inout Payload payload)
 {
     #ifdef ENABLE_VOLUMES
     {
-        float distanceToGeometry = -1.0f;
-        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-        query.__rayQueryInitializeEXT(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, payload.Origin, 0.0001, payload.Direction, 1000000);
-        query.Proceed();
-        if (query.CommittedStatus() != COMMITTED_NOTHING)
-        {
-            distanceToGeometry = query.CommittedRayT();
-        }
+        float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
 
         float scatterDistance = -1.0f;
         int scatteredVolumeIndex = -1;
@@ -172,10 +162,10 @@ bool ScatteredInVolume(inout Payload payload)
                 toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
 
                 bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
-                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(newDir, toLightEnv) * !(float)isObscuredByGeometry;
+                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(newDir, toLightEnv) * (float)!isObscuredByGeometry;
                 float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, newDir);
 
-                // Transmittance along the ray how to be accounted for
+                // Transmittance along the ray has to be accounted for
                 float transmittance = 1.0f;
                 for (uint i = 0; i < uUBO.VolumesCount; i++)
                 {

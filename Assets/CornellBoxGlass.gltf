@@ -97,35 +97,10 @@
 		{
 			"mesh":5,
 			"name":"area light",
-			"scale":[
-				2.0451719760894775,
-				2.0451719760894775,
-				2.0451719760894775
-			],
 			"translation":[
-				0.023686608299613,
+				0.023686999455094337,
 				5.650000095367432,
-				-5.837862491607666
-			]
-		},
-		{
-			"mesh":6,
-			"name":"Cube",
-			"rotation":[
-				0,
-				0.3826834559440613,
-				0,
-				0.9238795638084412
-			],
-			"scale":[
-				1.9999998807907104,
-				2,
-				1.9999998807907104
-			],
-			"translation":[
-				-0.0169424619525671,
-				-3.527731418609619,
-				-5.243691921234131
+				-5.837860107421875
 			]
 		},
 		{
@@ -135,6 +110,20 @@
 				0,
 				0,
 				15.018107414245605
+			]
+		},
+		{
+			"mesh":6,
+			"name":"Sphere",
+			"scale":[
+				2,
+				2,
+				2
+			],
+			"translation":[
+				0,
+				-0.59444260597229,
+				-5.837860107421875
 			]
 		}
 	],
@@ -199,7 +188,7 @@
 			],
 			"extensions":{
 				"KHR_materials_emissive_strength":{
-					"emissiveStrength":50
+					"emissiveStrength":200
 				}
 			},
 			"name":"Material.002",
@@ -220,7 +209,7 @@
 					"transmissionFactor":1
 				}
 			},
-			"name":"Cube",
+			"name":"Sphere",
 			"pbrMetallicRoughness":{
 				"metallicFactor":0,
 				"roughnessFactor":0
@@ -307,7 +296,7 @@
 			]
 		},
 		{
-			"name":"Cube.001",
+			"name":"Sphere.001",
 			"primitives":[
 				{
 					"attributes":{
@@ -463,14 +452,14 @@
 		{
 			"bufferView":13,
 			"componentType":5126,
-			"count":24,
+			"count":559,
 			"max":[
+				0.9999997019767761,
 				1,
-				1,
-				1
+				0.9999993443489075
 			],
 			"min":[
-				-1,
+				-0.9999990463256836,
 				-1,
 				-1
 			],
@@ -479,19 +468,19 @@
 		{
 			"bufferView":14,
 			"componentType":5126,
-			"count":24,
+			"count":559,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":15,
 			"componentType":5126,
-			"count":24,
+			"count":559,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":16,
 			"componentType":5123,
-			"count":36,
+			"count":2880,
 			"type":"SCALAR"
 		}
 	],
@@ -576,32 +565,32 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":288,
+			"byteLength":6708,
 			"byteOffset":588,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":288,
-			"byteOffset":876,
+			"byteLength":6708,
+			"byteOffset":7296,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":192,
-			"byteOffset":1164,
+			"byteLength":4472,
+			"byteOffset":14004,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":72,
-			"byteOffset":1356,
+			"byteLength":5760,
+			"byteOffset":18476,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":1428,
+			"byteLength":24236,
 			"uri":"CornellBoxGlass.bin"
 		}
 	]

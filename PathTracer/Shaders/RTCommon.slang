@@ -59,8 +59,6 @@ public float3 Rotate(float3 v, float3 axis, float theta)
 
 public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
 {
-    #define USE_RAY_QUERIES
-
     #ifdef USE_RAY_QUERIES
     {
         RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
@@ -88,18 +86,35 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
 
 public float GetDistanceToGeometry(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
 {
-    RayDesc rayDesc;
-    rayDesc.Origin = origin;
-    rayDesc.Direction = normalize(direction);
-    rayDesc.TMin = 0.00001f;
-    rayDesc.TMax = 1000.0f;
+    #ifdef USE_RAY_QUERIES
+    {
+        float distanceToGeometry = -1.0f;
+        RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+        query.__rayQueryInitializeEXT(as, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin, 0.0001, direction, 1000000);
+        query.Proceed();
+        if (query.CommittedStatus() != COMMITTED_NOTHING)
+        {
+            distanceToGeometry = query.CommittedRayT();
+        }
 
-    Payload payload;
-    payload.QueryDistance = true; // Set Query distance flag
+        return distanceToGeometry;
+    }
+    #else
+    {
+        RayDesc rayDesc;
+        rayDesc.Origin = origin;
+        rayDesc.Direction = normalize(direction);
+        rayDesc.TMin = 0.00001f;
+        rayDesc.TMax = 1000.0f;
 
-    TraceRay(as, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 1u, rayDesc, payload); // Use shadow miss shader
+        Payload payload;
+        payload.QueryDistance = true; // Set Query distance flag
 
-    return payload.DistanceToSurface;
+        TraceRay(as, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 1u, rayDesc, payload); // Use shadow miss shader
+
+        return payload.DistanceToSurface;
+    }
+    #endif
 }
 
 public float BalanceHeuristics(float pdfA, float pdfB)
@@ -110,4 +125,13 @@ public float BalanceHeuristics(float pdfA, float pdfB)
 public float PowerHeuristics(float pdfA, float pdfB)
 {
     return pow(pdfA, 2.0f) / (pow(pdfA, 2.0f) + pow(pdfB, 2.0f));
+}
+
+public float2 DirectionToUV(in float3 v)
+{
+    float gamma = asin(-v.y);
+    float theta = atan2(v.x, -v.z);
+
+    float2 uv = float2(theta * M_1_OVER_PI * 0.5F, gamma * M_1_OVER_PI) + 0.5F;
+    return uv;
 }

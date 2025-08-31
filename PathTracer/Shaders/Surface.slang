@@ -41,7 +41,7 @@ public struct Surface
         }
         #else
         {
-            // Transformed normals often cause rays to go under the geometry the same goes for normal textures.
+            // Transformed normals often cause rays to go under the geometry, the same goes for normal textures.
             // They aren't implemented properly yet so there is no compensation for that
             m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
         }
@@ -50,8 +50,7 @@ public struct Surface
 
         if (dot(m_Normal, WorldRayDirection()) > 0.0f)
         {
-            // Sometimes the geometry is flat (e.g. a 2D plane), it has only one face (and one normal direction).
-            // If that's the case then flip the normal and act as if it has two faces.
+            // If geometry is hit from inside then invert the normal
             m_Normal = -m_Normal;
             m_HitFromInside = true;
         }
