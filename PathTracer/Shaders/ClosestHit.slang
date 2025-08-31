@@ -36,9 +36,6 @@ import Volume;
 [[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
 
 // Alias map is used to efficiently select texels from env map based on importance.
-// It aims at creating a set of texel couples
-// so that all couples emit roughly the same amount of energy. To do this,
-// each lower energy texel will be assigned an "alias" with higher energy
 [[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
@@ -67,14 +64,17 @@ void Main(inout Payload payload, in float2 attrib)
     // Initialize Geometry Data
     //
 
-    // I'm not sure if it's possible to use multiple hit shaders like it is with miss shaders, so I also use this shader
-    // to query the distance to surface. I could use ray queries but they have really low hardware coverage, I think that's
-    // because they aren't emulated in software if RT cores are absent in the GPU
-    // if (payload.QueryDistance)
-    // {
-    //     payload.DistanceToSurface = RayTCurrent();
-    //     return;
-    // }
+    #ifndef USE_RAY_QUERIES
+    {
+        // I'm not sure if it's possible to use multiple hit shaders like it is with miss shaders, so I also use this shader
+        // to query the distance to surface when ray queries are disabled.
+        if (payload.QueryDistance)
+        {
+            payload.DistanceToSurface = RayTCurrent();
+            return;
+        }
+    }
+    #endif
 
     float3 barycentrics = float3(1.0f - attrib.x - attrib.y, attrib.x, attrib.y);
     uint geometryIndex = InstanceIndex();

@@ -11,7 +11,6 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
   - VK_KHR_ray_tracing_pipeline
   - VK_KHR_swapchain
   - VK_KHR_deferred_host_operations
-- Visual Studio 2022 (older versions might work but aren't tested).
 
 # Running
 [TODO]
@@ -21,10 +20,12 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 
 # Features Overview
 
-- BSDF with MIS
+- BSDF with importance sampling
 - Energy compensation implemented according to [[Turquin 2018]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) paper.
-- HDR Environment Maps
-- Importance sampling Environment map
+- HDR Environment Maps with importance sampling
+- NEE for environment map light
+- Volumetric scattering with importance sampling implemented according to [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
+- Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Textures and Normal Maps
 - Editor
   - Changing material and path tracing properties at runtime
@@ -35,31 +36,35 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
   - ACES tonemapping
 - Anti Aliasing
 - Depth of Field
-- Volumetric scattering with MIS
 - Russian roulette
 
 # Gallery
-![Sponza](./Gallery/GodRays.png)
-![CannelleEtFromage](./Gallery/CannelleEtFromage.png)
-![DragonHead](./Gallery/DragonHead.png)
-![Bistro](./Gallery/Bistro.png)
-![OceanAjax](./Gallery/OceanAjax.png)
-![Dogs](./Gallery/Dogs.png)
-![BreakfastRoom](./Gallery/BreakfastRoom.png)
-![CornellBox](./Gallery/CornellBox.png)
-![Mustang0](./Gallery/Mustang0.png)
-![Fog](./Gallery/FogCarUndenoised.png)
-![TeapotMarble](./Gallery/TeapotMarble.png)
-![TeapotTiled](./Gallery/TeapotTiled.png)
-![SubsurfaceBall](./Gallery/SubsurfaceBall.png)
-![Caustics](./Gallery/Caustics.png)
+<p align="center">
 
-# In Depth Project Overview
+<img src="./Gallery/GodRays.png"/>
+<img src="./Gallery/CannelleEtFromage.png"/>
+<img src="./Gallery/DragonHead.png"/>
+<img src="./Gallery/Bistro.png"/>
+<img src="./Gallery/OceanAjax.png"/>
+<img src="./Gallery/Dogs.png"/>
+<img src="./Gallery/BreakfastRoom.png"/>
+<img src="./Gallery/CornellBox.png"/>
+<img src="./Gallery/VolumeLight.png"/>
+<img src="./Gallery/Mustang0.png"/>
+<img src="./Gallery/FogCarUndenoised.png"/>
+<img src="./Gallery/TeapotMarble.png" width="40%"/>
+<img src="./Gallery/TeapotTiled.png" width="40%"/>
+<img src="./Gallery/SubsurfaceBall.png"/>
+<img src="./Gallery/Caustics.png"/>
 
-**Disclaimer**: This section describes my specific implementation choices and approach to path tracing. I'll be going over the entire project in depth. Starting from file structure and gradually explaining each feature. The mathematical formulations and techniques described here represent my interpretation and implementation of various published papers and methods. But for authoritative and complete information, please refer to the original papers cited throughout this readme.
+</p>
+
+# Project Overview
+
+**Disclaimer**: This section describes my specific implementation choices and approach to path tracing. I'll be going over the entire project in depth. Starting from file structure and gradually explaining each step I took while making this project. The mathematical formulations and techniques described here represent my interpretation and implementation of various published papers and methods. But for authoritative and complete information, please refer to the original papers.
 
 ## Code Structure
-This path tracer is built on [VulkanHelper](https://github.com/Zydak/VulkanHelper), my vulkan abstraction to get rid of the explicitness but keep the performance and features of vulkan. I use it for all my projects to minimize the boilerplate code.
+This path tracer is built on [VulkanHelper](https://github.com/Zydak/VulkanHelper), my vulkan abstraction layer to get rid of the explicitness but keep the performance and features of vulkan. I use it for all my projects to minimize the boilerplate code.
 
 The project is split into 5 main components:
 - Application
@@ -72,9 +77,9 @@ The project is split into 5 main components:
   <img src="./Gallery/Diagrams/CodeStructureDiagram.png"/>
 </p>
 
-Application is simple, it creates window and vulkan instance, and then delegates the rendering into the Editor component.
+Application is simple, it creates window and vulkan instance, and then leaves the rendering to the Editor component.
 
-Editor manages the UI rendering as well as path tracer and post processor components. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behaviour.
+Editor manages the UI rendering as well as path tracer and post processor components. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behaviour. Then it retrieves images from them and displays them in the viewport.
 
 Path tracer is an isolated component, it has no knowledge of the editor. The data to it is passed by get/set functions. This way the communication happens through these small defined channels so there is no coupling between the two, the editor can be easily swapped out. The component itself manages the path tracing, as an input it takes scene filepath and spits out path traced image as an output. It creates and manages all resources needed for path tracing (materials, cameras, mesh buffers). The only way to interact with it (apart from previously mentioned get/set functions) is calling `PathTrace()` which will schedule the work on the GPU.
 
@@ -107,18 +112,12 @@ When making the BSDF I did not aim for being 100% physically correct, I just wan
 
 Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. Surfaces are modeled using microfacet theory, and I chose the GGX distribution for its industry standard status, it's extensively documentated, and easy to implementation considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts convergence speed.
 
-Here's a side by side comparison. Rough surfaces aren't really a problem, since the distribution is still a close match, but when something less rough is introduced, it takes a absurd amount of time to converge with uniform sampling. Both images have 50K samples per pixel.
+Here's a side by side comparison. Rough surfaces aren't really a problem, since the distribution is still a close match, but when something less rough is introduced, it takes a absurd amount of time to converge with uniform sampling. Both images have 50K samples per pixel. The left one is using uniforms sampling, and the right one is importance sampling the BSDF.
 
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/ImportanceSamplingOff.png" />
-    <p>Uniform Sampling</p>
-  </div>
-  <div style="text-align: center; margin: 0 10px;">
-    <img src="./Gallery/ImportanceSamplingOn.png" />
-    <p>Importance Sampling BSDF</p>
-  </div>
-</div>
+<p align="center">
+  <img src="./Gallery/ImportanceSamplingOff.png" width="45%" />
+  <img src="./Gallery/ImportanceSamplingOn.png" width="45%" />
+</p>
 
 Currently supported material properties are:
 - Base Color
@@ -164,8 +163,7 @@ Everything there is based on [Sampling the GGX Distribution of Visible Normals](
 
 #### Metallic
 
-The sampling weight is simple here: $w_\text{metallic} = \text{metallic}$.
-The outgoing direction $\mathbf{L}$ is computed as $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$
+The sampling weight is simple here: $w_\text{metallic} = \text{metallic}$. and the the outgoing direction $\mathbf{L}$ is computed as $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$.
 
 The BRDF is:
 
@@ -196,7 +194,7 @@ $$
 F = \text{lerp}(\mathbf{C}, \mathbf{S}, (1 - \mathbf{V} \cdot \mathbf{H})^5)
 $$
 
-The PDF is given by weighting VNDF by the jacobian of the reflect operator.
+And finally the PDF is given by weighting VNDF by the jacobian of the reflect operator.
 
 $$
 p_\text{metallic} = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
@@ -240,7 +238,7 @@ $$
 
 If ray got reflected, outgoing direction is computed the same way as for metallic $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$.
 
-If ray got transmitted, I decided to just scatter it diffusely, for that I use Lambertian reflection. I decided to use lambert because honestly I see no major difference in other diffuse models like oren-nayar, sure they're more physically accurate, but lambert is simple and suits my needs. Outgoing direction $\mathbf{L}$ is computed by sampling a random vector on a hemisphere with cosine weighted distribution.
+If ray got transmitted, I use Lambertian reflection. I decided to use lambert because honestly I see no major difference in other diffuse models like oren-nayar, sure they're more physically accurate, but lambert is simple and suits my needs. Outgoing direction $\mathbf{L}$ is computed by sampling a random vector on a hemisphere with cosine weighted distribution.
 
 Reflection is evaluated in pretty much the same way as metallic.
 
@@ -267,8 +265,6 @@ f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\
 p_\text{dielectric}^T = \frac{\mathbf{L} \cdot \mathbf{N}}{\pi}
 \end{gather*}
 $$
-
-Where $\mathbf{C}$ is the surface base color.
 
 <p align="center">
   <img src="./Gallery/MaterialShowcase/DielectricIOR0.png" width="22%" />
@@ -313,7 +309,7 @@ $$
 f_\text{glass}^T = \frac{|\mathbf{V} \cdot \mathbf{H}| |\mathbf{L} \cdot \mathbf{H}|}{|\mathbf{V} \cdot \mathbf{N}| |\mathbf{L} \cdot \mathbf{N}|} \cdot \frac{\eta^2 \cdot F \cdot G \cdot D}{(\eta(\mathbf{V} \cdot \mathbf{H}) + (\mathbf{L} \cdot \mathbf{H}))^2}
 $$
 
-With fresnel being the surface base color since I want the color to be tinted on refraction.
+With fresnel being the surface base color since I want the color to be fully tinted on refraction.
 
 $$
 F = \mathbf{C}
@@ -340,7 +336,7 @@ $$
 
 #### Final BSDF
 
-After every lobes' BxDF and PDF have been evaluated they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled and then simply add them all together.
+After the BxDF and PDF of each lobe have been evaluated, they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled, and then simply add them all together.
 
 $$
 \begin{gather*}
@@ -349,9 +345,9 @@ p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\t
 \end{gather*}
 $$
 
-And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$. Evaluating the BSDF like will be usefull for features like NEE later on.
+And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$. Evaluating the BSDF like will this be usefull for features like NEE later on.
 
-Here's a little presentation of the entire BSDF with varying parameters for each lobe:
+Here's a little presentation of the entire BSDF with varying parameters for each lobe, although I think the teapots made a better job already:
 ![BSDF](./Gallery/BSDF.png)
 
 ## Energy compensation
@@ -364,7 +360,7 @@ After finishing the BSDF, I noticed a signifact color darkerning as roughness in
 
 This is a known issue, and one way to fix this is simulating multiple surface scattering, accounting for the fact that light can bounce multiple times on a microsurface, just like [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) suggests. The problem is that: 1. it's not that easy to implement, and 2. according to [[Turquin 2019]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) properly simulating multiple scattering can be from 7x to even 15x slower. So instead I decided to use energy compensation lookup tables implemented according to [[Turquin 2019]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf). They're easy to compute and implement, but most importantly, they're fast.
 
-So first of all, to have a way of verifying my implementation, I something called *Furnace Test*. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
+So first of all, as a way of verifying my implementation, I used something called *Furnace Test*. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
 
 <p align="center">
   <img src="./Gallery/FurnaceMetalNoCompensation.png" width="40%" />
@@ -372,21 +368,21 @@ So first of all, to have a way of verifying my implementation, I something calle
 </p>
 
 ### Lookup Energy Calculator
-The CPU code for generating LUTs (Lookup Tables) is in the `LookupTableCalculator.cpp`. The class itself is pretty simple, you give it a shader alongside the LUT size, it executes that shader repeatedly until all samples have been accumulated, and then it returns the lookup table as a vector of floats. Computing these LUTs can take some time depending on the precision you want, so I decided to cache them on disk `Assets/LookupTables` as binary files and later load them as textures for the path tracer to use. The computation of the samples is done fully on the GPU, it could be just as easily implemented on the CPU, but of course it would be much much slower.
+The CPU code for generating LUTs (Lookup Tables) is in the `LookupTableCalculator.cpp`. The class itself is pretty simple, you give it a shader alongside the LUT size, it executes that shader repeatedly until all samples have been accumulated, and then it returns the lookup table as a vector of floats. Computing these LUTs can take some time depending on the precision you want, so I decided to cache them on disk in `Assets/LookupTables` as binary files and later load them as textures for the path tracer to use. The computation of the samples is done fully on the GPU, it could be just as easily implemented on the CPU, but of course it would be much much slower. And considering that I compute trillions of samples for each LUT, the performance is a pretty big consideration here, even on the GPU they take several minutes to compute.
 
 #### Reflection LUT
-The first LUT is the reflection LUT, it's used to compensate metallic and dielectric lobes, since they are reflection only. Code for computing the energy loss is in `LookupReflect.slang`. I decided to use 64x64x32 LUT for the reflection. After taking 10 million samples per pixel (1310720000000 in total) I ended up with this:
+The first LUT is the reflection LUT, it's used to compensate metallic and dielectric lobes, since they are reflection only. Code for computing the energy loss is in `LookupReflect.slang`. I decided to use 64x64x32 LUT for the reflection. After taking 10 million samples per pixel (1'310'720'000'000 in total) I ended up with this:
 
 <p align="center">
   <img src="./Gallery/ReflectionLookup.png" width="50%" />
 </p>
 
-X axis represents viewing angle ($\mathbf{V} \cdot \mathbf{N}$) and Y axis represents surface roughness. As you can see, most energy is lost at grazing angles with high roughness (Lower right corner, both X and Y are high, since (0, 0) is left top corner).
+X axis represents viewing angle ($\mathbf{V} \cdot \mathbf{N}$) and Y axis represents surface roughness. As you can see, most energy is lost at high angles with high roughness (Lower right corner, both X and Y are high, since (0, 0) is left top corner).
 
 But the reflection LUT is 3 dimensional, and the third parameter is anisotropy, but this one is tricky, that's because the energy loss is dependent on the viewing direction, not just angle this time. So to properly compute energy loss for anisotropy, I'd actually need to add even more dimensions to the table. But I decided not to do that, the LUT still gets most of the energy from anisotropy back, and the anisotropy itself is used so rarely that I decided it's not really worth the hassle, since bigger LUT means more memory used and that directly translates to the performance.
 
 #### Glass LUT
-Glass LUT is computed in a similar fashion with a couple of small differences. First, instead of computing the energy lost during reflection, the energy loss during both reflection and refraction is computed. Second, the LUT has to also be parameterized by IOR, so the third dimension of the LUT is IOR instead of anisotropy this time. And lastly, 2 different LUTs have to be computed for glass, the differentiation between ray hitting the surface from inside the mesh and ray hitting the surface from outside the mesh has to be made. That's because IOR changes based on that fact. I decided to use 128x128x32 LUT this time because the glass needs a lot more precision than simple reflection. Also x coordinate is now parameterized with $(\mathbf{V} \cdot \mathbf{N})^2$ because more precision is needed on grazing angles. The code can be found in `LookupRefract.slang`. After accumulating 10 million samples per pixel (5242880000000) in total I get this:
+Glass LUT is computed in a similar fashion with a couple of small differences. First, instead of computing the energy lost during reflection, the energy loss during both reflection and refraction is computed. Second, the LUT has to also be parameterized by IOR, so the third dimension of the LUT is IOR instead of anisotropy this time. And lastly, 2 different LUTs have to be computed for glass, the differentiation between ray hitting the surface from inside the mesh and ray hitting the surface from outside the mesh has to be made. That's because IOR changes based on that fact. I decided to use 128x128x32 LUT this time because the glass needs a lot more precision than simple reflection. Also x coordinate is now parameterized with $(\mathbf{V} \cdot \mathbf{N})^2$ because more precision is needed on grazing angles. The code can be found in `LookupRefract.slang`. After accumulating 10 million samples per pixel (5'242'880'000'000 in total) I get this:
 
 <p align="center">
   <img src="./Gallery/RefractionLookupInside.png" width="45%" />
@@ -415,7 +411,7 @@ f_\text{ms}^T = \frac{f_\text{ss}^T}{E_\text{ss}}
 \end{gather*}
 $$
 
-And that's it. To verify whether the compensation is actually working a furnace test can be used again. Here's side by side comparison, on the left, no compensation is applied, and on the right the compensation is applied.
+And that's it. To verify whether the compensation is actually working a furnace test can be used again. Here's side by side comparison, on the left, no compensation is applied, and on the right the compensation is applied. The difference is clearly visible.
 
 <p align="center">
   <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" width="40%" />
@@ -437,7 +433,7 @@ And that's it. To verify whether the compensation is actually working a furnace 
   <img src="./Gallery/FurnaceGlassCompensation.png" width="40%" />
 </p>
 
-Now, the metallic furnace test is pretty much indistinguishable without turning up the contrast, but in the glass furnace test, if you look closely, you'll see that the compensation is not perfect. That's because the tables are just approximations, they have limited dimensions, and a limited number of samples are taken, and that's causing some issues down the line. But that's okay, the couple percent of energy loss or gain are barely visible even in the furnace tests, let alone in complex scenes, and the simplicity of the solution along with its speed make it a much more preferable option from [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) approach. Making path tracer 100% energy conserving and preserving has almost no benefits, and the amount of performance that's sacrificed in the process is very noticeable. The only important thing to me, is that there is no longer any color darkening visible with a naked eye. Rough glass was impossible to simulate since it turned black really fast. And the color on the metal surface was very saturated and darkened. Now there's none of that. So the key point is that both problems are solved.
+Now, the metallic furnace test is pretty much indistinguishable without turning up the contrast, but in the glass furnace test, if you look closely, you'll see that the compensation is not perfect. That's because the tables are just approximations, they have limited dimensions, and a limited number of samples is taken, and that's causing some issues down the line. But that's okay, the couple percent of energy loss or gain are barely visible even in the furnace tests, let alone in complex scenes, and the simplicity of the solution along with its speed make it a much more preferable option from [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) approach. Making path tracer 100% energy conserving and preserving has almost no benefits, and the amount of performance that's sacrificed in the process is very noticeable. The only important thing to me, is that there is no longer any color darkening visible with a naked eye. Rough glass was impossible to simulate since it turned black really fast. And the color on the metal surface was very saturated and darkened. Now there's none of that. So the key point is that both problems are solved.
 
 And even though anisotropy is not computed correctly (the viewing direction is not accounted for), it still looks quite good, most of the energy lost is being retrieved back.
 
@@ -474,11 +470,8 @@ And since this is a path tracer, light rays are already simulated, all that need
 
 ```
 focusPoint = origin + direction * focalLength;
-
 randomOffset = UniformFloat2(-0.5f, 0.5f) * DoFStrenght;
-
 RayOrigin = origin.xyz + cameraRight * randomOffset.x + cameraUp * randomOffset.y;
-
 RayDirection = normalize(focalPoint - origin.xyz);
 ```
 
@@ -518,7 +511,7 @@ Here's a comparison:
 
 Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K samples per pixel (10'000'000'000 samples in total) were taken, bounce limit was set to 20. It took 45s to compute. Image on the right has russian roulette enabled, dimensions and sample count are identical, but this time it took only 20s to compute. It is visually identical to one on the left but the render time has been cut in half. And the performance boost of the russian roulette only increases as the scenes become more complex, and more bounces are needed.
 
-Of course I still had to set maximum bounce limit. Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. The default I use is 200 max bounces.
+Of course I still had to set maximum bounce limit. Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
 
 ## Volumetrics
 
@@ -538,7 +531,7 @@ Consider a fog effect that fills an entire room. If I place the camera inside th
 For mesh defined volumes, the only way to answer this question is to shoot a ray in any direction and count how many times it intersects the mesh boundary. If it's an odd number, you're inside, if even, you're outside. However, this approach had several serious problems:
 
 - **Mesh requirements**: The mesh must be perfectly watertight with no gaps, holes, or non-manifold geometry. It also needs to be 3D and not a 2D plane, for example.
-- **Performance cost**: The bigger issue though is performance, since every volume now requires additional ray tracing. You'd need to use anyhit shaders to check every intersection along the ray path. That's 1 additional really expensive ray query per pixel for *each* volume in the scene. For complex scenes with a lot of triangles, that becomes quite expensive really fast.
+- **Performance cost**: The bigger issue though is performance, since every volume now requires additional ray tracing. You'd need to use anyhit shaders to check every intersection along the ray path. That's 1 additional really expensive ray query per pixel for *each* volume in the scene. For complex meshes with a lot of triangles, that becomes quite expensive really fast.
 - **Importance sampling lights**: Transmittance values have to be computed when sampling lights, and that means additional ray queries, this time on every bounce.
 
 #### The AABB Solution
@@ -549,22 +542,22 @@ So for large volumes that span entire scenes, I use AABBs. Mesh volumes are stil
 The only downside of this approach is that you can't have fancy shapes for volumes you want to spawn rays within. But that's hardly an issue for things like fog. And more complex volumetric shapes are usually stored in something like OpenVDB format instead of triangles anyway.
 
 ### Nested Volumes
-To determine whether a ray was currently in a volume or not, I decided to keep a global flag in the payload. When a ray refracts through the mesh surface from outside, the flag is set to true. When a ray refracts from inside, the flag is set to false. This way no additional cost is added to determine whether to scatter in a volume or not. If the ray got refracted from outside, and the mesh has a volume inside it, it has a chance of scattering inside the medium instead of reaching the other side of the mesh, it's as simple as that. The only thing that as needed for simulating scattering is the distance which the ray has traveled through the volume. It's easy to compute since it's just the distance between two intersection points.
+To determine whether a ray was currently in a volume or not, I decided to keep a global flag in the payload. When a ray refracts through the mesh surface from outside, the flag is set to true. When a ray refracts from inside, the flag is set to false. This way no additional cost is added to determine whether to scatter in a volume or not. If the ray got refracted from outside, and the mesh has a volume inside it, it has a chance of scattering inside the medium instead of reaching the other side of the mesh, it's as simple as that. The only thing that is needed for simulating scattering is the distance which the ray has traveled through the volume. It's easy to compute since it's just the distance between two intersection points.
 
 ### AABB volumes
 AABB volumes are pretty much the same, but this time there is no global flag dictating whether the ray is inside the volume or not, since it has to account for the fact that it can spawn inside the volume. So an AABB ray intersection test is done every time. The math for that is dirt cheap, so it doesn't cause any performance issues even for multiple volumes.
 
 ### Scattering
 
-To simulate scattering I use *Closed Form Tracking* method, since for now I only support homogenous volumes, there's no need for anything more sophisticated. It's implemented according to [this article](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html) and [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf). Distance along the ray at which scattering has occured is given by:
+To simulate scattering I use a simple tracking approach, since for now I only support homogenous volumes, there's no need for anything more sophisticated like delta tracking. I implemented it according to [this article](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html) and [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf) paper. Distance along the ray at which scattering has occured is given by:
 
 $$
 t = -\frac{\ln(1 - \xi)}{\sigma_t}
 $$
 
-If this distance is shorter than the distance to the other side of the surface, the ray has scattered inside the volume.
+If this distance is shorter than the distance to the other side of the volume, or any other closest geometry, the ray has scattered inside the volume.
 
-With $t$ in place, the next thing is simulating the scattering itself. That's done with a phase function $p(\mathbf{V} \cdot \mathbf{L})$. It dictates how likely the ray is to scatter in direction $\mathbf{L}$ given $\mathbf{V}$. These functions are usually parameterized by $G$, also called anisotropy. It controls the average scattering angle, in other words, the likelihood of light being scattered forward, backward, or isotropically. I decided to use the Henyey-Greenstein phase function since it has become a standard in PBR for volumes.
+With $t$ in place, the next thing is simulating the scattering itself. That's done with a phase function $p(\mathbf{V} \cdot \mathbf{L})$. It dictates how likely the ray is to scatter in direction $\mathbf{L}$ given $\mathbf{V}$. These functions are usually parameterized by $G$, also called anisotropy. It controls the average scattering angle, in other words, the likelihood of light being scattered forward, backward, or isotropically. I decided to use the Henyey-Greenstein phase function since it has become a standard in PBR for volumes for it's ease of use.
 
 $$
 p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g(\mathbf{V} \cdot \mathbf{L}))^{\frac{3}{2}}}
@@ -589,7 +582,7 @@ $$
 \end{gather*}
 $$
 
-So first I contructed $\mathbf{L}$ in a coordinate system where $\mathbf{V}$ points along the z-axis, and then transform it to world space using orthonormal basis around $\mathbf{V}$:
+So first I contructed $\mathbf{L}$ in a coordinate system where $\mathbf{V}$ points along the z-axis, and then transformed it to world space using orthonormal basis around $\mathbf{V}$:
 
 $$
 \begin{gather*}
@@ -608,6 +601,13 @@ The rest was easy. Since both $\mathbf{V}$ and $\mathbf{L}$ were in place, all t
 
 <p align="center">
   <img src="./Gallery/SubsurfaceMonkey.png"/>
+  <br />
+  Subsurface suzanne
+</p>
+
+<p align="center">
+  <img src="./Gallery/MaterialShowcase/SubsurfaceR02.png" width="45%" />
+  <img src="./Gallery/MaterialShowcase/SubsurfaceR10.png" width="45%" />
 </p>
 
 This gives materials a more waxy look because light can penetrate the surface and exit on the same side but in a different location, as opposed to reflecting immediately. It's a pretty expensive simulation since the medium has to be really dense, and a lot of scattering events have to be simulated. So usually for rendering, subsurface scattering is just approximated using different and more efficient methods. But with this, it's almost as accurate as you can get.
@@ -617,7 +617,7 @@ This gives materials a more waxy look because light can penetrate the surface an
   <img src="./Gallery/DragonHead.png" width="45%" />
 </p>
 
-Among other effects that are possible to simulate, is volumetric glass. It's basically a glass object filled volume of anisotropy 1.0, so the ray will travel in a straght line. This way, instead of tinting the color on refraction, the color is tinted as ray travels through the object. So the color is less saturated in thin areas and more saturated in thick ones. It's just an opinion but, I think it looks way better than normal glass.
+Among other effects that are possible to simulate, is volumetric glass. It's basically a glass object filled volume of anisotropy 1.0, so the ray will travel in a straght line. This way, instead of tinting the color on refraction, the color is tinted as ray travels through the object. So the color is less saturated in thin areas and more saturated in thick ones. It's just an opinion, but I think it looks way better than normal glass.
 
 <p align="center">
   <img src="./Gallery/MaterialShowcase/VolumeGlassIOR110.png" width="22%" />
@@ -626,14 +626,13 @@ Among other effects that are possible to simulate, is volumetric glass. It's bas
   <img src="./Gallery/MaterialShowcase/VolumeGlassIOR175.png" width="22%" />
 </p>
 
-
 <p align="center">
-  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" width="30%" />
-  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R02.png" width="30%" />
-  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R04.png" width="30%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R02.png" width="22%" />
+  <img src="./Gallery/MaterialShowcase/VolumeGlassIOR150R04.png" width="22%" />
 </p>
 
-When it comes to AABB volumes there's really not much to see without any light sampling. The most you can do, is place fog around the scene and wait eternity for it to converge. Probability of a light ray bouncing in a volume multiple times and then hitting a light source is abysmally low, most of the paths won't contribute anything. Image below is an example of that, it took 1 millions samples **per pixel** (2 073 600 000 000 samples in total, that's a scary number, god bless GPUs) to look somewhat decent, I had to path trace this for almost 2 hours, which is quite long considering how simple the scene is.
+When it comes to AABB volumes there's really not much to see without any explicit light sampling. The most you can do, is place fog around the scene and wait eternity for it to converge. Probability of a light ray bouncing in a volume multiple times and then hitting a light source is abysmally low, most of the paths won't contribute anything. Image below is an example of that, it took 1 millions samples **per pixel** (2 073 600 000 000 samples in total, that's a scary number, god bless GPUs) to look somewhat decent, I had to path trace this for almost 2 hours, which is quite long considering how simple the scene is.
 
 <p align="center">
   <img src="./Gallery/FogCarUndenoised.png"/>
@@ -653,15 +652,15 @@ Consider what happens if I'd place sun in the scene, it's really far away, so it
 
 ### Solution
 
-NEE (next event estimation) is a technique of explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unocludded, direct lighting is estimated by combining both sampling techniques (sampling BSDF and sampling lights) using MIS.
+NEE (next event estimation) is a technique of explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unocludded, direct lighting is estimated.
 
 #### MIS
 
-The problem is that direct lighting can't just be added to what is already there, that would cause double counting, adding light contribution from a single light source twice (once for NEE and once for BSDF sample) which would overbrighten the image. So light contribution from one strategy has to go. But that would cause the problem of poor distribution match for some surfaces, this problem is described in detail in [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf), and a solution is proposed. And that is to combine two sampling strategies using MIS weights.
+The problem is that direct lighting can't just be added to what is already there, that would cause double counting, adding light contribution from a single light source twice (once for NEE sample and once for BSDF sample) which would overbrighten the image. So light contribution from one strategy has to go. But that would cause the problem of poor distribution match for some surfaces, the same problem as with uniformly sampling the BSDF directions. This exact problem is described in detail in [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf), and a solution is proposed. And that is to combine two sampling strategies using MIS weights.
 
 I take two samples, one from each sampling strategy:
 
-- **BSDF Sample**
+- **BSDF / Phase function Sample**
 - - Direction: $\omega_\text{bsdf}$
 - - BSDF evaluation: $f(\omega_\text{bsdf})$
 - - PDF evaluation: $p_\text{bsdf}(\omega_\text{bsdf})$
@@ -695,6 +694,8 @@ $$
 
 This approach ensures that both sampling strategies contribute appropriately while avoiding double counting.
 
+Also, because there are volumes in the scene, transmittance must be taken into account. That is, how much light is blocked by a volume in the way. It's computed with a simple Beer-Lambert law: $T = e^{-\sigma_t \cdot t}$.
+
 #### Sampling Lights
 
 The method of sampling the direction to the light source and evaluating it's PDF is different for every type of light source.
@@ -703,15 +704,13 @@ The method of sampling the direction to the light source and evaluating it's PDF
 
 Since environment map is conceptually just a big sphere around the scene, I first tried to uniformly sample it. So direction is random vector on a sphere, and PDF is $\frac{1}{4 \pi}$.
 
-But, uniform sampling won't make much difference, chance of sampling small bright spot on a huge 4K texture will be just as small as the chance for ray to randomly bounce into it. It's an improvement, of course, but still not good enough. Image below has 100K samples per pixel, it has somewhat less noise than naive version, but it's still a lot of noise nonetheless. So in order to fix that, I use importance sampling. That will steer sampled directions into the brighter areas of environment map.
+But, uniform sampling won't make much difference, chance of sampling small bright spot on a huge 4K texture will be just as small as the chance for a ray to randomly bounce into it. It's an improvement, of course, but still not good enough. Image below has 100K samples per pixel, it has somewhat less noise than naive version, but it's still a lot of noise nonetheless. So in order to fix that, I use importance sampling. That will steer sampled directions into the brighter areas of environment map.
 
 <p align="center">
   <img src="./Gallery/BreakfastUniformNEE100K.png"/>
 </p>
 
-To importance sample the environment map, an [Alias Method](https://en.wikipedia.org/wiki/Alias_method) is used. It has O(1) time complexity so it's great for performance and implementing it is fairly simple.
-
-// TODO
+So t importance sample the environment map, I decided to use [Alias Method](https://en.wikipedia.org/wiki/Alias_method). It has O(1) time complexity so it's great for performance, and it works really well.
 
 ##### Emissive Meshes
 Sampling of emissive meshes is not yet supported. Only Environment Map NEE works properly.
@@ -737,16 +736,42 @@ float luminance = dot(pixelValue, float3(0.212671f, 0.715160f, 0.072169f));
 float scale = MaxLuminance / max(luminance, MaxLuminance);
 pixelValue *= scale;
 ```
+
 <p align="center">
   <img src="./Gallery/BreakfastFireflies.png" width="45%" />
   <img src="./Gallery/BreakfastFirefliesDeleted.png" width="45%" />
 </p>
 
-With this final improvement, I added some subtle depth of field effect into the scene, focusing on the teapot on the table, bumped the resolution to 4K (3840x2160), and rendered the final image you can find in [Gallery](#gallery):
+With this final improvement, I added some subtle depth of field effect into the scene, focusing on the teapot on the table, bumped the resolution to 4K (3840x2160), and rendered the final image you can find in the [Gallery](#gallery):
 
 <p align="center">
   <img src="./Gallery/BreakfastRoom.png"/>
 </p>
+
+Scattering inside volumes also doesn't take an eternity to converge now, the only difference here is that instead of calculating the surface BSDF, I evaluate the phase function. Both images below are 25K samples per pixels. First one is naive path tracing, and the second on is NEE with importance sampling.
+
+<p align="center">
+  <img src="./Gallery/SuzanneRoomNaive25K.png" />
+  <img src="./Gallery/SuzanneNEEImportance25K.png" />
+</p>
+
+## Performance & Benchmarks
+This is an offline path tracer, but of course having it in interactive framerates speeds up development and shortens render times. It wasn't my priority to make this thing run as fast as possible and there are a couple areas of possible improvment, nonetheless, I think the performance is quite good, it's not like I didn't care about it at all.
+
+Specs the benchmarks were taken on:
+- CPU: Intel Core i5-10400F CPU @ 2.90GHz
+- GPU: Nvidia RTX 3060
+- RAM: 16GB DDR4
+- OS: Debian 12 bookworm
+
+### Breakfast Room scene
+- Vertices: 161418
+- Indices: 809292
+- Resolution: 1920x1080
+- Samples Per Pixel: 50'000
+- Render Time: 2 minutes 58 seconds
+
+TODO
 
 # References
 
@@ -757,6 +782,8 @@ With this final improvement, I added some subtle depth of field effect into the 
 - [A Reflectance Model For Computer Graphics](https://dl.acm.org/doi/pdf/10.1145/357290.357293)
 - [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf)
 - [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
+- [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
+- [Scratch a pixel article on volumes](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html)
 
 ## Models
 - https://developer.nvidia.com/orca/amazon-lumberyard-bistro - Bistro

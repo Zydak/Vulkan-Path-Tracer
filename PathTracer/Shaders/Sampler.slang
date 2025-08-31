@@ -175,31 +175,9 @@ public struct Sampler
         return scatteredDir;
     }
 
-    float2 getSphericalUv(float3 v)
-    {
-        float gamma = asin(-v.y);
-        float theta = atan2(v.z, v.x);
-
-        float2 uv = float2(theta * M_1_OVER_PI * 0.5F, gamma * M_1_OVER_PI) + 0.5F;
-        return uv;
-    }
-
     [mutating]
-    public void ImportanceSampleEnvMap(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> uAccels, float azimuth, float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleEnvMap(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
     {
-        // Test Uniform Sampling
-
-        #if 0
-        float3 dir = RandomSphereVec();
-        float2 uv = getSphericalUv(dir);
-
-        outValue = hdrTexture.SampleLevel(sampler, uv, 0);
-        outValue.a = 1 / (4.0 * M_PI); // PDF for uniform sphere sampling
-
-        toLight = dir;
-
-        #else
-
         // Uniformly pick a texel index idx in the environment map
         float3 xi = UniformFloat3();
 
@@ -211,7 +189,7 @@ public struct Sampler
         uint idx = min(uint(xi.x * float(size)), size - 1);
 
         // Fetch the entry for that texel, containing the importance and the texel alias
-        AliasMapEntry entry = uAccels[idx];
+        AliasMapEntry entry = aliasMap[idx];
 
         uint envIdx;
 
@@ -247,11 +225,10 @@ public struct Sampler
         const float sinTheta = sin(theta);
         const float v = theta * M_1_OVER_PI;
 
-        toLight = float3(cosPhi * sinTheta, cosTheta, sinPhi * sinTheta);
+        toLight = float3(sinPhi * sinTheta, cosTheta, -cosPhi * sinTheta);
 
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
-        #endif
     }
 
     [mutating]

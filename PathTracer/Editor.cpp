@@ -518,6 +518,19 @@ void Editor::RenderPathTracingSettings()
         });
     }
 
+    static bool areRayQueriesSupported = m_Device.AreRayQueriesSupported();
+
+    ImGui::BeginDisabled(!areRayQueriesSupported);
+    static bool useRayQueries = m_PathTracer.UseRayQueries();
+    if (ImGui::Checkbox("Use Ray Queries", &useRayQueries))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetUseRayQueries(useRayQueries, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+    ImGui::EndDisabled();
+
     static bool showEnvMapDirectly = m_PathTracer.IsEnvMapShownDirectly();
     if (ImGui::Checkbox("Show Environment Map Directly", &showEnvMapDirectly))
     {
@@ -734,8 +747,11 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
-    if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -0.99999f, 0.99999f, "%.5f", ImGuiSliderFlags_AlwaysClamp))
+    {
         volumeModified = true;
+        selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.99999f, 0.99999f);
+    }
 
     ImGui::PopID();
 
@@ -746,6 +762,7 @@ void Editor::RenderVolumeSettings()
             PathTracer::Volume vol;
             int volumeIndex;
         };
+
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
             m_PathTracer.SetVolume((uint32_t)selectedVolumeIndex, selectedVolume, cmd);
             m_RenderTime = 0.0f;

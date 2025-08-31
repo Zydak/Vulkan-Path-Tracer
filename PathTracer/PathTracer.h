@@ -88,6 +88,7 @@ public:
     [[nodiscard]] inline bool UseEnergyCompensation() const { return m_UseEnergyCompensation; }
     [[nodiscard]] inline bool IsInFurnaceTestMode() const { return m_FurnaceTestMode; }
     [[nodiscard]] inline float GetEnvironmentIntensity() const { return m_EnvironmentIntensity; }
+    [[nodiscard]] inline bool UseRayQueries() const { return m_UseRayQueries; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -105,6 +106,7 @@ public:
     void SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer);
     void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer);
+    void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -133,6 +135,7 @@ private:
     bool m_UseEnergyCompensation = true;
     bool m_FurnaceTestMode = false;
     float m_EnvironmentIntensity = 1.0f;
+    bool m_UseRayQueries = true;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
