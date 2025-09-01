@@ -23,7 +23,7 @@ public:
 
     static PostProcessor New(VulkanHelper::Device device);
 
-    void SetInputImage(const VulkanHelper::ImageView& inputImageView);
+    void SetInputImage(VulkanHelper::ImageView inputImageView);
     void PostProcess(VulkanHelper::CommandBuffer& commandBuffer);
     void SetTonemappingData(const TonemappingData& data, VulkanHelper::CommandBuffer& commandBuffer);
     void SetBloomData(const BloomData& data);

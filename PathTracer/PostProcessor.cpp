@@ -116,7 +116,7 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
     return postProcessor;
 }
 
-void PostProcessor::SetInputImage(const VulkanHelper::ImageView& inputImageView)
+void PostProcessor::SetInputImage(VulkanHelper::ImageView inputImageView)
 {
     m_InputImageView = inputImageView;
 

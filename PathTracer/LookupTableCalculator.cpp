@@ -5,7 +5,7 @@
 
 LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device, const std::string& shaderFilepath, const std::vector<VulkanHelper::Shader::Define>& defines)
 {
-    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
+    VulkanHelper::Shader::InitializeSession("../PathTracer/Shaders/", defines.size(), defines.data());
     LookupTableCalculator calculator;
     calculator.m_Device = device;
 
