@@ -126,7 +126,7 @@ private:
     float m_MaxLuminance = 500.0f;
     float m_FocusDistance = 1.0f;
     float m_DepthOfFieldStrength = 0.0f;
-    std::string m_EnvMapFilepath = "../../../Assets/meadow_2_4k.hdr";
+    std::string m_EnvMapFilepath = "../Assets/meadow_2_4k.hdr";
     float m_EnvMapRotationAzimuth = 0.0f;
     float m_EnvMapRotationAltitude = 0.0f;
     bool m_EnableEnvMapMIS = true;

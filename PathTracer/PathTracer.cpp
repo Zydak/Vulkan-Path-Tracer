@@ -143,9 +143,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::CommandBuffer initializationCmd = m_CommandPool.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
 
-    m_ReflectionLookup = LoadLookupTable("../../../Assets/LookupTables/ReflectionLookup.bin", {64, 64, 32}, initializationCmd);
-    m_RefractionFromOutsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", {128, 128, 32}, initializationCmd);
-    m_RefractionFromInsideLookup = LoadLookupTable("../../../Assets/LookupTables/RefractionLookupHitFromInside.bin", {128, 128, 32}, initializationCmd);
+    m_ReflectionLookup = LoadLookupTable("../Assets/LookupTables/ReflectionLookup.bin", {64, 64, 32}, initializationCmd);
+    m_RefractionFromOutsideLookup = LoadLookupTable("../Assets/LookupTables/RefractionLookupHitFromOutside.bin", {128, 128, 32}, initializationCmd);
+    m_RefractionFromInsideLookup = LoadLookupTable("../Assets/LookupTables/RefractionLookupHitFromInside.bin", {128, 128, 32}, initializationCmd);
     LoadEnvironmentMap(m_EnvMapFilepath.c_str(), initializationCmd);
 
     // Meshes
@@ -501,7 +501,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
 
-    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
+    VulkanHelper::Shader::InitializeSession("../PathTracer/Shaders/", defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
     VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
     VulkanHelper::Shader missShader = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
@@ -846,7 +846,7 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
 
-    VulkanHelper::Shader::InitializeSession("../../../PathTracer/Shaders/", defines.size(), defines.data());
+    VulkanHelper::Shader::InitializeSession("../PathTracer/Shaders/", defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
     auto hitShaderRes = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT});
     auto missShaderRes = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT});

@@ -4,7 +4,7 @@
 Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSDF with Diffuse, Dielectric, Metallic and Glass lobes + volume scattering. Renders can also be saved as png images.
 
 # System Requirements
-- [TODO]
+- Windows 10 / Linux (Only debian 12 is tested)
 - Either NVIDIA RTX 2000+ series or AMD RX 6000+ series to support all of the extensions below. You may check whether they're present on your device [here](https://vulkan.gpuinfo.org/listdevices.php), maybe it's possible to run on older hardware.
   - VK_KHR_ray_query
   - VK_KHR_acceleration_structure
@@ -16,7 +16,26 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 [TODO]
 
 # Building
-[TODO]
+## Windows
+```
+git clone --recursive https://github.com/Zydak/Vulkan-Path-Tracer
+cd Vulkan-Path-Tracer
+mkdir build
+cd build
+cmake ..
+```
+Then open generated Visual Studio solution and build.
+
+## Linux
+```
+git clone --recursive https://github.com/Zydak/Vulkan-Path-Tracer
+cd Vulkan-Path-Tracer
+mkdir build
+cd build
+cmake ..
+make
+```
+To run the executable `./PathTracer/VulkanPathTracer`
 
 # Features Overview
 
@@ -762,14 +781,14 @@ Specs the benchmarks were taken on:
 - CPU: Intel Core i5-10400F CPU @ 2.90GHz
 - GPU: Nvidia RTX 3060
 - RAM: 16GB DDR4
-- OS: Windows 10
+- OS: Debian 12
 
-### Breakfast Room scene
+### Breakfast Room
 - Vertices: 161'418
 - Indices: 809'292
 - Resolution: 1920x1080
 - Samples Per Pixel: 50'000
-- Render Time: 2 minutes 41 seconds
+- Render Time: 2 minutes 32 seconds
 
 <p align="center">
   <img src="./Gallery/BreakfastImportanceNEE50K.png" />
@@ -780,7 +799,7 @@ Specs the benchmarks were taken on:
 - Indices: 3'150
 - Resolution: 1920x1080
 - Samples Per Pixel: 50'000
-- Render Time: 2 minutes 14s
+- Render Time: 2 minutes 15s
 
 <p align="center">
   <img src="./Gallery/VolumetricRoom50K.png" />
@@ -791,7 +810,7 @@ Specs the benchmarks were taken on:
 - Indices: 9'179'637
 - Resolution: 1080x1080
 - Samples Per Pixel: 50'000
-- Render Time: 3 minutes 48 seconds
+- Render Time: 3 minutes 12 seconds
 
 <p align="center">
   <img src="./Gallery/CanneleEtFromage50K.png" />
@@ -831,3 +850,4 @@ Specs the benchmarks were taken on:
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://renderman.pixar.com/official-swatch - RenderMan teapot
 - https://www.cgbookcase.com/ - Textures for teapots
+- https://casual-effects.com/g3d/data10/ - Breakfast Room
