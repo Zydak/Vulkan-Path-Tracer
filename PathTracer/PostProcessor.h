@@ -38,6 +38,8 @@ private:
 
     VulkanHelper::DescriptorPool m_DescriptorPool;
     VulkanHelper::DescriptorSet m_TonemappingDescriptorSet;
+
+    VulkanHelper::Sampler m_Sampler;
     
     VulkanHelper::Pipeline m_TonemappingPipeline;
     VulkanHelper::Buffer m_TonemappingBuffer;

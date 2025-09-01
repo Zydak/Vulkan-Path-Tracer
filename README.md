@@ -79,7 +79,7 @@ The project is split into 5 main components:
 
 Application is simple, it creates window and vulkan instance, and then leaves the rendering to the Editor component.
 
-Editor manages the UI rendering as well as path tracer and post processor components. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behaviour. Then it retrieves images from them and displays them in the viewport.
+Editor manages the UI rendering as well as path tracer and post processor components. It retrieves the user input through the UI and feeds it into the path tracer and post processor to modify their behavior. Then it retrieves images from them and displays them in the viewport.
 
 Path tracer is an isolated component, it has no knowledge of the editor. The data to it is passed by get/set functions. This way the communication happens through these small defined channels so there is no coupling between the two, the editor can be easily swapped out. The component itself manages the path tracing, as an input it takes scene filepath and spits out path traced image as an output. It creates and manages all resources needed for path tracing (materials, cameras, mesh buffers). The only way to interact with it (apart from previously mentioned get/set functions) is calling `PathTrace()` which will schedule the work on the GPU.
 
@@ -108,9 +108,9 @@ Then there's also Lookup Table Calculator but it could really be a separate appl
 The acceleration structure for ray tracing as well as all mesh intersection tests are handled through the Vulkan RT pipeline, and that part of the code is handled by [VulkanHelper](https://github.com/Zydak/VulkanHelper). I decided to use Vulkan RT pipeline for the simplicity and performance. It allows for utilizing RT cores on the newer GPUs so it's a lot faster than doing everything in compute. And of course you don't have to set up your own acceleration structure so it's way simpler. Although I wonder if using ray queries inside a compute shader would be faster or slower. I never got to test that out. The only thing that's worth noting here is that I do loop based approach for generating rays instead of recursion (I don't spawn new rays from hit shader), I found it around 2x-3x faster. I guess the GPU doesn't like recursion. Also with loop based approach there's no depth limit. Last time I checked vulkan only guarantees that the recursion limit is at least 1, anything above that varies per GPU.
 
 ## BSDF
-When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a **multi-lobe BSDF with scalar-weighted blending**. This approach is useful because it allows for a lot of artistic control. I can also really easily import materials from different file formats like glTF or OBJ, so that I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similiar enough to look good.
+When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a **multi-lobe BSDF with scalar-weighted blending**. This approach is useful because it allows for a lot of artistic control. I can also really easily import materials from different file formats like glTF or OBJ, so that I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
 
-Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. Surfaces are modeled using microfacet theory, and I chose the GGX distribution for its industry standard status, it's extensively documentated, and easy to implementation considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts convergence speed.
+Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. Surfaces are modeled using microfacet theory, and I chose the GGX distribution for its industry standard status, it's extensively documented, and easy to implementation considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts convergence speed.
 
 Here's a side by side comparison. Rough surfaces aren't really a problem, since the distribution is still a close match, but when something less rough is introduced, it takes a absurd amount of time to converge with uniform sampling. Both images have 50K samples per pixel. The left one is using uniforms sampling, and the right one is importance sampling the BSDF.
 
@@ -345,13 +345,13 @@ p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\t
 \end{gather*}
 $$
 
-And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$. Evaluating the BSDF like will this be usefull for features like NEE later on.
+And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$. Evaluating the BSDF like will this be useful for features like NEE later on.
 
 Here's a little presentation of the entire BSDF with varying parameters for each lobe, although I think the teapots made a better job already:
 ![BSDF](./Gallery/BSDF.png)
 
 ## Energy compensation
-After finishing the BSDF, I noticed a signifact color darkerning as roughness increased. The issue was that single scatter GGX that I use is not energy conserving, that's because of two reasons. First, when the $L$ is sampled, it is possible for ray to bounce into the surface instead of out of it (or the other way around for refraction). In that case I just discard the sample, which means that the energy is lost completely. And the second reason, the masking function destroys light occluded by other microfacets. That's bad because increasing roughness of a surface introduces visible darkening of the color. This is especially visible in rough glass where light bounces multiple times. If I increase the roughness on previously showcased materials it's clearly visible.
+After finishing the BSDF, I noticed a significs color darkening as roughness increased. The issue was that single scatter GGX that I use is not energy conserving, that's because of two reasons. First, when the $L$ is sampled, it is possible for ray to bounce into the surface instead of out of it (or the other way around for refraction). In that case I just discard the sample, which means that the energy is lost completely. And the second reason, the masking function destroys light occluded by other microfacets. That's bad because increasing roughness of a surface introduces visible darkening of the color. This is especially visible in rough glass where light bounces multiple times. If I increase the roughness on previously showcased materials it's clearly visible.
 
 <p align="center">
   <img src="./Gallery/MaterialShowcase/MetallicCompensationOff.png" width="40%" />
@@ -448,7 +448,7 @@ And even though anisotropy is not computed correctly (the viewing direction is n
 </p>
 
 ## Anti Aliasing
-AA in path tracers is basically free since multiple samples across frames are already being taken, the only thing that needs to be done is slightly offseting the ray direction and origin each time so that the ray's starting position covers the entire pixel across multiple samples. So when choosing pixel position on a screen, I just add small random offset for AA.
+AA in path tracers is basically free since multiple samples across frames are already being taken, the only thing that needs to be done is slightly offsetting the ray direction and origin each time so that the ray's starting position covers the entire pixel across multiple samples. So when choosing pixel position on a screen, I just add small random offset for AA.
 
 ```
 pixelCenter += UniformFloat2(-0.5f, 0.5f);
@@ -466,7 +466,7 @@ All that depth of field effect is trying to achieve is to simulate how real worl
   <img src="./Gallery/DepthOfField.png"/>
 </p>
 
-And since this is a path tracer, light rays are already simulated, all that needs to be done is offseting the origin slightly and pointing the ray to a focus point.
+And since this is a path tracer, light rays are already simulated, all that needs to be done is offsetting the origin slightly and pointing the ray to a focus point.
 
 ```
 focusPoint = origin + direction * focalLength;
@@ -500,7 +500,7 @@ $$
 E[f^\prime] = (1 - p) \cdot 0 + p \cdot \frac{E[f]}{p} = E[f]
 $$
 
-This of course introduces more variance, but as long as probability of ray continuation $p$ is chosen correctly, and rays aren't terminated too often, the performance boost will easily outweight small variance.
+This of course introduces more variance, but as long as probability of ray continuation $p$ is chosen correctly, and rays aren't terminated too often, the performance boost will easily outweigh small variance.
 
 Here's a comparison:
 
@@ -513,12 +513,12 @@ Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K sam
 
 Of course I still had to set maximum bounce limit. Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
 
-## Volumetrics
+## Participating media
 
 I implement two distinct types of volumetric rendering in this path tracer:
 
-1. **Nested volumes** - Volumetrics contained within mesh boundaries
-2. **AABB volumes** - Volumetrics contained within axis-aligned bounding boxes that users can place manually
+1. **Nested volumes** - Volumes contained within mesh boundaries
+2. **AABB volumes** - Volumes contained within axis-aligned bounding boxes that users can place manually
 
 ### Why Two Separate Approaches?
 
@@ -549,7 +549,7 @@ AABB volumes are pretty much the same, but this time there is no global flag dic
 
 ### Scattering
 
-To simulate scattering I use a simple tracking approach, since for now I only support homogenous volumes, there's no need for anything more sophisticated like delta tracking. I implemented it according to [this article](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html) and [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf) paper. Distance along the ray at which scattering has occured is given by:
+To simulate scattering I use a simple tracking approach, since for now I only support homogenous volumes, there's no need for anything more sophisticated like delta tracking. I implemented it according to [this article](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html) and [Production Volume Rendering](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf) paper. Distance along the ray at which scattering has occurred is given by:
 
 $$
 t = -\frac{\ln(1 - \xi)}{\sigma_t}
@@ -582,7 +582,7 @@ $$
 \end{gather*}
 $$
 
-So first I contructed $\mathbf{L}$ in a coordinate system where $\mathbf{V}$ points along the z-axis, and then transformed it to world space using orthonormal basis around $\mathbf{V}$:
+So first I constructed $\mathbf{L}$ in a coordinate system where $\mathbf{V}$ points along the z-axis, and then transformed it to world space using orthonormal basis around $\mathbf{V}$:
 
 $$
 \begin{gather*}
@@ -617,7 +617,7 @@ This gives materials a more waxy look because light can penetrate the surface an
   <img src="./Gallery/DragonHead.png" width="45%" />
 </p>
 
-Among other effects that are possible to simulate, is volumetric glass. It's basically a glass object filled volume of anisotropy 1.0, so the ray will travel in a straght line. This way, instead of tinting the color on refraction, the color is tinted as ray travels through the object. So the color is less saturated in thin areas and more saturated in thick ones. It's just an opinion, but I think it looks way better than normal glass.
+Among other effects that are possible to simulate, is volumetric glass. It's basically a glass object filled volume of anisotropy 1.0, so the ray will travel in a straight line. This way, instead of tinting the color on refraction, the color is tinted as ray travels through the object. So the color is less saturated in thin areas and more saturated in thick ones. It's just an opinion, but I think it looks way better than normal glass.
 
 <p align="center">
   <img src="./Gallery/MaterialShowcase/VolumeGlassIOR110.png" width="22%" />
@@ -652,7 +652,7 @@ Consider what happens if I'd place sun in the scene, it's really far away, so it
 
 ### Solution
 
-NEE (next event estimation) is a technique of explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unocludded, direct lighting is estimated.
+NEE (next event estimation) is a technique of explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unoccluded, direct lighting is estimated.
 
 #### MIS
 
@@ -729,7 +729,7 @@ I don't think I have to point out the difference in noise. All images have 25K s
   <img src="./Gallery/BreakfastImportanceNEE25K.png"/>
 </p>
 
-If you look closesy at the last image, you'll see that there are still really bright pixels spread out in the image. These are called *fireflies*. They appear because even with NEE, it's still possible for ray to stumble upon really bright light source by bouncing randomly in the scene. And since the emission value of those is very high, the pixel is very bright. They do not contribute much to the final image and are mostly just annoying noise, so to get rid of them I set maximum luminance value which pixel can have, and if it exceeds it, it gets scaled down. For this image max luminance I used was 20, so that it doesn't interfere with scene lighting but affects the fireflies.
+If you look closely at the last image, you'll see that there are still really bright pixels spread out in the image. These are called *fireflies*. They appear because even with NEE, it's still possible for ray to stumble upon really bright light source by bouncing randomly in the scene. And since the emission value of those is very high, the pixel is very bright. They do not contribute much to the final image and are mostly just annoying noise, so to get rid of them I set maximum luminance value which pixel can have, and if it exceeds it, it gets scaled down. For this image max luminance I used was 20, so that it doesn't interfere with scene lighting but affects the fireflies.
 
 ```
 float luminance = dot(pixelValue, float3(0.212671f, 0.715160f, 0.072169f));
@@ -756,22 +756,57 @@ Scattering inside volumes also doesn't take an eternity to converge now, the onl
 </p>
 
 ## Performance & Benchmarks
-This is an offline path tracer, but of course having it in interactive framerates speeds up development and shortens render times. It wasn't my priority to make this thing run as fast as possible and there are a couple areas of possible improvment, nonetheless, I think the performance is quite good, it's not like I didn't care about it at all.
+This is an offline path tracer, but of course having it in interactive framerates speeds up development and shortens render times. It wasn't my priority to make this thing run as fast as possible and there are a couple areas of possible improvement, nonetheless, I think the performance is quite good, it's not like I didn't care about it at all.
 
 Specs the benchmarks were taken on:
 - CPU: Intel Core i5-10400F CPU @ 2.90GHz
 - GPU: Nvidia RTX 3060
 - RAM: 16GB DDR4
-- OS: Debian 12 bookworm
+- OS: Windows 10
 
 ### Breakfast Room scene
-- Vertices: 161418
-- Indices: 809292
+- Vertices: 161'418
+- Indices: 809'292
 - Resolution: 1920x1080
 - Samples Per Pixel: 50'000
-- Render Time: 2 minutes 58 seconds
+- Render Time: 2 minutes 41 seconds
 
-TODO
+<p align="center">
+  <img src="./Gallery/BreakfastImportanceNEE50K.png" />
+</p>
+
+### Volumetric Room
+- Vertices: 2'114
+- Indices: 3'150
+- Resolution: 1920x1080
+- Samples Per Pixel: 50'000
+- Render Time: 2 minutes 14s
+
+<p align="center">
+  <img src="./Gallery/VolumetricRoom50K.png" />
+</p>
+
+### Cannelle Et Fromage
+- Vertices: 1'976'973
+- Indices: 9'179'637
+- Resolution: 1080x1080
+- Samples Per Pixel: 50'000
+- Render Time: 3 minutes 48 seconds
+
+<p align="center">
+  <img src="./Gallery/CanneleEtFromage50K.png" />
+</p>
+
+### Cornell Box With Glass Sphere
+- Vertices: 583
+- Indices: 2916
+- Resolution: 1080x1080
+- Samples Per Pixel 5'000
+- Render Time: 15 seconds
+
+<p align="center">
+  <img src="./Gallery/CornellBox5K.png" />
+</p>
 
 # References
 
@@ -796,5 +831,3 @@ TODO
 - https://wirewheelsclub.com/models/1965-ford-mustang-fastback/ - Mustang
 - https://renderman.pixar.com/official-swatch - RenderMan teapot
 - https://www.cgbookcase.com/ - Textures for teapots
-- https://benedikt-bitterli.me/resources/ - Material Test Ball
-- https://sketchfab.com/3d-models/
