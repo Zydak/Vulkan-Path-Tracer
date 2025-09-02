@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSDF - Vulkan Path Tracer</title>
+    <link rel="stylesheet" href="feature-style.css">
+    
+    <!-- MathJax for LaTeX support -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>BSDF</h1>
+            <a href="../index.html" class="back-link">← Back to Home</a>
+        </header>
+        
+        <div class="feature-content">
+            <div class="image-row">
+                <img src="../Images/MaterialShowcase/DielectricIOR15.png">
+                <img src="../Images/MaterialShowcase/MetallicR02.png">
+                <img src="../Images/MaterialShowcase/GlassIOR150.png">
+            </div>
+            
+            <div class="description">
+                <div class="chapter-content">
+                    <p>
+                        When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a <b>multi-lobe BSDF with scalar-weighted blending</b>. This approach is useful because it allows for a lot of artistic control. I can easily import materials from different file formats like glTF or OBJ, so I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, it was more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
+                    </p>
+                    <p>
+                        Currently supported material properties are:
+                        <ul>
+                            <li>Base Color</li>
+                            <li>Emissive Color</li>
+                            <li>Specular Color</li>
+                            <li>Metallic</li>
+                            <li>Roughness</li>
+                            <li>IOR</li>
+                            <li>Transmission</li>
+                            <li>Anisotropy</li>
+                            <li>Anisotropy Rotation</li>
+                            <li>Base Color Texture</li>
+                            <li>Normal Texture</li>
+                            <li>Metallic Texture</li>
+                            <li>Roughness Texture</li>
+                            <li>Emissive Texture</li>
+                        </ul>
+                    </p>
+                    <p>
+                        Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. So surfaces are modeled using microfacet theory, and I chose the GGX for that, it's extensively documented, and easy to implement considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts the convergence speed compared to something like uniform sampling.
+                    </p>
+
+                    <div class="image-row">
+                        <div class="centered-container">
+                            <img src="../Images/ImportanceSamplingOff.png">
+                            <p>Uniform sampling, 50K samples per pixel</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/ImportanceSamplingOn.png">
+                            <p>Importance sampling, 50K samples per pixel</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h1>Code Conventions</h1>
+                <div class="chapter-content">
+                    <p>
+                        I deviated from the standard path tracing notation ($\omega_o$ and $\omega_i$) because it felt counterintuitive for a backward path tracer. Since rays are traced from camera to scene, calling the direction they're traveling in the "incoming" direction was confusing. So I chose to use $\mathbf{V}$ for the direction to the view point and $\mathbf{L}$ for outgoing direction to the light source. It's also shorter to write so the shader code is much cleaner.
+                    </p>
+
+                    <h1>Microsurface</h1>
+                    <p>
+                        As I've mentioned before, microfacet theory is used to simulate surfaces. So when a ray hits the surface, the microsurface $\mathbf{H}$ is sampled according to the $\text{VNDF}$ for GGX. Sampling implementation follows the method described in <a href="https://jcgt.org/published/0007/04/01/paper.pdf">Sampling the GGX Distribution of Visible Normals</a>.
+                    </p>
+                </div>
+
+                <h1>Lobes</h1>
+                <div class="chapter-content">
+                    <p>
+                        From code standpoint, materials are split into 3 different types:
+                        <ul>
+                            <li>Metallic</li>
+                            <li>Dielectric</li>
+                            <li>Glass</li>
+                        </ul>
+                    </p>
+                    <p>
+                        When a ray hits the surface, one of these 3 types is sampled stochastically based on their sampling weights $w_{\text{metallic}}$, $w_{\text{dielectric}}$, $w_{\text{glass}}$. These weights are chosen more or less arbitrarily and then are normalized so that they sum up to 1.
+                    </p>
+                    <p>
+                        A direction is then sampled from the selected type to determine the outgoing direction $\mathbf{L}$, and the BSDF is evaluated to determine how much light is reflected or refracted.
+                    </p>
+                    <p>
+                        The BSDF code is placed in <code>Material.slang</code> and is divided into two parts, stochastically importance sampling the direction (<code>SampleBSDF(V, H, F)</code>) and evaluation of that direction (<code>EvaluateBSDF(V, H, L, F)</code>). Everything there is based on <a href="https://jcgt.org/published/0007/04/01/paper.pdf">Sampling the GGX Distribution of Visible Normals</a> and <a href="https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf">Microfacet Models for Refraction through Rough Surfaces</a>.
+                    </p>
+                </div>
+
+                <h2>Metallic Lobe</h2>
+                <div class="chapter-content">
+                    <p>
+                        The sampling weight is simple here: $w_\text{metallic} = \text{metallic}$. and the the outgoing direction $\mathbf{L}$ is computed as $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$.
+                    </p>
+                    <p>
+                        The BRDF is:
+
+                        $$
+                        f_{\text{metallic}} = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N})(\mathbf{V} \cdot \mathbf{L})}
+                        $$
+
+                        where $D$ is the anisotropic GGX distribution.
+                        
+                        $$
+                        D = \frac{1}{\pi \alpha_x \alpha_y (\frac{x_h^2}{\alpha_x^2} + \frac{y_h^2}{\alpha_y^2} + z_n^2)^2}
+                        $$
+
+                        For masking, I use anisotropic smith function.
+
+                        $$
+                        G = G_1(\mathbf{V}) \cdot G_1(\mathbf{L})
+                        $$
+
+                        $$
+                        G_1(\hat{v}) = \frac{1}{1 + \Lambda(\hat{v})} \text{, where }
+                        \Lambda(\hat{v}) = \frac{-1 + \sqrt{1 + \frac{\alpha_x^2 x_{\hat{v}}^2+\alpha_y^2 y_{\hat{v}}^2}{z_{\hat{v}}^2}}}{2} 
+                        $$
+
+                        Now for fresnel, I don't have complex indices of refraction, so I decided to just do what Blender does: blend between surface base color and specular tint color based on Schlick fresnel approximation.
+
+                        $$
+                        F = \text{lerp}(\mathbf{C}, \mathbf{S}, (1 - \mathbf{V} \cdot \mathbf{H})^5)
+                        $$
+
+                        And finally the PDF is given by weighting VNDF by the jacobian of the reflect operator.
+
+                        $$
+                        p_\text{metallic} = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
+                        $$
+                    </p>
+
+                    <div class="image-row">
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/MetallicR00.png">
+                            <p>Roughness = 0.0</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/MetallicR02.png">
+                            <p>Roughness = 0.2</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/MetallicR04.png">
+                            <p>Roughness = 0.4</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/MetallicAniso.png">
+                            <p>Roughness = 0.4 <br> Anisotropy = 1.0</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <h2>Dielectric Lobe</h2>
+                <div class="chapter-content">
+                    <p>
+                        Unlike metals, where I only simulate reflection, the dielectrics are a little bit more complicated. I basically simulate 2 cases here: the light can either reflect from the surface, or transmit into it. If light ray got transmitted, I scatter it diffusely. This creates a kind of specular lobe/layer on top of the diffuse one, so materials like varnished wood can be simulated. This specular intensity is parameterized with materials' IOR. Dielectric materials are also influenced by roughness and specular tint.
+                    </p>
+                    <p>
+                        Sampling weight is $w_\text{dielectric} = (1 - \text{metallic}) \cdot (1 - \text{transmission})$.
+                    </p>
+                    <p>
+                        The probability of ray being reflected is given by the fresnel equation, so the intensity of the specular layer can be parameterized by materials' IOR.
+
+                        $$
+                        \begin{gather*}
+                        \text{Given:} \quad \eta = \frac{n_i}{n_t}, \quad \cos\theta_i = \mathbf{V} \cdot \mathbf{H} \\
+                        \sin^2\theta_t = \eta^2 \left(1 - \cos^2\theta_i\right) \\
+                        \text{If } \sin^2\theta_t > 1: \quad F_D = 1\\
+                        \text{Otherwise:} \quad \cos\theta_t = \sqrt{1 - \sin^2\theta_t} \\
+                        r_s = \frac{\eta \cos\theta_t - \cos\theta_i}{\eta \cos\theta_t + \cos\theta_i} \\
+                        r_p = \frac{\eta \cos\theta_i - \cos\theta_t}{\eta \cos\theta_i + \cos\theta_t} \\
+                        F_D = \frac{1}{2} \left( r_s^2 + r_p^2 \right)
+                        \end{gather*}
+                        $$
+
+                        A random value $\xi \sim \mathcal{U}(0, 1)$ is sampled and
+
+                        $$
+                        \begin{cases}
+                        \text{Reflect} & \xi < F_D \\
+                        \text{Transmit} & \text{otherwise}
+                        \end{cases}
+                        $$
+
+                        If ray got reflected, outgoing direction is computed the same way as for metallic $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$.
+                    </p>
+                    <p>
+                        If ray got transmitted, I use Lambertian reflection. I decided to use lambert because honestly I see no major difference in other diffuse models like oren-nayar, sure they're more physically accurate, but lambert is simple and suits my needs. Outgoing direction $\mathbf{L}$ is computed by sampling a random vector on a hemisphere with cosine weighted distribution.
+                    </p>
+                    <p>
+                        Reflection is evaluated in pretty much the same way as metallic.
+
+                        $$
+                        \begin{gather*}
+                        f_{\text{dielectric}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
+                        p_\text{dielectric}^R = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
+                        \end{gather*}
+                        $$
+
+                        with the only difference being that instead of using Schlick, the $F$ factor gets changed to the specular tint color of the surface.
+
+                        $$
+                        F = \text{specularTint}
+                        $$
+
+                        It isn't equal to $F_D$ because the actual fresnel equation is already included in the sampling probability, so I use $F$ factor in the equation just for tinting the color.
+                    </p>
+                    <p>
+                        And if ray got transmitted, it scatters diffusely, so I'm using simple Lambertian reflection here:
+
+                        $$
+                        \begin{gather*}
+                        f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\
+                        p_\text{dielectric}^T = \frac{\mathbf{L} \cdot \mathbf{N}}{\pi}
+                        \end{gather*}
+                        $$
+                    </p>
+
+                    <div class="image-row">
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/DielectricIOR0.png">
+                            <p>IOR = 1.0</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/DielectricIOR15.png">
+                            <p>IOR = 1.5</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/DielectricIOR15R02.png">
+                            <p>IOR = 1.5 <br> Roughness = 0.2</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/DielectricIOR15R04.png">
+                            <p>IOR = 1.5 <br> Roughness = 0.4</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Glass Lobe</h2>
+                <div class="chapter-content">
+                    <p>
+                        Sampling weight is $w_\text{glass} = (1 - \text{metallic}) \cdot \text{transmission}$.
+                    </p>
+                    <p>
+                        Ideally, I could have implemented glass as part of the dielectric (since glass is also a dielectric material), then I could choose between scattering diffusely and refracting based on material's $\text{transmission}$ value, but I had to make it a separate thing due to a constraint with the energy compensation system.
+                    </p>
+                    <p>
+                        The problem is that the <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a> paper doesn't provide a method to calculate energy compensation separately for just the transmission component, it only gives the combined reflection + transmission compensation. According to it, the energy compensation lookup tables need to account for all possible light paths, and for refractive materials like glass, this includes both reflected and transmitted rays: $E_\text{ss}^S = E_\text{ss}^R + E_\text{ss}^T$. This means I need to apply the same energy compensation to both the reflection and transmission parts of the glass BSDF. So reflecting ray requires knowing whether the material will be refractive or not. I have to know whether to apply only reflection compensation (like in dielectric) or reflection + transmission compensation.
+                    </p>
+                    <p>
+                        I had an attempt at making refractive only lookup table but it failed miserably. I'm not really sure whether it's not possible at all or I had made some mistake along the way, because they didn't really expand on that in the paper. So anyway, that's why I have glass as a separate type alongside dielectric. I hope that made any sense.
+                    </p>
+                    <p>
+                        To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled, if ray got reflected, outgoing direction is computed the same way as for dielectric and metallic. And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
+
+                        $$
+                        L = 
+                        \begin{cases}
+                        \text{reflect}(-\mathbf{V}, \mathbf{H}) & \xi < F_D \\
+                        \text{refract}(-\mathbf{V}, \mathbf{H}, \eta) & \text{otherwise}
+                        \end{cases}
+                        $$
+
+                        BRDF and PDF for reflection stay the same as in dielectric, nothing is different here.
+
+                        $$
+                        \begin{gather*}
+                        f_{\text{glass}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
+                        p_\text{glass}^R = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}\\
+                        F = \text{specularTint}
+                        \end{gather*}
+                        $$
+
+                        For refraction, instead of BRDF, BTDF is computed
+
+                        $$
+                        f_\text{glass}^T = \frac{|\mathbf{V} \cdot \mathbf{H}| |\mathbf{L} \cdot \mathbf{H}|}{|\mathbf{V} \cdot \mathbf{N}| |\mathbf{L} \cdot \mathbf{N}|} \cdot \frac{\eta^2 \cdot F \cdot G \cdot D}{(\eta(\mathbf{V} \cdot \mathbf{H}) + (\mathbf{L} \cdot \mathbf{H}))^2}
+                        $$
+
+                        With fresnel being the surface base color since I want the color to be fully tinted on refraction.
+
+                        $$
+                        F = \mathbf{C}
+                        $$
+
+                        The PDF also slightly changes, the same VNDF is still used, but this time instead of weighting it by the jacobian of $\text{reflect}$, it's weighted by the jacobian of $\text{refract}$
+
+                        $$
+                        p_\text{glass}^T = \frac{\text{VNDF}}{\frac{\eta^2 |\mathbf{L} \cdot \mathbf{H}|}{(\eta(\mathbf{V} \cdot \mathbf{H}) + \mathbf{L} \cdot \mathbf{H})^2}}
+                        $$
+                    </p>
+                    
+                    <div class="image-row">
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR110.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.1</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR125.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.25</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR150.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.5</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR175.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.75</p>
+                        </div>
+                    </div>
+                    <div class="image-row">
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR150.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.5 <br> Roughness = 0.0</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR150R02.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.5 <br> Roughness = 0.2</p>
+                        </div>
+                        <div class="centered-container">
+                            <img src="../Images/MaterialShowcase/GlassIOR150R04.png">
+                            <p>Transmission = 1.0 <br> IOR = 1.5 <br> Roughness = 0.4</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h1>Final BSDF</h1>
+                <div class="chapter-content">
+                    <p>
+                        After the BxDF and PDF of each lobe have been evaluated, they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled, and then simply add them all together.
+
+                        $$
+                        \begin{gather*}
+                        f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
+                        p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
+                        \end{gather*}
+                        $$
+
+                        And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$.
+                    </p>
+                    <div class="centered-container">
+                        <img src="../Images/BSDF.png" width="70%">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <a href="../index.html" class="back-link">Next Section</a>
+    </div>
+</body>
+</html>
