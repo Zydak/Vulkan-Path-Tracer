@@ -15,7 +15,8 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     m_PathTracer = PathTracer::New(device, &m_ThreadPool);
 
     auto selection = pfd::open_file("Select scene file", "", {
-        "Scene Files", "*.gltf"
+        "Scene Files", "*.gltf",
+        "All Files", "*.*"
     }).result();
     VH_ASSERT(!selection.empty(), "Failed to get scene file path, Terminating.");
 
