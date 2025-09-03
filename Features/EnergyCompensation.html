@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Compensation - Vulkan Path Tracer</title>
+    <link rel="stylesheet" href="feature-style.css">
+    
+    <!-- MathJax for LaTeX support -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Energy Compensation</h1>
+            <a href="../index.html" class="back-link">← Back to Home</a>
+        </header>
+        
+        <div class="feature-content">
+
+            <!-- TODO image comparison -->
+
+            <div class="chapter-content">
+                <p>
+                    After finishing the BSDF, I noticed a significant color darkening as roughness increased. The issue was that single scatter GGX that I use is not energy conserving, that's because of two reasons. First, when the $L$ is sampled, it is possible for ray to bounce into the surface instead of out of it (or the other way around for refraction). In that case I just discard the sample, which means that the energy is lost completely. And the second reason, the masking function destroys light occluded by other microfacets. That's bad because increasing roughness of a surface introduces visible darkening of the color. This is especially visible in rough glass where light bounces multiple times. If I increase the roughness on previously showcased materials it's clearly visible.
+                </p>
+
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/MetallicCompensationOff.png">
+                    <img src="../Images/MaterialShowcase/GlassCompensationOff.png">
+                </div>
+                
+                <p>
+                    This is a known issue, and one way to fix this is simulating multiple surface scattering, accounting for the fact that light can bounce multiple times on a microsurface, just like <a href="https://jo.dreggn.org/home/2016_microfacets.pdf">[Heitz 2016]</a> suggests. The problem is that: 1. it's not that easy to implement, and 2. according to <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a> properly simulating multiple scattering can be from 7x to even 15x slower. So instead I decided to use energy compensation lookup tables implemented according to <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a>. They're easy to compute and implement, but most importantly, they're fast.
+                </p>
+                <p>
+                    So first of all, as a way of verifying my implementation, I used something called *Furnace Test*. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
+                </p>
+
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/FurnaceMetalNoCompensation.png">
+                    <img src="../Images/MaterialShowcase/FurnaceGlassNoCompensation.png">
+                </div>
+
+            </div>
+
+            <h1>Lookup Energy Calculator</h1>
+            <div class="chapter-content">
+                <p>
+                    The CPU code for generating LUTs (Lookup Tables) is in the <code>LookupTableCalculator.cpp</code> file. The class itself is pretty simple, you give it a shader alongside the LUT size, it executes that shader repeatedly until all samples have been accumulated, and then it returns the lookup table as a vector of floats. Computing these LUTs can take some time depending on the precision you want, so I decided to cache them on disk in <code>Assets/LookupTables</code> as binary files and later load them as textures for the path tracer to use. The computation of the samples is done fully on the GPU, it could be just as easily implemented on the CPU, but of course it would be much much slower. And considering that I compute trillions of samples for each LUT, the performance is a pretty big consideration here, even on the GPU they take several minutes to compute.
+                </p>
+            </div>
+
+            <h2>Reflection LUT</h2>
+            <div class="chapter-content">
+                <p>
+                    The first LUT is the reflection LUT, it's used to compensate metallic and dielectric lobes, since they are reflection only. Code for computing the energy loss is in `LookupReflect.slang`. I decided to use 64x64x32 LUT for the reflection. After taking 10 million samples per pixel (1'310'720'000'000 in total) I ended up with this:
+                </p>
+
+                <div class="centered-container">
+                    <img src="../Images/MaterialShowcase/ReflectionLookup.png" alt="" width="50%">
+                    <p>
+                        Reflection LUT. X axis represents viewing angle ($\mathbf{V} \cdot \mathbf{N}$) and Y axis represents surface roughness.
+                    </p>
+                </div>
+
+                <p>
+                    As you can see, most energy is lost at high angles with high roughness (Lower right corner, both X and Y are high, since (0, 0) is left top corner).
+                </p>
+
+                <p>
+                    But the reflection LUT is 3 dimensional, and the third parameter is anisotropy, but this one is tricky, that's because the energy loss is dependent on the viewing direction, not just angle this time. So to properly compute energy loss for anisotropy, I'd actually need to add even more dimensions to the table. But I decided not to do that, the LUT still gets most of the energy from anisotropy back, and the anisotropy itself is used so rarely that I decided it's not really worth the hassle, since bigger LUT means more memory used and that directly translates to the performance.
+                </p>
+            </div>
+
+            <h2>Glass LUT</h2>
+            <div class="chapter-content">
+                <p>
+                    Glass LUT is computed in a similar fashion with a couple of small differences. First, instead of computing the energy lost during reflection, the energy loss during both reflection and refraction is computed. Second, the LUT has to also be parameterized by IOR, so the third dimension of the LUT is IOR instead of anisotropy this time. And lastly, 2 different LUTs have to be computed for glass, the differentiation between ray hitting the surface from inside the mesh and ray hitting the surface from outside the mesh has to be made. That's because IOR changes based on that fact. I decided to use 128x128x32 LUT this time because the glass needs a lot more precision than simple reflection. Also x coordinate is now parameterized with $(\mathbf{V} \cdot \mathbf{N})^2$ because more precision is needed on small angles. The code can be found in `LookupRefract.slang`. After accumulating 10 million samples per pixel (5'242'880'000'000 in total) I get this: (Both are slices of the third dimension with IOR 1.5)
+                </p>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/MaterialShowcase/RefractionLookupInside.png">
+                        <p>
+                            Inside Refraction Lookup
+                        </p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/MaterialShowcase/RefractionLookupOutside.png">
+                        <p>
+                            Outside Refraction Lookup
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <h1>Results</h1>
+            <div class="chapter-content">
+                <p>
+                    After getting the tables the rest is simple, I just use the equations from the paper:
+
+                    For metallic and dielectric reflection:
+
+                    $$
+                    f_\text{ms} = (1 + F_0 \cdot \frac{1 - E_\text{ss}}{E_\text{ss}}) \cdot f_\text{ss}
+                    $$
+
+                    with $E_\text{ss}$ being the value from the LUT. $f_\text{ss}$ being the single scattering BRDF that's evaluated. And $f_\text{ms}$ being final multi scatter approximation.
+
+                    and for glass
+
+                    $$
+                    \begin{gather*}
+                    f_\text{ms}^R = \frac{f_\text{ss}^R}{E_\text{ss}}\\
+                    f_\text{ms}^T = \frac{f_\text{ss}^T}{E_\text{ss}}
+                    \end{gather*}
+                    $$
+
+                    And that's it. To verify whether the compensation is actually working a furnace test can be used again. Here's side by side comparison. The difference is clearly visible.
+                </p>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <p>
+                            No Compensation Applied
+                        </p>
+                        <img src="../Images/MaterialShowcase/MetallicCompensationOff.png">
+                    </div>
+                    <div class="centered-container">
+                        <p>
+                            Compensation Applied
+                        </p>
+                        <img src="../Images/MaterialShowcase/MetallicCompensationOn.png">
+                    </div>
+                </div>
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/FurnaceMetalNoCompensation.png">
+                    <img src="../Images/MaterialShowcase/FurnaceMetalCompensation.png">
+                </div>
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/GlassCompensationOff.png">
+                    <img src="../Images/MaterialShowcase/GlassCompensationOn.png">
+                </div>
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/FurnaceGlassNoCompensation.png">
+                    <img src="../Images/MaterialShowcase/FurnaceGlassCompensation.png">
+                </div>
+
+                <p>
+                    Now, the metallic furnace test is pretty much indistinguishable without turning up the contrast, but in the glass furnace test, if you look closely, you'll see that the compensation is not perfect. That's because the tables are just approximations, they have limited dimensions, and a limited number of samples is taken, and that's causing some issues down the line. But that's okay, the couple percent of energy loss or gain are barely visible even in the furnace tests, let alone in complex scenes, and the simplicity of the solution along with its speed make it a much more preferable option from [[Heitz 2016]](https://jo.dreggn.org/home/2016_microfacets.pdf) approach. Making path tracer 100% energy conserving and preserving has almost no benefits, and the amount of performance that's sacrificed in the process is very noticeable. The only important thing to me, is that there is no longer any color darkening visible with a naked eye. Rough glass was impossible to simulate since it turned black really fast. And the color on the metal surface was very saturated and darkened. Now there's none of that. So the key point is that both problems are solved.
+                </p>
+
+                <p>
+                    And even though anisotropy is not computed correctly (the viewing direction is not accounted for), it still looks quite good, most of the energy lost is being retrieved back.
+                </p>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <p>
+                            No Compensation Applied
+                        </p>
+                        <img src="../Images/MaterialShowcase/MetallicAnisoCompensationOff.png">
+                    </div>
+                    <div class="centered-container">
+                        <p>
+                            Compensation Applied
+                        </p>
+                        <img src="../Images/MaterialShowcase/MetallicAnisoCompensationOn.png">
+                    </div>
+                </div>
+                <div class="image-row">
+                    <img src="../Images/MaterialShowcase/FurnaceAnisotropyNoCompensation.png">
+                    <img src="../Images/MaterialShowcase/FurnaceAnisotropyCompensation.png">
+                </div>
+            </div>
+
+        </div>
+        <a href="ParticipatingMedia.html" class="back-link">Next Section</a>
+    </div>
+</body>
+</html>

@@ -36,7 +36,6 @@
                 <img src="../Images/MaterialShowcase/GlassIOR150.png">
             </div>
             
-            <div class="description">
                 <div class="chapter-content">
                     <p>
                         When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a <b>multi-lobe BSDF with scalar-weighted blending</b>. This approach is useful because it allows for a lot of artistic control. I can easily import materials from different file formats like glTF or OBJ, so I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, it was more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
@@ -364,10 +363,8 @@
                         <img src="../Images/BSDF.png" width="70%">
                     </div>
                 </div>
-
-            </div>
         </div>
-        <a href="../index.html" class="back-link">Next Section</a>
+        <a href="EnergyCompensation.html" class="back-link">Next Section</a>
     </div>
 </body>
 </html>
