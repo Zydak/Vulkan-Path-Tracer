@@ -37,4 +37,4 @@ and some utilities that don't really fit anywhere in particular:
 - `RTCommon.slang` - Shared data structures and common ray tracing utilities that are shared across files.
 - `Defines.slang` - Shader preprocessor definitions and constants.
 
-Then there's also Lookup Table Calculator but it could really be a separate application altogether, it isn't really tied to anything and nothing is really tied to it. So I'll go over it in the [Energy Compensation](#energy-compensation) section.
+Then there's also Lookup Table Calculator but it could really be a separate application altogether, it isn't really tied to anything and nothing is really tied to it. So I'll go over it in the [Energy Compensation](./EnergyCompensation.md) section.

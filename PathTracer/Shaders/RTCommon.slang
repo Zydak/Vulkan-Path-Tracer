@@ -90,7 +90,7 @@ public float GetDistanceToGeometry(in RaytracingAccelerationStructure as, in flo
     {
         float distanceToGeometry = -1.0f;
         RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-        query.__rayQueryInitializeEXT(as, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin, 0.0001, direction, 1000000);
+        query.__rayQueryInitializeEXT(as, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin, 0.00001, direction, 1000000);
         query.Proceed();
         if (query.CommittedStatus() != COMMITTED_NOTHING)
         {
