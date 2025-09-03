@@ -4,7 +4,7 @@ html {
 }
 
 body {
-    width: 75%;
+    width: 80%;
     margin: 40px auto;
     text-align: center;
     color: #ffffff;
@@ -13,11 +13,12 @@ body {
 }
 
 .container {
-    width: 100%;
+    width: 95%;
     margin: 0 auto;
 }
 
 .centered-container {
+    width: 100%;
     text-align: center;
 }
 
@@ -83,8 +84,8 @@ body {
     justify-content: center;
     gap: 10px;
     flex-wrap: nowrap;
-    margin-bottom: 25px;
-    margin-top: 25px;
+    margin-bottom: 10px;
+    margin-top: 10px;
 }
 
 .image-row img {
@@ -105,4 +106,14 @@ code {
 
 .chapter-content {
     
+}
+
+pre code {
+    display: block;
+  background: #202020;
+  padding-left: 10px;
+  padding-right: 10px;
+  border: 1px solid #666666;
+  border-radius: 5px;
+  font-family: monospace;
 }
