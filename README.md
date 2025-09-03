@@ -54,7 +54,7 @@ To run the executable `./PathTracer/VulkanPathTracer`, make sure you're running 
 - Depth of Field
 - Russian roulette
 
-If you want to know details of the implementation of these features, look at [Project Overview](./Docs/ProjectOverview.md).
+If you're interested in details of the implementation of these features, look at [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/).
 
 # Gallery
 <p align="center">

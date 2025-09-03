@@ -34,7 +34,7 @@ void Main()
     float3 accumulatedLight = 0.0f;
     for (uint i = 0; i < uUBO.SampleCount; i++)
     {
-        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.5f, 0.5f); // Add small jitter for anti aliasing
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.75f, 0.75f); // Add small jitter for anti aliasing
         const float2 pixelUV = pixelCenter / float2(size.xy);
         float2 d = pixelUV * 2.0f - 1.0f;
 

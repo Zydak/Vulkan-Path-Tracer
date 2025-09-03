@@ -177,7 +177,7 @@ void Main(inout Payload payload, in float2 attrib)
 
         if (canHitEnvMap)
         {
-            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 0.001f, toEnvMapDirectionWorld);
+            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 0.00001f, toEnvMapDirectionWorld);
         }
     }
     #endif
@@ -236,7 +236,7 @@ void Main(inout Payload payload, in float2 attrib)
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
-    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.0001f * (float)wasRefracted + 0.0001f * (float)(!wasRefracted));
+    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.00001f * (float)wasRefracted + 0.00001f * (float)(!wasRefracted));
     payload.Direction = newDir;
 
     payload.BxDF *= scatterSample.BxDF;
