@@ -35,7 +35,8 @@
                 <img src="../Images/MaterialShowcase/MetallicR02.png">
                 <img src="../Images/MaterialShowcase/GlassIOR150.png">
             </div>
-            
+
+                <h2>BSDF</h2>
                 <div class="chapter-content">
                     <p>
                         When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a <b>multi-lobe BSDF with scalar-weighted blending</b>. This approach is useful because it allows for a lot of artistic control. I can easily import materials from different file formats like glTF or OBJ, so I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, it was more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
@@ -115,36 +116,56 @@
                     </p>
                     <p>
                         The BRDF is:
+                    </p>
 
+                    <p>
                         $$
                         f_{\text{metallic}} = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N})(\mathbf{V} \cdot \mathbf{L})}
                         $$
+                    </p>
 
+                    <p>
                         where $D$ is the anisotropic GGX distribution.
+                    </p>
                         
+                    <p>
                         $$
                         D = \frac{1}{\pi \alpha_x \alpha_y (\frac{x_h^2}{\alpha_x^2} + \frac{y_h^2}{\alpha_y^2} + z_n^2)^2}
                         $$
+                    </p>
 
+                    <p>
                         For masking, I use anisotropic smith function.
+                    </p>
 
+                    <p>
                         $$
                         G = G_1(\mathbf{V}) \cdot G_1(\mathbf{L})
                         $$
+                    </p>
 
+                    <p>
                         $$
                         G_1(\hat{v}) = \frac{1}{1 + \Lambda(\hat{v})} \text{, where }
                         \Lambda(\hat{v}) = \frac{-1 + \sqrt{1 + \frac{\alpha_x^2 x_{\hat{v}}^2+\alpha_y^2 y_{\hat{v}}^2}{z_{\hat{v}}^2}}}{2} 
                         $$
+                    </p>
 
+                    <p>
                         Now for fresnel, I don't have complex indices of refraction, so I decided to just do what Blender does: blend between surface base color and specular tint color based on Schlick fresnel approximation.
+                    </p>
 
+                    <p>
                         $$
                         F = \text{lerp}(\mathbf{C}, \mathbf{S}, (1 - \mathbf{V} \cdot \mathbf{H})^5)
                         $$
+                    </p>
 
+                    <p>
                         And finally the PDF is given by weighting VNDF by the jacobian of the reflect operator.
+                    </p>
 
+                    <p>
                         $$
                         p_\text{metallic} = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
                         $$
@@ -182,6 +203,7 @@
                     <p>
                         The probability of ray being reflected is given by the fresnel equation, so the intensity of the specular layer can be parameterized by materials' IOR.
 
+                    <p>
                         $$
                         \begin{gather*}
                         \text{Given:} \quad \eta = \frac{n_i}{n_t}, \quad \cos\theta_i = \mathbf{V} \cdot \mathbf{H} \\
@@ -194,8 +216,10 @@
                         \end{gather*}
                         $$
 
+                    <p>
                         A random value $\xi \sim \mathcal{U}(0, 1)$ is sampled and
 
+                    <p>
                         $$
                         \begin{cases}
                         \text{Reflect} & \xi < F_D \\
@@ -203,6 +227,7 @@
                         \end{cases}
                         $$
 
+                    <p>
                         If ray got reflected, outgoing direction is computed the same way as for metallic $\mathbf{L} = \text{reflect}(-\mathbf{V}, \mathbf{H})$.
                     </p>
                     <p>
@@ -210,25 +235,36 @@
                     </p>
                     <p>
                         Reflection is evaluated in pretty much the same way as metallic.
-
+                    </p>
+                    
+                    <p>
                         $$
                         \begin{gather*}
                         f_{\text{dielectric}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
                         p_\text{dielectric}^R = \frac{\text{VNDF}}{4 (\mathbf{V} \cdot \mathbf{H})}
                         \end{gather*}
                         $$
-
+                    </p>
+                    
+                    <p>
                         with the only difference being that instead of using Schlick, the $F$ factor gets changed to the specular tint color of the surface.
-
+                    </p>
+                    
+                    <p>
                         $$
                         F = \text{specularTint}
                         $$
-
+                    </p>
+                    
+                    <p>
                         It isn't equal to $F_D$ because the actual fresnel equation is already included in the sampling probability, so I use $F$ factor in the equation just for tinting the color.
                     </p>
+
                     <p>
                         And if ray got transmitted, it scatters diffusely, so I'm using simple Lambertian reflection here:
+                    </p>
 
+                    <p>
                         $$
                         \begin{gather*}
                         f_\text{dielectric}^T = \mathbf{C} \cdot \frac{1}{\pi} \\
@@ -273,7 +309,9 @@
                     </p>
                     <p>
                         To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled, if ray got reflected, outgoing direction is computed the same way as for dielectric and metallic. And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
-
+                    </p>
+                    
+                    <p>
                         $$
                         L = 
                         \begin{cases}
@@ -281,9 +319,13 @@
                         \text{refract}(-\mathbf{V}, \mathbf{H}, \eta) & \text{otherwise}
                         \end{cases}
                         $$
-
+                    </p>
+                    
+                    <p>
                         BRDF and PDF for reflection stay the same as in dielectric, nothing is different here.
-
+                    </p>
+                    
+                    <p>
                         $$
                         \begin{gather*}
                         f_{\text{glass}}^R = \frac{F \cdot D \cdot G}{4 (\mathbf{V} \cdot \mathbf{N}) (\mathbf{L} \cdot \mathbf{N})}\\
@@ -291,31 +333,39 @@
                         F = \text{specularTint}
                         \end{gather*}
                         $$
-
+                    </p>
+                    
+                    <p>
                         For refraction, instead of BRDF, BTDF is computed
-
+                    </p>
+                    
+                    <p>
                         $$
                         f_\text{glass}^T = \frac{|\mathbf{V} \cdot \mathbf{H}| |\mathbf{L} \cdot \mathbf{H}|}{|\mathbf{V} \cdot \mathbf{N}| |\mathbf{L} \cdot \mathbf{N}|} \cdot \frac{\eta^2 \cdot F \cdot G \cdot D}{(\eta(\mathbf{V} \cdot \mathbf{H}) + (\mathbf{L} \cdot \mathbf{H}))^2}
                         $$
-
+                    </p>
+                    
+                    <p>
                         With fresnel being the surface base color since I want the color to be fully tinted on refraction.
-
+                    </p>
+                    
+                    <p>
                         $$
                         F = \mathbf{C}
                         $$
-
+                    </p>
+                    
+                    <p>
                         The PDF also slightly changes, the same VNDF is still used, but this time instead of weighting it by the jacobian of $\text{reflect}$, it's weighted by the jacobian of $\text{refract}$
-
+                    </p>
+                    
+                    <p>
                         $$
                         p_\text{glass}^T = \frac{\text{VNDF}}{\frac{\eta^2 |\mathbf{L} \cdot \mathbf{H}|}{(\eta(\mathbf{V} \cdot \mathbf{H}) + \mathbf{L} \cdot \mathbf{H})^2}}
                         $$
                     </p>
                     
                     <div class="image-row">
-                        <div class="centered-container">
-                            <img src="../Images/MaterialShowcase/GlassIOR110.png">
-                            <p>Transmission = 1.0 <br> IOR = 1.1</p>
-                        </div>
                         <div class="centered-container">
                             <img src="../Images/MaterialShowcase/GlassIOR125.png">
                             <p>Transmission = 1.0 <br> IOR = 1.25</p>
@@ -350,12 +400,14 @@
                     <p>
                         After the BxDF and PDF of each lobe have been evaluated, they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled, and then simply add them all together.
 
-                        $$
-                        \begin{gather*}
-                        f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
-                        p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
-                        \end{gather*}
-                        $$
+                        <p>
+                            $$
+                            \begin{gather*}
+                            f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
+                            p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
+                            \end{gather*}
+                            $$
+                        </p>
 
                         And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$.
                     </p>

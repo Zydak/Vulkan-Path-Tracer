@@ -33,6 +33,7 @@
 
             <!-- TODO image comparison -->
 
+            <h2>Energy Compensation</h2>
             <div class="chapter-content">
                 <p>
                     After finishing the BSDF, I noticed a significant color darkening as roughness increased. The issue was that single scatter GGX that I use is not energy conserving, that's because of two reasons. First, when the $L$ is sampled, it is possible for ray to bounce into the surface instead of out of it (or the other way around for refraction). In that case I just discard the sample, which means that the energy is lost completely. And the second reason, the masking function destroys light occluded by other microfacets. That's bad because increasing roughness of a surface introduces visible darkening of the color. This is especially visible in rough glass where light bounces multiple times. If I increase the roughness on previously showcased materials it's clearly visible.

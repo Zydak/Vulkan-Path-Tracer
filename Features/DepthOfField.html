@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth Of Field - Vulkan Path Tracer</title>
+    <link rel="stylesheet" href="feature-style.css">
+    
+    <!-- MathJax for LaTeX support -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Depth Of Field</h1>
+            <a href="../index.html" class="back-link">← Back to Home</a>
+        </header>
+        
+        <div class="feature-content">
+
+            <h2>Depth Of Field</h2>
+            <div class="chapter-content">
+                <p>
+                    All that depth of field effect is trying to achieve is to simulate how real world camera lenses work.
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/DepthOfField.png" width="100%">
+                </div>
+                <p>
+                    And since this is a path tracer, light rays are already simulated, all that needs to be done is offsetting the origin slightly and pointing the ray to a focus point.
+                </p>
+
+                <pre>
+                    <code>
+focusPoint = origin + direction * focalLength;
+randomOffset = UniformFloat2(-0.5f, 0.5f) * DoFStrenght;
+RayOrigin = origin.xyz + cameraRight * randomOffset.x + cameraUp * randomOffset.y;
+RayDirection = normalize(focalPoint - origin.xyz);
+                    </code>
+                </pre>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/DoFOff.png" alt="No Depth Of Field" width="100%">
+                        <p class="image-caption">No Depth Of Field</p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/DoFOn.png" alt="With Depth Of Field" width="100%">
+                        <p class="image-caption">Depth Of Field</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <a href="RussianRoulette.html" class="back-link">Next Section</a>
+    </div>
+</body>
+</html>
