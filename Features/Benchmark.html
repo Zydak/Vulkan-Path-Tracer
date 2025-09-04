@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benchmark - Vulkan Path Tracer</title>
+    <link rel="stylesheet" href="feature-style.css">
+    
+    <!-- MathJax for LaTeX support -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Benchmark</h1>
+            <a href="../index.html" class="back-link">← Back to Home</a>
+        </header>
+        
+        <div class="feature-content">
+
+            <h2>Benchmark</h2>
+            <div class="chapter-content">
+                <p>
+                    This is an offline path tracer, but of course having it in interactive framerates speeds up development and shortens render times. It wasn't my priority to make this thing run as fast as possible and there are a couple areas of possible improvement, nonetheless, I think the performance is quite good, it's not like I didn't care about it at all.
+                </p>
+                <p>
+                    Hardware the benchmark was done with:
+                    <ul>
+                        <li>CPU: Intel Core i5-10400F 2.90GHz</li>
+                        <li>GPU: Nvidia RTX 3060</li>
+                        <li>RAM: 16GB</li>
+                        <li>OS: Debian 12</li>
+                    </ul>
+                </p>
+            </div>
+
+            <h2>Breakfast Room</h2>
+            <div class="chapter-content">
+                <p>
+                    <ul>
+                        <li>Vertices: 161'418</li>
+                        <li>Indices: 809'292</li>
+                        <li>Resolution: 1920x1080</li>
+                        <li>Samples per pixel: 50'000</li>
+                        <li>Render Time: 2 minutes 32 seconds</li>
+                    </ul>
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/BreakfastImportanceNEE50K.png" width="100%">
+                </div>
+            </div>
+
+            <h2>Volumetric Room</h2>
+            <div class="chapter-content">
+                <p>
+                    <ul>
+                        <li>Vertices: 2'114</li>
+                        <li>Indices: 3'150</li>
+                        <li>Resolution: 1920x1080</li>
+                        <li>Samples per pixel: 50'000</li>
+                        <li>Render Time: 2 minutes 15 seconds</li>
+                    </ul>
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/VolumetricRoom50K.png" width="100%">
+                </div>
+            </div>
+
+            <h2>Cannelle Et Fromage</h2>
+            <div class="chapter-content">
+                <p>
+                    <ul>
+                        <li>Vertices: 1'976'973</li>
+                        <li>Indices: 9'179'637</li>
+                        <li>Resolution: 1080x1080</li>
+                        <li>Samples per pixel: 50'000</li>
+                        <li>Render Time: 3 minutes 12 seconds</li>
+                    </ul>
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/CanneleEtFromage50K.png" width="100%">
+                </div>
+            </div>
+
+            <h2>Cornell Box With Glass Sphere</h2>
+            <div class="chapter-content">
+                <p>
+                    <ul>
+                        <li>Vertices: 583</li>
+                        <li>Indices: 2916</li>
+                        <li>Resolution: 1080x1080</li>
+                        <li>Samples per pixel: 5'000</li>
+                        <li>Render Time: 15 seconds</li>
+                    </ul>
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/CornellBox5K.png" width="100%">
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

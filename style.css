@@ -40,46 +40,77 @@ body {
 }
 
 .features-section {
-    padding: 25px;
+    margin-top: 40px;
+    padding: 25;
 }
 
 .features-section h2 {
     font-size: 1.8rem;
     color: #ffffff;
-    margin-bottom: 25px;
+    margin-bottom: 30px;
     font-weight: normal;
-    border-bottom: 1px solid #444444;
-    padding-bottom: 10px;
+    text-align: center;
 }
 
 .features-list {
     list-style: none;
     padding: 0;
-    max-width: 400px;
+    max-width: 500px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
 }
 
 .features-list li {
-    margin: 8px 0;
+    margin: 0;
 }
 
 .features-list a {
     display: block;
-    color: #cccccc;
+    color: #ffffff;
     text-decoration: none;
-    padding: 12px 20px;
-    border: 1px solid #555555;
-    background-color: #222222;
-    font-size: 1.1rem;
-    border-left: 3px solid #666666;
+    padding: 18px 20px;
+    background-color: #242424;
+    font-size: 1rem;
+    border: 1px solid #333333;
+    text-align: center;
+    transition: all 0.2s ease;
 }
 
 .features-list a:hover {
-    background-color: #2a2a2a;
-    color: #ffffff;
-    border-left: 3px solid #888888;
+    background-color: #2d2d2d;
+    border-color: #444444;
+    transform: translateY(-2px);
 }
 
 .description {
     padding: 0 20px;
+}
+
+@media (max-width: 768px) {
+    body {
+        width: 100%;
+        margin: 0;
+        padding: 0px;
+    }
+    
+    .container {
+        width: 100%;
+    }
+    
+    .features-list {
+        display: flex;
+        flex-direction: column;
+        max-width: 100%;
+        gap: 12px;
+    }
+    
+    .main-header h1 {
+        font-size: 2rem;
+    }
+    
+    .features-section h2 {
+        font-size: 1.5rem;
+    }
 }

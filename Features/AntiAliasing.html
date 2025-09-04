@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti Aliasing - Vulkan Path Tracer</title>
+    <link rel="stylesheet" href="feature-style.css">
+    
+    <!-- MathJax for LaTeX support -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Anti Aliasing</h1>
+            <a href="../index.html" class="back-link">← Back to Home</a>
+        </header>
+        
+        <div class="feature-content">
+
+            <h2>Anti Aliasing</h2>
+            <div class="chapter-content">
+                <p>
+                    AA in path tracers is basically free since multiple samples across frames are already being taken, the only thing that needs to be done is slightly offsetting the ray direction and origin each time so that the ray's starting position covers the entire pixel across multiple samples. So when choosing pixel position on a screen, I just add small random offset for AA.
+                </p>
+
+                <pre>
+                    <code>
+pixelCenter += UniformFloat2(-0.5f, 0.5f);
+                    </code>
+                </pre>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/AntiAliasingOff.png" alt="No Anti Aliasing" width="100%">
+                        <p class="image-caption">No Anti Aliasing</p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/AntiAliasingOn.png" alt="With Anti Aliasing" width="100%">
+                        <p class="image-caption">Anti Aliasing</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <a href="DepthOfField.html" class="back-link">Next Section</a>
+    </div>
+</body>
+</html>
