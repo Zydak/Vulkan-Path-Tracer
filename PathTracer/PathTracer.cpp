@@ -376,6 +376,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
 
     VulkanHelper::Vector<VulkanHelper::BLAS> blasVector;
+    blasVector.Reserve(m_SceneMeshes.size());
     VulkanHelper::Vector<glm::mat4> modelMatrices;
     for (const auto& mesh : m_SceneMeshes)
     {
