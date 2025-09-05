@@ -643,18 +643,18 @@ void Editor::SaveToFileSettings()
         uint32_t counter = 1;
 
         // Check if folder is created
-        if (!std::filesystem::exists("../RenderedImages"))
+        if (!std::filesystem::exists("../../RenderedImages"))
         {
-            std::filesystem::create_directories("../RenderedImages");
+            std::filesystem::create_directories("../../RenderedImages");
         }
 
-        filePath = "../RenderedImages/" + std::string(fileName) + ".png";
+        filePath = "../../RenderedImages/" + std::string(fileName) + ".png";
         while(true)
         {
             if (!std::filesystem::exists(filePath))
                 break;
 
-            filePath = "../RenderedImages/" + std::string(fileName) + "_" + std::to_string(counter++) + ".png";
+            filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(counter++) + ".png";
         }
 
         PushDeferredTask(std::make_shared<std::string>(filePath), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
