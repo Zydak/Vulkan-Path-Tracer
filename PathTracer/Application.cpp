@@ -32,42 +32,42 @@ Application::Application()
         }
     }
 
-    if (!std::filesystem::exists("../Assets/LookupTables/ReflectionLookup.bin"))
+    if (!std::filesystem::exists("../../Assets/LookupTables/ReflectionLookup.bin"))
     {
         // Create directory
-        std::filesystem::create_directories("../Assets/LookupTables/");
+        std::filesystem::create_directories("../../Assets/LookupTables/");
 
         m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupReflect.slang", {});
         std::vector<float> data = m_LookupTableCalculator.CalculateTable({64, 64, 32}, 10'000'000);
 
         // Write lookup to file
-        std::ofstream file("../Assets/LookupTables/ReflectionLookup.bin", std::ios::binary);
+        std::ofstream file("../../Assets/LookupTables/ReflectionLookup.bin", std::ios::binary);
         file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
-    if (!std::filesystem::exists("../Assets/LookupTables/RefractionLookupHitFromOutside.bin"))
+    if (!std::filesystem::exists("../../Assets/LookupTables/RefractionLookupHitFromOutside.bin"))
     {
         // Create directory
-        std::filesystem::create_directories("../Assets/LookupTables/");
+        std::filesystem::create_directories("../../Assets/LookupTables/");
 
         m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupRefract.slang", {VulkanHelper::Shader::Define{"ABOVE_SURFACE", ""}});
         std::vector<float> data = m_LookupTableCalculator.CalculateTable({128, 128, 32}, 10'000'000);
 
         // Write lookup to file
-        std::ofstream file("../Assets/LookupTables/RefractionLookupHitFromOutside.bin", std::ios::binary);
+        std::ofstream file("../../Assets/LookupTables/RefractionLookupHitFromOutside.bin", std::ios::binary);
         file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
-    if (!std::filesystem::exists("../Assets/LookupTables/RefractionLookupHitFromInside.bin"))
+    if (!std::filesystem::exists("../../Assets/LookupTables/RefractionLookupHitFromInside.bin"))
     {
         // Create directory
-        std::filesystem::create_directories("../Assets/LookupTables/");
+        std::filesystem::create_directories("../../Assets/LookupTables/");
 
         m_LookupTableCalculator = LookupTableCalculator::New(m_Device, "LookupRefract.slang", {VulkanHelper::Shader::Define{"BELOW_SURFACE", ""}});
         std::vector<float> data = m_LookupTableCalculator.CalculateTable({128, 128, 32}, 10'000'000);
 
         // Write lookup to file
-        std::ofstream file("../Assets/LookupTables/RefractionLookupHitFromInside.bin", std::ios::binary);
+        std::ofstream file("../../Assets/LookupTables/RefractionLookupHitFromInside.bin", std::ios::binary);
         file.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)(data.size() * sizeof(float)));
     }
 
