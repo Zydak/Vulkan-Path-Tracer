@@ -32,7 +32,7 @@ cd build
 cmake ..
 make
 ```
-To run the executable `./PathTracer/VulkanPathTracer`, make sure you're running it from `build` folder since that has to be the working directory.
+Executable will be in `build/PathTracer/VulkanPathTracer`.
 
 # Features Overview
 
