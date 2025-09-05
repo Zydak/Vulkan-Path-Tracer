@@ -61,7 +61,7 @@
                         </ul>
                     </p>
                     <p>
-                        Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. So surfaces are modeled using microfacet theory, and I chose the GGX for that, it's extensively documented, and easy to implement considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts the convergence speed compared to something like uniform sampling.
+                        Of course, I wanted the path tracer to at least be physically based, if not 100% physically accurate. So surfaces are modeled using microfacet theory, and for the microfacet distribution function I chose GGX, mostly because it's easy to implement considering the amount of resources. Outgoing directions are sampled using importance sampling, which is a low hanging fruit given that I'm already using GGX. Importance sampling is almost always included in GGX related papers and articles, and it significantly boosts the convergence speed compared to something like uniform sampling.
                     </p>
 
                     <div class="image-row">
@@ -99,7 +99,7 @@
                         </ul>
                     </p>
                     <p>
-                        When a ray hits the surface, one of these 3 types is sampled stochastically based on their sampling weights $w_{\text{metallic}}$, $w_{\text{dielectric}}$, $w_{\text{glass}}$. These weights are chosen more or less arbitrarily and then are normalized so that they sum up to 1.
+                        When a ray hits the surface, one of these 3 types is sampled stochastically based on their sampling weights $w_{\text{metallic}}$, $w_{\text{dielectric}}$, $w_{\text{glass}}$. These weights are chosen more or less arbitrarily.
                     </p>
                     <p>
                         A direction is then sampled from the selected type to determine the outgoing direction $\mathbf{L}$, and the BSDF is evaluated to determine how much light is reflected or refracted.
@@ -195,7 +195,7 @@
                 <h2>Dielectric Lobe</h2>
                 <div class="chapter-content">
                     <p>
-                        Unlike metals, where I only simulate reflection, the dielectrics are a little bit more complicated. I basically simulate 2 cases here: the light can either reflect from the surface, or transmit into it. If light ray got transmitted, I scatter it diffusely. This creates a kind of specular lobe/layer on top of the diffuse one, so materials like varnished wood can be simulated. This specular intensity is parameterized with materials' IOR. Dielectric materials are also influenced by roughness and specular tint.
+                        Unlike metals, where I only simulate reflection, I handle both reflection and refraction, so the light can either reflect from the surface, or transmit into it. If ray got reflected then it's the same as in the metallic lobe. If light ray got transmitted, I scatter it diffusely. This creates a kind of specular lobe/layer on top of the diffuse one, so materials like varnished wood can be simulated. This specular intensity is parameterized with materials' IOR. Dielectric materials are also influenced by roughness and specular tint.
                     </p>
                     <p>
                         Sampling weight is $w_\text{dielectric} = (1 - \text{metallic}) \cdot (1 - \text{transmission})$.

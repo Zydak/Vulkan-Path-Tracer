@@ -43,7 +43,7 @@
                     Naive path tracing (sometimes called brute force), is a type of path tracing, where rays shot from the camera bounce around the scene until they loose all energy, lights are discovered by pure chance, no shortcuts or approximations are used. It can compute global illumination very accurately, but I've hit a limit on this technique fairly soon in the development.
                 </p>
                 <p>
-                    Consider what happens if I'd place sun in the scene, it's really far away, so it appears small, and it's insanely bright. Probability of rays randomly bouncing around and hitting the sun is marginal, and brightness is measured in thousands if not millions. So variance will be through the roof, and that's exactly what happens. The image below is 100K samples per pixel, and the amount of noise is unbelievable, there are really bright pixels scattered almost everywhere, and the direct lighting from sun has not converged very well. The image is mathematically correct of course, it will converge eventually, but you'd probably have to render it for multiple days and take tens of millions of samples per pixel.
+                    Consider what happens if I'd place sun in the scene, it's really far away, so it appears small, and it's insanely bright. Probability of rays randomly bouncing around and hitting the sun is marginal, and brightness is measured in thousands if not millions. So variance will be through the roof, and that's exactly what happens. The image below is 100K samples per pixel.
                 </p>
                 <div class="centered-container">
                     <img src="../Images/BreakfastNaive100K.png" width="100%">
@@ -56,14 +56,14 @@
             <h2>Next Event Estimation</h2>
             <div class="chapter-content">
                 <p>
-                    NEE (next event estimation) is a technique of explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unoccluded, direct lighting is estimated.
+                    So to reduce the amount of noise I decided to implement <b>NEE</b> (next event estimation), so explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unoccluded, direct lighting is estimated.
                 </p>
             </div>
 
             <h2>Multiple Importance Sampling</h2>
             <div class="chapter-content">
                 <p>
-                    The problem is that direct lighting can't just be added to what is already there, that would cause double counting, adding light contribution from a single light source twice (once for NEE sample and once for BSDF sample) which would overbrighten the image. So light contribution from one strategy has to go. But that would cause the problem of poor distribution match for some surfaces, the same problem as with uniformly sampling the BSDF directions. This exact problem is described in detail in <a href="https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf">Optimally Combining Sampling Techniques for Monte Carlo Rendering</a>, and a solution is proposed. And that is to combine two sampling strategies using MIS weights.
+                    To combine current BSDF importance sampling with NEE I implemented MIS according to <a href="https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf">Optimally Combining Sampling Techniques for Monte Carlo Rendering</a>.
                 </p>
                 <p>
                     I take two samples, one from each sampling strategy:

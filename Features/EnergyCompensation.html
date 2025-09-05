@@ -48,7 +48,7 @@
                     This is a known issue, and one way to fix this is simulating multiple surface scattering, accounting for the fact that light can bounce multiple times on a microsurface, just like <a href="https://jo.dreggn.org/home/2016_microfacets.pdf">[Heitz 2016]</a> suggests. The problem is that: 1. it's not that easy to implement, and 2. according to <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a> properly simulating multiple scattering can be from 7x to even 15x slower. So instead I decided to use energy compensation lookup tables implemented according to <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a>. They're easy to compute and implement, but most importantly, they're fast.
                 </p>
                 <p>
-                    So first of all, as a way of verifying my implementation, I used something called *Furnace Test*. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
+                    So first of all, as a way of verifying my implementation, I used something called <b>Furnace Test</b>. In a uniformly lit environment, non absorbing materials should be invisible since they reflect exactly what they receive, but my BSDF was clearly failing this test. On the left is rough metal, while on the right is rough glass, both have roughness set to 1.
                 </p>
 
                 <div class="image-row">
