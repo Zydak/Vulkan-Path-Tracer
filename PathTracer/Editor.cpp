@@ -378,25 +378,33 @@ void Editor::RenderPostProcessingSettings()
     static float bloomThreshold = 2.0f;
     static float bloomStrength = 1.0f;
     static int bloomMipCount = 10;
+    static float bloomFalloffRange = 1.0f;
 
     if (ImGui::SliderInt("Bloom Mip Count", &bloomMipCount, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
-            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount, bloomFalloffRange });
         });
     }
 
     if (ImGui::SliderFloat("Bloom Threshold", &bloomThreshold, 0.0f, 10.0f))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
-            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount, bloomFalloffRange });
         });
     }
 
     if (ImGui::SliderFloat("Bloom Strength", &bloomStrength, 0.0f, 2.0f))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
-            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount });
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount, bloomFalloffRange });
+        });
+    }
+
+    if (ImGui::SliderFloat("Bloom Falloff Range", &bloomFalloffRange, 0.0f, 5.0f))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
+            m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount, bloomFalloffRange });
         });
     }
 }

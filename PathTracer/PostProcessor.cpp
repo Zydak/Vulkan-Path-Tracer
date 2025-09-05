@@ -245,4 +245,5 @@ void PostProcessor::SetBloomData(const BloomData& data)
 {
     m_BloomPushData.BloomThreshold = data.BloomThreshold;
     m_BloomPushData.BloomStrength = data.BloomStrength;
+    m_BloomPushData.FalloffRange = data.FalloffRange;
 }
