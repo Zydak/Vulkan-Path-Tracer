@@ -17,6 +17,7 @@ public:
         float BloomThreshold = 2.0f;
         float BloomStrength = 1.1f;
         uint32_t MipCount = 10;
+        float FalloffRange = 1.0f;
     };
 
     PostProcessor() = default;
@@ -55,6 +56,7 @@ private:
         float BloomThreshold = 2.0f;
         float BloomStrength = 1.1f;
         int FirstBatch = 1;
+        float FalloffRange = 1.0f;
     };
     BloomPushData m_BloomPushData{};
     uint32_t m_MipCount = 10;

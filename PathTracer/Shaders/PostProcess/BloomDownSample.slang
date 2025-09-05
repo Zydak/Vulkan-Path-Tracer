@@ -12,6 +12,7 @@ struct PushConstant
     float BloomThreshold;
     float BloomStrength;
     int FirstDispatch;
+    float FallofRange;
 }
 
 [vk::push_constant] PushConstant pPush;
@@ -32,8 +33,15 @@ void Main(uint3 threadID : SV_DispatchThreadID)
     {
         float3 color = uInputImage.Load(threadID.xy).rgb;
         const float brightness = dot(color, float3(0.2126, 0.7152, 0.0722));
-        if (brightness < pPush.BloomThreshold)
-            color = float3(0.0f);
+        
+        // Gradual falloff instead of binary cutoff
+        // Using smoothstep for a smooth transition around the threshold
+        float falloffRange = pPush.FallofRange; // Adjust this to control falloff width
+        float falloffStart = pPush.BloomThreshold - falloffRange;
+        float falloffEnd = pPush.BloomThreshold + falloffRange;
+        float factor = smoothstep(falloffStart, falloffEnd, brightness);
+        
+        color *= factor;
 
         uOutputImage.Store(threadID.xy, float4(color, 1.0));
     }
