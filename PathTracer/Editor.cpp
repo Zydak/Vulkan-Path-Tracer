@@ -445,7 +445,8 @@ void Editor::RenderInfo()
     if (ImGui::Button("Select Scene"))
     {
         auto selection = pfd::open_file("Select scene file", "", {
-            "Scene Files", "*.gltf"
+            "Scene Files", "*.gltf",
+            "All Files", "*.*"
         }).result();
         if (!selection.empty())
         {
@@ -710,6 +711,13 @@ void Editor::RenderVolumeSettings()
         });
     }
 
+    if (ImGui::Button("Import Volume"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.ImportVolume("/home/p551/Desktop/wdas_cloud/wdas_cloud_quarter.vdb", commandBuffer);
+        });
+    }
+
     if (m_PathTracer.GetVolumes().empty())
     {
         ImGui::Text("No volumes in the scene.");
@@ -760,6 +768,11 @@ void Editor::RenderVolumeSettings()
     {
         volumeModified = true;
         selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.99999f, 0.99999f);
+    }
+    if (ImGui::SliderFloat("Heterogenous Smoothness", &selectedVolume.HeterogenousSmoothing, 0.0f, 10.0f))
+    {
+        volumeModified = true;
+        selectedVolume.HeterogenousSmoothing = selectedVolume.HeterogenousSmoothing;
     }
 
     ImGui::PopID();

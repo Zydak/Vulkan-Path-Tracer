@@ -33,6 +33,9 @@ public:
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
         float Density = 1.0f;
         float Anisotropy = 0.0f;
+
+        int HeterogeneousTextureIndex = -1; // -1 if homogeneous
+        float HeterogenousSmoothing = 1.0f;
     };
 
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);
@@ -107,6 +110,7 @@ public:
     void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
+    void ImportVolume(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -204,4 +208,5 @@ private:
 
     std::vector<Volume> m_Volumes;
     VulkanHelper::Buffer m_VolumesBuffer;
+    std::vector<VulkanHelper::ImageView> m_VolumeDensityTextures;
 };
