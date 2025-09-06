@@ -26,6 +26,14 @@ void Main()
     uint3 size = DispatchRaysDimensions();
     uint3 LaunchID = DispatchRaysIndex();
 
+    // // TEST
+
+    // const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f);
+    // const float2 pixelUV = pixelCenter / float2(size.xy);
+
+    // uImage[LaunchID.xy] = uVolumeDensityTexture.SampleLevel(uSampler, float3(pixelUV, uUBO.FrameCount % 154), 0);
+    // return;
+
     Payload payload;
     payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uUBO.Seed);
 
@@ -73,7 +81,11 @@ void Main()
 
             payload.Emitted = float3(0.0f, 0.0f, 0.0f);
 
-            bool scatteredInVolume = ScatteredInVolume(payload);
+            bool nullCollision = false;
+            bool scatteredInVolume = ScatteredInVolume(payload, nullCollision);
+
+            if (nullCollision)
+                continue;
 
             // If ray didn't scatter inside volume trace to the geometry surface
             if (!scatteredInVolume)
@@ -121,31 +133,44 @@ void Main()
     }
 }
 
-bool ScatteredInVolume(inout Payload payload)
+bool ScatteredInVolume(inout Payload payload, out bool nullCollision)
 {
+    nullCollision = false;
+
     #ifdef ENABLE_VOLUMES
     {
         float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
 
         float scatterDistance = -1.0f;
+        bool isNullCollision = false;
         int scatteredVolumeIndex = -1;
         for (int i = 0; i < uUBO.VolumesCount; i++)
         {
-            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler);
+            bool isNullCollisionTemp = false;
+            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, uSampler, isNullCollisionTemp);
 
             // Choose the closest scatter distance
             if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
             {
                 scatterDistance = scatterDistanceTemp;
                 scatteredVolumeIndex = i;
+                isNullCollision = isNullCollisionTemp;
             }
         }
 
         if (scatterDistance >= 0.0f && (distanceToGeometry < 0.0f || scatterDistance < distanceToGeometry))
         {
-            payload.Depth++;
             payload.Origin += payload.Direction * scatterDistance;
-            const float3 newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, uVolumes[scatteredVolumeIndex].GetAnisotropy());
+            
+            if (isNullCollision)
+            {
+                // Null collision, just continue tracing
+                nullCollision = true;
+                return true;
+            }
+            payload.Depth++;
+
+            const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler);
 
             // Importance sampling Env map
             #ifdef ENABLE_ENV_MAP_MIS
@@ -153,7 +178,7 @@ bool ScatteredInVolume(inout Payload payload)
                 float3 toLightEnv;
                 float4 envMapValue;
                 payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
-                float3 envMapColor = envMapValue.rgb;
+                float3 envMapColor = envMapValue.rgb * uUBO.EnvironmentIntensity;
                 float envMapPDF = envMapValue.a;
 
                 float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
@@ -166,19 +191,7 @@ bool ScatteredInVolume(inout Payload payload)
                 float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, newDir);
 
                 // Transmittance along the ray has to be accounted for
-                float transmittance = 1.0f;
-                for (uint i = 0; i < uUBO.VolumesCount; i++)
-                {
-                    VolumeIntersection intersection = uVolumes[i].IntersectWithRay(payload.Origin, toLightEnv);
-                    if (uVolumes[i].IsPointInside(payload.Origin))
-                    {
-                        intersection.HitPointNear = 0.0f;
-                    }
-
-                    float pathThroughVolumeLength = intersection.HitPointFar - intersection.HitPointNear;
-
-                    transmittance *= exp(-uVolumes[i].GetDensity() * pathThroughVolumeLength);
-                }
+                float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, uVolumes, uUBO.VolumesCount, uSampler);
 
                 float3 colorSample = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
                 float3 colorLight = uVolumes[scatteredVolumeIndex].GetColor() * phaseLightDir;

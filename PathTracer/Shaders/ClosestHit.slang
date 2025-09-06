@@ -249,20 +249,7 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitEnvMap)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float transmittance = 1.0f;
-            for (uint i = 0; i < uUBO.VolumesCount; i++)
-            {
-                const Volume volume = uVolumes[i];
-                VolumeIntersection intersection = volume.IntersectWithRay(payload.Origin, toEnvMapDirectionWorld);
-
-                if (volume.IsPointInside(payload.Origin))
-                {
-                    intersection.HitPointNear = 0.0f;
-                }
-
-                float pathThroughVolumeLength = intersection.HitPointFar - intersection.HitPointNear;
-                transmittance *= exp(-volume.GetDensity() * pathThroughVolumeLength);
-            }
+            float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
 
             if (envMapValue.a > 0.0f && envMapDirectionEval.PDF > 0.0f)
             {

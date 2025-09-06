@@ -7,8 +7,12 @@
 #include <numeric>
 #include <numbers>
 
+#include "openvdb/openvdb.h"
+
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
+    openvdb::initialize();
+
     PathTracer pathTracer{};
     pathTracer.m_Device = device;
     pathTracer.m_ThreadPool = threadPool;
@@ -409,7 +413,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     CreateOutputImageView();
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 19> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 20> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
@@ -428,7 +432,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{15, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Env map
         VulkanHelper::DescriptorSet::BindingDescription{16, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
         VulkanHelper::DescriptorSet::BindingDescription{17, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
-        VulkanHelper::DescriptorSet::BindingDescription{18, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER} // Lookup sampler
+        VulkanHelper::DescriptorSet::BindingDescription{18, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
+        VulkanHelper::DescriptorSet::BindingDescription{19, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // Volume density textures
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -1048,6 +1053,123 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 
 void PathTracer::AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer)
 {
+    const uint32_t initialSize = m_Volumes.size();
+    VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume), m_Volumes.size() * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
+    m_Volumes.push_back(volume);
+
+    // Update Uniform Buffer
+    uint32_t count = (uint32_t)m_Volumes.size();
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&count, sizeof(uint32_t), offsetof(PathTracerUniform, VolumesCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume count");
+    ResetPathTracing();
+
+    if (initialSize == 0)
+        ReloadShaders(commandBuffer);
+}
+
+void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (std::filesystem::exists(filepath) == false)
+    {
+        VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
+        return;
+    }
+
+    VH_LOG_DEBUG("Loading OPENDVDB volume: {}", filepath);
+    openvdb::io::File file(filepath);
+
+    try {
+        file.open();  // This will throw if the file can't be opened
+    } catch (const openvdb::IoError& e) {
+        VH_LOG_ERROR("Failed to open OpenVDB file '{}': {}", filepath, e.what());
+        return;
+    }
+
+    openvdb::GridBase::Ptr densityGrid;
+    for (openvdb::io::File::NameIterator nameIter = file.beginName(); nameIter != file.endName(); ++nameIter)
+    {
+        if (nameIter.gridName() == "density")
+        {
+            densityGrid = file.readGrid(nameIter.gridName());
+            break;
+        }
+    }
+    file.close();
+
+    openvdb::FloatGrid::Ptr floatGrid = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
+
+    float maxDensity = openvdb::tools::minMax(floatGrid->tree(), true).max();
+
+    openvdb::math::Coord dim = floatGrid->evalActiveVoxelDim();
+    openvdb::math::Coord min = floatGrid->evalActiveVoxelBoundingBox().min();
+    openvdb::math::Coord max = floatGrid->evalActiveVoxelBoundingBox().max();
+
+    VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
+    VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
+
+    // Prepare density texture
+    VulkanHelper::Image::Config imageConfig{};
+    imageConfig.Device = m_Device;
+    imageConfig.Width = (uint32_t)dim.x();
+    imageConfig.Height = (uint32_t)dim.y();
+    imageConfig.LayerCount = (uint32_t)dim.z();
+    imageConfig.Format = VulkanHelper::Format::R32_SFLOAT;
+    imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+    imageConfig.UsePersistentStagingBuffer = true;
+
+    VulkanHelper::Image densityImage = VulkanHelper::Image::New(imageConfig).Value();
+    densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
+
+    // Prepare density data
+    std::vector<float> densityData;
+    densityData.reserve((size_t)dim.x() * (size_t)dim.y());
+    for (int z = 0; z < dim.z(); z++)
+    {
+        densityData.clear();
+        for (int y = 0; y < dim.y(); y++)
+        {
+            for (int x = 0; x < dim.x(); x++)
+            {
+                openvdb::math::Coord coord(min.x() + x, min.y() + y, min.z() + z);
+                float value = floatGrid->tree().getValue(coord);
+                densityData.push_back(value / maxDensity); // Normalize to [0, 1]
+            }
+        }
+
+        // Upload texture data one layer at a time
+        VH_ASSERT(densityImage.UploadData(
+            densityData.data(),
+            densityData.size() * sizeof(float),
+            0,
+            &commandBuffer,
+            (uint32_t)(z)
+        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+        VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
+        VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit and wait command buffer");
+        VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin command buffer recording");
+    }
+
+    densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
+    VulkanHelper::ImageView::Config imageViewConfig{};
+    imageViewConfig.image = densityImage;
+    imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D_ARRAY;
+    imageViewConfig.BaseLayer = 0;
+    imageViewConfig.LayerCount = (uint32_t)dim.z();
+
+    m_VolumeDensityTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, 0, m_VolumeDensityTextures[0], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
+
+    Volume volume{};
+    volume.HeterogeneousTextureIndex = 1; // Test
+
+    volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
+    volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
+
+    // Scale it down so AABB is -1 to 1
+    float maxDim = (float)glm::max(glm::max(dim.x(), dim.y()), dim.z());
+    volume.CornerMin /= maxDim / 2.0f;
+    volume.CornerMax /= maxDim / 2.0f;
+
     const uint32_t initialSize = m_Volumes.size();
     VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume), m_Volumes.size() * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
     m_Volumes.push_back(volume);
