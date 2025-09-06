@@ -13,6 +13,11 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
   - VK_KHR_deferred_host_operations
 
 # Building
+## Prerequisites
+- [Vulkan SDK](https://vulkan.lunarg.com/sdk/home).
+- Cmake 3.12
+- C++ 20
+
 ## Windows
 ```
 git clone --recursive https://github.com/Zydak/Vulkan-Path-Tracer
@@ -32,7 +37,7 @@ cd build
 cmake ..
 make
 ```
-To run the executable `./PathTracer/VulkanPathTracer`, make sure you're running it from `build` folder since that has to be the working directory.
+Executable will be in `build/PathTracer/VulkanPathTracer`.
 
 # Features Overview
 
