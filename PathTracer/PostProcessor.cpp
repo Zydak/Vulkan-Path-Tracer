@@ -243,6 +243,7 @@ void PostProcessor::SetTonemappingData(const TonemappingData& data, VulkanHelper
 
 void PostProcessor::SetBloomData(const BloomData& data)
 {
+    m_MipCount = data.MipCount;
     m_BloomPushData.BloomThreshold = data.BloomThreshold;
     m_BloomPushData.BloomStrength = data.BloomStrength;
     m_BloomPushData.FalloffRange = data.FalloffRange;
