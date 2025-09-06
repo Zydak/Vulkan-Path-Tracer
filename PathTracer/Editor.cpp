@@ -35,7 +35,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
 
     PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-        m_PostProcessor.SetTonemappingData({1.0f}, commandBuffer);
+        m_PostProcessor.SetTonemappingData({}, commandBuffer);
     });
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
@@ -378,7 +378,7 @@ void Editor::RenderPostProcessingSettings()
     static float bloomThreshold = 2.0f;
     static float bloomStrength = 1.0f;
     static int bloomMipCount = 10;
-    static float bloomFalloffRange = 1.0f;
+    static float bloomFalloffRange = 5.0f;
 
     if (ImGui::SliderInt("Bloom Mip Count", &bloomMipCount, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp))
     {
@@ -401,7 +401,7 @@ void Editor::RenderPostProcessingSettings()
         });
     }
 
-    if (ImGui::SliderFloat("Bloom Falloff Range", &bloomFalloffRange, 0.0f, 5.0f))
+    if (ImGui::SliderFloat("Bloom Falloff Range", &bloomFalloffRange, 0.0f, 10.0f))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
             m_PostProcessor.SetBloomData({ bloomThreshold, bloomStrength, (uint32_t)bloomMipCount, bloomFalloffRange });

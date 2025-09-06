@@ -15,9 +15,9 @@ public:
     {
     public:
         float BloomThreshold = 2.0f;
-        float BloomStrength = 1.1f;
+        float BloomStrength = 1.0f;
         uint32_t MipCount = 10;
-        float FalloffRange = 1.0f;
+        float FalloffRange = 5.0f;
     };
 
     PostProcessor() = default;
@@ -54,9 +54,9 @@ private:
     struct BloomPushData
     {
         float BloomThreshold = 2.0f;
-        float BloomStrength = 1.1f;
+        float BloomStrength = 1.0f;
         int FirstBatch = 1;
-        float FalloffRange = 1.0f;
+        float FalloffRange = 5.0f;
     };
     BloomPushData m_BloomPushData{};
     uint32_t m_MipCount = 10;
