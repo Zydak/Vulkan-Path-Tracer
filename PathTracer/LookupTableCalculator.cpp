@@ -68,7 +68,7 @@ std::vector<float> LookupTableCalculator::CalculateTable(glm::uvec3 tableSize, u
     VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording command buffer");
 
     // Update descriptor set
-    VH_ASSERT(m_DescriptorSet.AddBuffer(0, 0, buffer) == VulkanHelper::VHResult::OK, "Failed to update descriptor set");
+    VH_ASSERT(m_DescriptorSet.AddBuffer(0, 0, &buffer) == VulkanHelper::VHResult::OK, "Failed to update descriptor set");
 
     // Set Push data
     PipelinePushConstant pushConstantData{};

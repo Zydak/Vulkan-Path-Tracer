@@ -151,6 +151,8 @@ public struct Sampler
     [mutating]
     public float3 SampleHenyeyGreenstein(float3 incidentDir, float G)
     {
+        //G = GHG;
+
         float2 rand = UniformFloat2();
         float cosTheta;
         if (abs(G) < 1e-5) {
@@ -173,6 +175,58 @@ public struct Sampler
         float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
 
         return scatteredDir;
+    }
+
+    [mutating]
+    public float3 SampleDraine(float3 incidentDir, float g)
+    {
+        float a = ALPHA_GD;
+        g = GD;
+        
+        float2 rand = UniformFloat2();
+
+        const float g2 = g * g;
+        const float g3 = g * g2;
+        const float g4 = g2 * g2;
+        const float g6 = g2 * g4;
+        const float pgp1_2 = (1 + g2) * (1 + g2);
+        const float T1 = (-1 + g2) * (4 * g2 + a * pgp1_2);
+        const float T1a = -a + a * g4;
+        const float T1a3 = T1a * T1a * T1a;
+        const float T2 = -1296 * (-1 + g2) * (a - a * g2) * (T1a) * (4 * g2 + a * pgp1_2);
+        const float T3 = 3 * g2 * (1 + g * (-1 + 2 * rand.x)) + a * (2 + g2 + g3 * (1 + 2 * g2) * (-1 + 2 * rand.x));
+        const float T4a = 432 * T1a3 + T2 + 432 * (a - a * g2) * T3 * T3;
+        const float T4b = -144 * a * g2 + 288 * a * g4 - 144 * a * g6;
+        const float T4b3 = T4b * T4b * T4b;
+        const float T4 = T4a + sqrt(-4 * T4b3 + T4a * T4a);
+        const float T4p3 = pow(T4, 1.0 / 3.0);
+        const float T6 = (2 * T1a + (48 * pow(2, 1.0 / 3.0) *
+            (-(a * g2) + 2 * a * g4 - a * g6)) / T4p3 + T4p3 / (3. * pow(2, 1.0 / 3.0))) / (a - a * g2);
+        const float T5 = 6 * (1 + g2) + T6;
+        float cosTheta = (1 + g2 - pow(-0.5 * sqrt(T5) + sqrt(6 * (1 + g2) - (8 * T3) / (a * (-1 + g2) * sqrt(T5)) - T6) / 2., 2)) / (2. * g);
+
+        float phi = 2.0 * M_PI * rand.y;
+
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+        // new dir is created in tangent space, so rotate it by incidentDir
+        float3 up = abs(incidentDir.y) < 0.9999999 ? float3(0, 1, 0) : float3(0, 0, 1);
+        float3 tangent = normalize(cross(up, incidentDir));
+        float3 bitangent = cross(incidentDir, tangent);
+        float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
+
+        return scatteredDir;
+    }
+
+    [mutating]
+    public float3 SampleHGPlusDreine(float3 incidentDir, float)
+    {
+        float u = UniformFloat();
+        if (u < W_D)
+            return SampleHenyeyGreenstein(incidentDir, GHG);
+        else
+            return SampleDraine(incidentDir, GD);
     }
 
     [mutating]

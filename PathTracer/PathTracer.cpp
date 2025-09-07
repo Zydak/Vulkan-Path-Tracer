@@ -65,7 +65,7 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     // Volumes buffer
     VulkanHelper::Buffer::Config volumesBufferConfig{};
     volumesBufferConfig.Device = device;
-    volumesBufferConfig.Size = sizeof(Volume) * MAX_ENTITIES;
+    volumesBufferConfig.Size = sizeof(VolumeGPU) * MAX_ENTITIES;
     volumesBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT | VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
     pathTracer.m_VolumesBuffer = VulkanHelper::Buffer::New(volumesBufferConfig).Value();
 
@@ -136,7 +136,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
     m_FOV = scene.Value().Cameras[0].FOV;
-    glm::mat4 cameraView = scene.Value().Cameras[0].ViewMatrix;
+    m_CameraViewInverse = glm::inverse(scene.Value().Cameras[0].ViewMatrix);
 
     std::array<VulkanHelper::Format, 3> vertexAttributes = {
         VulkanHelper::Format::R32G32B32_SFLOAT, // Position
@@ -433,7 +433,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{16, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
         VulkanHelper::DescriptorSet::BindingDescription{17, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
         VulkanHelper::DescriptorSet::BindingDescription{18, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
-        VulkanHelper::DescriptorSet::BindingDescription{19, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // Volume density textures
+        VulkanHelper::DescriptorSet::BindingDescription{19, 16, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // Volume density textures
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -441,40 +441,47 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     descriptorSetConfig.BindingCount = static_cast<uint32_t>(bindingDescriptions.size());
 
     m_PathTracerDescriptorSet = m_DescriptorPool.AllocateDescriptorSet(descriptorSetConfig).Value();
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddAccelerationStructure(1, 0, m_SceneTLAS) == VulkanHelper::VHResult::OK, "Failed to add TLAS to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(2, 0, m_PathTracerUniformBuffer) == VulkanHelper::VHResult::OK, "Failed to add uniform buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, &m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddAccelerationStructure(1, 0, &m_SceneTLAS) == VulkanHelper::VHResult::OK, "Failed to add TLAS to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(2, 0, &m_PathTracerUniformBuffer) == VulkanHelper::VHResult::OK, "Failed to add uniform buffer to descriptor set");
     for (uint32_t i = 0; i < m_SceneMeshes.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(3, i, m_SceneMeshes[i].GetVertexBuffer()) == VulkanHelper::VHResult::OK, "Failed to add vertex buffer to descriptor set");
+    {
+        VulkanHelper::Buffer vertexBuffer = m_SceneMeshes[i].GetVertexBuffer();
+        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(3, i, &vertexBuffer) == VulkanHelper::VHResult::OK, "Failed to add vertex buffer to descriptor set");
+    }
     for (uint32_t i = 0; i < m_SceneMeshes.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(4, i, m_SceneMeshes[i].GetIndexBuffer()) == VulkanHelper::VHResult::OK, "Failed to add index buffer to descriptor set");
+    {
+        VulkanHelper::Buffer indexBuffer = m_SceneMeshes[i].GetIndexBuffer();
+        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(4, i, &indexBuffer) == VulkanHelper::VHResult::OK, "Failed to add index buffer to descriptor set");
+    }
     for (uint32_t i = 0; i < m_SceneBaseColorTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, i, m_SceneBaseColorTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add albedo texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, i, &m_SceneBaseColorTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add albedo texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneNormalTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, i, m_SceneNormalTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, i, &m_SceneNormalTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneRoughnessTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, i, m_SceneRoughnessTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, i, &m_SceneRoughnessTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneMetallicTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, i, m_SceneMetallicTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, i, &m_SceneMetallicTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
     for (uint32_t i = 0; i < m_SceneEmissiveTextures.size(); ++i)
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, i, m_SceneEmissiveTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, i, &m_SceneEmissiveTextures[i], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
 
-    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(10, 0, m_TextureSampler) == VulkanHelper::VHResult::OK, "Failed to add texture sampler to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(11, 0, m_MaterialsBuffer) == VulkanHelper::VHResult::OK, "Failed to add materials buffer to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(12, 0, m_ReflectionLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection lookup texture to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(13, 0, m_RefractionFromOutsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add refraction hit from outside lookup texture to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(14, 0, m_RefractionFromInsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection hit from inside lookup texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(10, 0, &m_TextureSampler) == VulkanHelper::VHResult::OK, "Failed to add texture sampler to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(11, 0, &m_MaterialsBuffer) == VulkanHelper::VHResult::OK, "Failed to add materials buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(12, 0, &m_ReflectionLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection lookup texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(13, 0, &m_RefractionFromOutsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add refraction hit from outside lookup texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(14, 0, &m_RefractionFromInsideLookup, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add reflection hit from inside lookup texture to descriptor set");
 
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(17, 0, m_VolumesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volumes buffer to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(18, 0, m_LookupTableSampler) == VulkanHelper::VHResult::OK, "Failed to add lookup table sampler to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, &m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, &m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(17, 0, &m_VolumesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volumes buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(18, 0, &m_LookupTableSampler) == VulkanHelper::VHResult::OK, "Failed to add lookup table sampler to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, 0, nullptr, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density texture to descriptor set");
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
-    glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
-    pathTracerUniform.CameraViewInverse = glm::inverse(cameraView);
-    pathTracerUniform.CameraProjectionInverse = glm::inverse(cameraProjection);
+    m_CameraProjectionInverse = glm::inverse(glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f));
+    pathTracerUniform.CameraViewInverse = m_CameraViewInverse;
+    pathTracerUniform.CameraProjectionInverse = m_CameraProjectionInverse;
     pathTracerUniform.MaxDepth = m_MaxDepth;
     pathTracerUniform.SampleCount = m_SamplesPerFrame;
     pathTracerUniform.MaxLuminance = m_MaxLuminance;
@@ -537,15 +544,15 @@ void PathTracer::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::Comm
     CreateOutputImageView();
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, &m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
 
     // Update projection
     const float aspectRatio = static_cast<float>(m_Width) / static_cast<float>(m_Height);
-    glm::mat4 cameraProjection = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
+    m_CameraProjectionInverse = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
 
-    cameraProjection = glm::inverse(cameraProjection);
+    m_CameraProjectionInverse = glm::inverse(m_CameraProjectionInverse);
 
-    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&cameraProjection, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraProjectionInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
     ResetPathTracing();
 }
@@ -669,7 +676,7 @@ void PathTracer::SetBaseColorTexture(uint32_t index, const std::string& filePath
     }
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, index, m_SceneBaseColorTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add base color texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(5, index, &m_SceneBaseColorTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add base color texture to descriptor set");
     ResetPathTracing();
 }
 
@@ -687,7 +694,7 @@ void PathTracer::SetNormalTexture(uint32_t index, const std::string& filePath, V
     }
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, index, m_SceneNormalTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(6, index, &m_SceneNormalTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add normal texture to descriptor set");
     ResetPathTracing();
 }
 
@@ -705,7 +712,7 @@ void PathTracer::SetRoughnessTexture(uint32_t index, const std::string& filePath
     }
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, index, m_SceneRoughnessTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(7, index, &m_SceneRoughnessTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add roughness texture to descriptor set");
     ResetPathTracing();
 }
 
@@ -723,7 +730,7 @@ void PathTracer::SetMetallicTexture(uint32_t index, const std::string& filePath,
     }
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, index, m_SceneMetallicTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(8, index, &m_SceneMetallicTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add metallic texture to descriptor set");
     ResetPathTracing();
 }
 
@@ -741,7 +748,7 @@ void PathTracer::SetEmissiveTexture(uint32_t index, const std::string& filePath,
     }
 
     // Update descriptor set
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, index, m_SceneEmissiveTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(9, index, &m_SceneEmissiveTextures[index], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add emissive texture to descriptor set");
     ResetPathTracing();
 }
 
@@ -808,8 +815,8 @@ void PathTracer::SetEnvMapFilepath(const std::string& filePath, VulkanHelper::Co
     m_EnvMapFilepath = filePath;
 
     LoadEnvironmentMap(filePath, commandBuffer);
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, 0, &m_EnvMapTexture, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add env map texture to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, &m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
     ResetPathTracing();
 }
 
@@ -1054,7 +1061,10 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 void PathTracer::AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer)
 {
     const uint32_t initialSize = m_Volumes.size();
-    VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume), m_Volumes.size() * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
+
+    VolumeGPU volumeGPU(volume);
+
+    VH_ASSERT(m_VolumesBuffer.UploadData(&volumeGPU, sizeof(VolumeGPU), m_Volumes.size() * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
     m_Volumes.push_back(volume);
 
     // Update Uniform Buffer
@@ -1068,110 +1078,140 @@ void PathTracer::AddVolume(const Volume& volume, VulkanHelper::CommandBuffer com
 
 void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (std::filesystem::exists(filepath) == false)
+    Volume volume{};
+    volume.DensityTextureFilepath = filepath;
+
+    bool isAlreadyLoaded = false;
+    for (const auto& vol : m_Volumes)
     {
-        VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
-        return;
-    }
-
-    VH_LOG_DEBUG("Loading OPENDVDB volume: {}", filepath);
-    openvdb::io::File file(filepath);
-
-    try {
-        file.open();  // This will throw if the file can't be opened
-    } catch (const openvdb::IoError& e) {
-        VH_LOG_ERROR("Failed to open OpenVDB file '{}': {}", filepath, e.what());
-        return;
-    }
-
-    openvdb::GridBase::Ptr densityGrid;
-    for (openvdb::io::File::NameIterator nameIter = file.beginName(); nameIter != file.endName(); ++nameIter)
-    {
-        if (nameIter.gridName() == "density")
+        if (vol.DensityTextureFilepath == filepath)
         {
-            densityGrid = file.readGrid(nameIter.gridName());
+            VH_ASSERT(m_ImportedVolumesCache.find(filepath) != m_ImportedVolumesCache.end(), "This should never happen. Filepath: {}", filepath);
+            const auto& entry = m_ImportedVolumesCache[filepath];
+
+            volume = entry;
+
+            volume.DensityTextureView = vol.DensityTextureView;
+            volume.HeterogeneousTextureIndex = vol.HeterogeneousTextureIndex;
+            volume.DensityTextureFilepath = vol.DensityTextureFilepath;
+            isAlreadyLoaded = true;
             break;
         }
     }
-    file.close();
 
-    openvdb::FloatGrid::Ptr floatGrid = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
-
-    float maxDensity = openvdb::tools::minMax(floatGrid->tree(), true).max();
-
-    openvdb::math::Coord dim = floatGrid->evalActiveVoxelDim();
-    openvdb::math::Coord min = floatGrid->evalActiveVoxelBoundingBox().min();
-    openvdb::math::Coord max = floatGrid->evalActiveVoxelBoundingBox().max();
-
-    VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
-    VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
-
-    // Prepare density texture
-    VulkanHelper::Image::Config imageConfig{};
-    imageConfig.Device = m_Device;
-    imageConfig.Width = (uint32_t)dim.x();
-    imageConfig.Height = (uint32_t)dim.y();
-    imageConfig.LayerCount = (uint32_t)dim.z();
-    imageConfig.Format = VulkanHelper::Format::R32_SFLOAT;
-    imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
-    imageConfig.UsePersistentStagingBuffer = true;
-
-    VulkanHelper::Image densityImage = VulkanHelper::Image::New(imageConfig).Value();
-    densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-
-    // Prepare density data
-    std::vector<float> densityData;
-    densityData.reserve((size_t)dim.x() * (size_t)dim.y());
-    for (int z = 0; z < dim.z(); z++)
+    if (!isAlreadyLoaded)
     {
-        densityData.clear();
-        for (int y = 0; y < dim.y(); y++)
+        if (std::filesystem::exists(filepath) == false)
         {
-            for (int x = 0; x < dim.x(); x++)
-            {
-                openvdb::math::Coord coord(min.x() + x, min.y() + y, min.z() + z);
-                float value = floatGrid->tree().getValue(coord);
-                densityData.push_back(value / maxDensity); // Normalize to [0, 1]
-            }
+            VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
+            return;
         }
 
-        // Upload texture data one layer at a time
-        VH_ASSERT(densityImage.UploadData(
-            densityData.data(),
-            densityData.size() * sizeof(float),
-            0,
-            &commandBuffer,
-            (uint32_t)(z)
-        ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+        VH_LOG_DEBUG("Loading OPENDVDB volume: {}", filepath);
+        openvdb::io::File file(filepath);
 
-        VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
-        VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit and wait command buffer");
-        VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin command buffer recording");
+        try {
+            file.open();  // This will throw if the file can't be opened
+        } catch (const openvdb::IoError& e) {
+            VH_LOG_ERROR("Failed to open OpenVDB file '{}': {}", filepath, e.what());
+            return;
+        }
+
+        openvdb::GridBase::Ptr densityGrid;
+        for (openvdb::io::File::NameIterator nameIter = file.beginName(); nameIter != file.endName(); ++nameIter)
+        {
+            if (nameIter.gridName() == "density")
+            {
+                densityGrid = file.readGrid(nameIter.gridName());
+                break;
+            }
+        }
+        file.close();
+
+        openvdb::FloatGrid::Ptr floatGrid = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
+
+        float maxDensity = openvdb::tools::minMax(floatGrid->tree(), true).max();
+
+        openvdb::math::Coord dim = floatGrid->evalActiveVoxelDim();
+        openvdb::math::Coord min = floatGrid->evalActiveVoxelBoundingBox().min();
+        openvdb::math::Coord max = floatGrid->evalActiveVoxelBoundingBox().max();
+
+        VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
+        VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
+
+        volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
+        volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
+
+        // Scale it down so AABB is -1 to 1
+        float maxDim = glm::max(glm::max(dim.x(), dim.y()), dim.z());
+        volume.CornerMin /= maxDim / 2.0f;
+        volume.CornerMax /= maxDim / 2.0f;
+
+        m_ImportedVolumesCache[filepath] = volume;
+
+        // Prepare density texture
+        VulkanHelper::Image::Config imageConfig{};
+        imageConfig.Device = m_Device;
+        imageConfig.Width = (uint32_t)dim.x();
+        imageConfig.Height = (uint32_t)dim.y();
+        imageConfig.LayerCount = (uint32_t)dim.z();
+        imageConfig.Format = VulkanHelper::Format::R32_SFLOAT;
+        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
+        imageConfig.UsePersistentStagingBuffer = true;
+
+        VulkanHelper::Image densityImage = VulkanHelper::Image::New(imageConfig).Value();
+        densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
+
+        // Prepare density data
+        std::vector<float> densityData;
+        densityData.reserve((size_t)dim.x() * (size_t)dim.y());
+        for (int z = 0; z < dim.z(); z++)
+        {
+            densityData.clear();
+            for (int y = 0; y < dim.y(); y++)
+            {
+                for (int x = 0; x < dim.x(); x++)
+                {
+                    openvdb::math::Coord coord(min.x() + x, min.y() + y, min.z() + z);
+                    float value = floatGrid->tree().getValue(coord);
+                    densityData.push_back(value / maxDensity); // Normalize to [0, 1]
+                }
+            }
+
+            // Upload texture data one layer at a time
+            VH_ASSERT(densityImage.UploadData(
+                densityData.data(),
+                densityData.size() * sizeof(float),
+                0,
+                &commandBuffer,
+                (uint32_t)(z)
+            ) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
+
+            VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
+            VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit and wait command buffer");
+            VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin command buffer recording");
+        }
+
+        densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
+        VulkanHelper::ImageView::Config imageViewConfig{};
+        imageViewConfig.image = densityImage;
+        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D_ARRAY;
+        imageViewConfig.BaseLayer = 0;
+        imageViewConfig.LayerCount = (uint32_t)dim.z();
+
+        volume.DensityTextureView = VulkanHelper::ImageView::New(imageViewConfig).Value();
+
+        static int textureIndex = 0;
+        static const int MaxHeterogeneousVolumeTextures = 16; // I doubt you'd fit more than this in a scene
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)textureIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
+        volume.HeterogeneousTextureIndex = textureIndex;
+        textureIndex = (textureIndex + 1) % MaxHeterogeneousVolumeTextures;
     }
 
-    densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-    VulkanHelper::ImageView::Config imageViewConfig{};
-    imageViewConfig.image = densityImage;
-    imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D_ARRAY;
-    imageViewConfig.BaseLayer = 0;
-    imageViewConfig.LayerCount = (uint32_t)dim.z();
-
-    m_VolumeDensityTextures.push_back(VulkanHelper::ImageView::New(imageViewConfig).Value());
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, 0, m_VolumeDensityTextures[0], VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
-
-    Volume volume{};
-    volume.HeterogeneousTextureIndex = 1; // Test
-
-    volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
-    volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
-
-    // Scale it down so AABB is -1 to 1
-    float maxDim = (float)glm::max(glm::max(dim.x(), dim.y()), dim.z());
-    volume.CornerMin /= maxDim / 2.0f;
-    volume.CornerMax /= maxDim / 2.0f;
+    VolumeGPU volumeGPU(volume);
 
     const uint32_t initialSize = m_Volumes.size();
-    VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume), m_Volumes.size() * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
+    VH_ASSERT(m_VolumesBuffer.UploadData(&volumeGPU, sizeof(VolumeGPU), m_Volumes.size() * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
     m_Volumes.push_back(volume);
 
     // Update Uniform Buffer
@@ -1192,9 +1232,9 @@ void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer comman
     m_Volumes.erase(m_Volumes.begin() + index);
     if (volumesToMove > 0)
     {
-        Volume volume;
-        VH_ASSERT(m_VolumesBuffer.DownloadData(&volume, sizeof(Volume) * volumesToMove, (index + 1) * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to download volume data");
-        VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume) * volumesToMove, index * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
+        VolumeGPU volume;
+        VH_ASSERT(m_VolumesBuffer.DownloadData(&volume, sizeof(VolumeGPU) * volumesToMove, (index + 1) * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to download volume data");
+        VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(VolumeGPU) * volumesToMove, index * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
     }
 
     uint32_t volumeCount = (uint32_t)m_Volumes.size();
@@ -1210,7 +1250,8 @@ void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer comman
 void PathTracer::SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_Volumes[index] = volume;
-    VH_ASSERT(m_VolumesBuffer.UploadData(&volume, sizeof(Volume), index * sizeof(Volume), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
+    VolumeGPU volumeGPU(volume);
+    VH_ASSERT(m_VolumesBuffer.UploadData(&volumeGPU, sizeof(VolumeGPU), index * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
     ResetPathTracing();
 }
 
@@ -1330,4 +1371,28 @@ void PathTracer::SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffe
     m_UseRayQueries = useRayQueries;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_CameraViewInverse != view)
+    {
+        m_CameraViewInverse = view;
+
+        VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraViewInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraViewInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+
+        ResetPathTracing();
+    }
+}
+
+void PathTracer::SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_CameraProjectionInverse != projection)
+    {
+        m_CameraProjectionInverse = projection;
+
+        VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraProjectionInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+
+        ResetPathTracing();
+    }
 }
