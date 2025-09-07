@@ -55,7 +55,7 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
 
         VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddBuffer(2, 0, &postProcessor.m_TonemappingBuffer) == VulkanHelper::VHResult::OK, "Failed to add tonemapping buffer to descriptor set");
     
-        postProcessor.m_Sampler = VulkanHelper::Sampler::New({ device }).Value();
+        postProcessor.m_Sampler = VulkanHelper::Sampler::New({ device, VulkanHelper::Sampler::AddressMode::CLAMP_TO_EDGE }).Value();
         VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddSampler(4, 0, &postProcessor.m_Sampler) == VulkanHelper::VHResult::OK, "Failed to add sampler to tonemapping descriptor set");
     }
 

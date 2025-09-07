@@ -15,9 +15,3 @@ public static const float INV_SQRT_2        = 0.7071067811865475244f;   /* 1/sqr
 public static const float FLT_MAX           = 3.402823466e+38F; // max value
 public static const uint UINT_MAX           = 4294967295;
 public static const uint MAX_DEPTH          = 1000000;
-
-public static const float d = 20.0f;
-public static const float GHG = exp(-(0.0990567f / (d - 1.67154)));
-public static const float GD = exp(-(2.20679f / (d + 3.91029)) - 0.428934);
-public static float ALPHA_GD = exp(3.62489f - (8.29288f / (d + 5.52825)));
-public static float W_D = exp(-(0.599085f / (d - 0.641583)) - 0.665888);

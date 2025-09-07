@@ -213,7 +213,7 @@ void Editor::RenderCameraSettings()
     ImGui::Text("Controls:");
     ImGui::BulletText("Mouse drag to look around");
     ImGui::BulletText("WASD to move forward/back/left/right");
-    ImGui::BulletText("Q/E to move up/down");
+    ImGui::BulletText("Space/LShift to move up/down");
 }
 
 void Editor::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
@@ -789,6 +789,17 @@ void Editor::RenderVolumeSettings()
     if (!ImGui::CollapsingHeader("Volume Settings"))
         return;
 
+    const char* phaseFunctions[] = { "Henyey", "Draine", "Henyey-Plus-Draine"};
+
+    static int selectedPhaseFunction = 0;
+    if (ImGui::Combo("Phase Function", &selectedPhaseFunction, phaseFunctions, IM_ARRAYSIZE(phaseFunctions)))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetPhaseFunction((PathTracer::PhaseFunction)selectedPhaseFunction, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
     if (ImGui::Button("Add Volume"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
@@ -858,15 +869,37 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
-    if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -0.99999f, 0.99999f, "%.5f", ImGuiSliderFlags_AlwaysClamp))
-    {
-        volumeModified = true;
-        selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.99999f, 0.99999f);
-    }
     if (ImGui::SliderFloat("Heterogenous Smoothness", &selectedVolume.HeterogenousSmoothing, 0.0f, 10.0f))
     {
         volumeModified = true;
         selectedVolume.HeterogenousSmoothing = selectedVolume.HeterogenousSmoothing;
+    }
+
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN || 
+        selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
+    {
+        if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -0.9999f, 0.9999f, "%.4f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.9999f, 0.9999f);
+        }
+    }
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
+    {
+        if (ImGui::SliderFloat("Alpha", &selectedVolume.Alpha, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.Alpha = glm::clamp(selectedVolume.Alpha, 0.0f, 1.0f);
+        }
+    }
+
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN_PLUS_DRAINE)
+    {
+        if (ImGui::SliderFloat("Droplet Size", &selectedVolume.DropletSize, 5.0f, 50.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.DropletSize = glm::clamp(selectedVolume.DropletSize, 5.0f, 50.0f);
+        }
     }
 
     ImGui::PopID();

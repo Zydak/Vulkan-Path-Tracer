@@ -514,6 +514,23 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
 
+    switch (m_PhaseFunction)
+    {
+    case PhaseFunction::HENYEY_GREENSTEIN:
+        defines.push_back({"PHASE_FUNCTION_HENYEY_GREENSTEIN", "1"});
+        break;
+    case PhaseFunction::DRAINE:
+        defines.push_back({"PHASE_FUNCTION_DRAINE", "1"});
+        break;
+    case PhaseFunction::HENYEY_GREENSTEIN_PLUS_DRAINE:
+        defines.push_back({"PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE", "1"});
+        break;
+
+    default:
+        VH_ASSERT(false, "Unknown phase function!");
+        break;
+    }
+
     VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
     VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
@@ -859,6 +876,23 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
 
+    switch (m_PhaseFunction)
+    {
+    case PhaseFunction::HENYEY_GREENSTEIN:
+        defines.push_back({"PHASE_FUNCTION_HENYEY_GREENSTEIN", "1"});
+        break;
+    case PhaseFunction::DRAINE:
+        defines.push_back({"PHASE_FUNCTION_DRAINE", "1"});
+        break;
+    case PhaseFunction::HENYEY_GREENSTEIN_PLUS_DRAINE:
+        defines.push_back({"PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE", "1"});
+        break;
+
+    default:
+        VH_ASSERT(false, "Unknown phase function!");
+        break;
+    }
+
     VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
     auto hitShaderRes = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT});
@@ -1142,7 +1176,7 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
         volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
         volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
 
-        // Scale it down so AABB is -1 to 1
+        // Scale it down so AABB is more or less -1 to 1
         float maxDim = glm::max(glm::max(dim.x(), dim.y()), dim.z());
         volume.CornerMin /= maxDim / 2.0f;
         volume.CornerMax /= maxDim / 2.0f;
@@ -1395,4 +1429,14 @@ void PathTracer::SetCameraProjectionInverse(const glm::mat4& projection, VulkanH
 
         ResetPathTracing();
     }
+}
+
+void PathTracer::SetPhaseFunction(PhaseFunction phaseFunction, VulkanHelper::CommandBuffer commandBuffer)
+{
+    if (m_PhaseFunction == phaseFunction)
+        return;
+
+    m_PhaseFunction = phaseFunction;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
 }

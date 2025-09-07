@@ -37,11 +37,20 @@ public:
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
         float Density = 1.0f;
         float Anisotropy = 0.0f;
+        float Alpha = 1.0f;
+        float DropletSize = 20.0f;
 
         std::string DensityTextureFilepath;
         VulkanHelper::ImageView DensityTextureView;
         int HeterogeneousTextureIndex = -1; // -1 if homogeneous
         float HeterogenousSmoothing = 1.0f;
+    };
+
+    enum class PhaseFunction
+    {
+        HENYEY_GREENSTEIN = 0,
+        DRAINE = 1,
+        HENYEY_GREENSTEIN_PLUS_DRAINE = 2
     };
 
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);
@@ -76,6 +85,9 @@ public:
     void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
+    void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
+    void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
+    void SetPhaseFunction(PhaseFunction phaseFunction, VulkanHelper::CommandBuffer commandBuffer);
 
     [[nodiscard]] inline uint32_t GetSamplesAccumulated() const { return m_SamplesAccumulated; }
     [[nodiscard]] inline uint32_t GetSamplesPerFrame() const { return m_SamplesPerFrame; }
@@ -98,12 +110,9 @@ public:
     [[nodiscard]] inline bool IsInFurnaceTestMode() const { return m_FurnaceTestMode; }
     [[nodiscard]] inline float GetEnvironmentIntensity() const { return m_EnvironmentIntensity; }
     [[nodiscard]] inline bool UseRayQueries() const { return m_UseRayQueries; }
-
-    // Camera accessors
     [[nodiscard]] inline const glm::mat4& GetCameraViewInverse() const { return m_CameraViewInverse; }
     [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
-    void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
-    void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
+    [[nodiscard]] inline PhaseFunction GetPhaseFunction() const { return m_PhaseFunction; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -154,6 +163,7 @@ private:
     bool m_FurnaceTestMode = false;
     float m_EnvironmentIntensity = 1.0f;
     bool m_UseRayQueries = true;
+    PhaseFunction m_PhaseFunction = PhaseFunction::HENYEY_GREENSTEIN;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -230,6 +240,8 @@ private:
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
         float Density = 1.0f;
         float Anisotropy = 0.0f;
+        float Alpha = 1.0f;
+        float DropletSize = 20.0f;
 
         int HeterogeneousTextureIndex = -1; // -1 if homogeneous
         float HeterogenousSmoothing = 1.0f;
@@ -243,6 +255,8 @@ private:
               EmissiveColor(volume.EmissiveColor),
               Density(volume.Density),
               Anisotropy(volume.Anisotropy),
+              Alpha(volume.Alpha),
+              DropletSize(volume.DropletSize),
               HeterogeneousTextureIndex(volume.HeterogeneousTextureIndex),
               HeterogenousSmoothing(volume.HeterogenousSmoothing)
         {
