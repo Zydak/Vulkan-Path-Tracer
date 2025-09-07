@@ -115,7 +115,7 @@ void Main()
     accumulatedLight *= scale;
 
     float3 color;
-    if (uUBO.FrameCount > 1)
+    if (uUBO.FrameCount > 0)
     {
         float a = 1.0f / float(uUBO.FrameCount);
         color = lerp(prevColor, accumulatedLight, a);
@@ -187,8 +187,8 @@ bool ScatteredInVolume(inout Payload payload, out bool nullCollision)
                 toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
 
                 bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
-                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, toLightEnv) * (float)!isObscuredByGeometry;
-                float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, newDir);
+                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightEnv) * (float)!isObscuredByGeometry;
+                float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir);
 
                 // Transmittance along the ray has to be accounted for
                 float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, uVolumes, uUBO.VolumesCount, uSampler);

@@ -20,7 +20,9 @@ public struct Volume
     float3 m_Color;
     float3 m_EmissiveColor;
     float m_Density;
-    float m_Anisotropy; // Scattering anisotropy (-1 to 1)
+    float m_Anisotropy;
+    float m_Alpha;
+    float m_DropletSize;
 
     int m_HeterogeneousTextureIndex; // -1 if homogeneous
     float m_HeterogenousSmoothing;
@@ -114,28 +116,66 @@ public struct Volume
 
     public float3 GetScatteringDirection(in float3 incidentDirection, inout Sampler sampler)
     {
-        float3 newdir = sampler.SampleHenyeyGreenstein(incidentDirection, m_Anisotropy);
+        float3 newdir;
+        #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
+        {
+            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, m_Anisotropy);
+        }
+        #elif defined(PHASE_FUNCTION_DRAINE)
+        {
+            newdir = sampler.SampleDraine(incidentDirection, m_Anisotropy, m_Alpha);
+        }
+        #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
+        {
+            newdir = sampler.SampleHGPlusDraine(incidentDirection, m_DropletSize);
+        }
+        #endif
+
         return newdir;
+    }
+
+    public float EvaluatePhaseFunction(in float3 V, in float3 L)
+    {
+        #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
+        {
+            return EvaluateHenyeyGreenstein(V, L, m_Anisotropy);
+        }
+        #elif defined(PHASE_FUNCTION_DRAINE)
+        {
+            return EvaluateDraine(V, L, m_Anisotropy, m_Alpha);
+        }
+        #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
+        {
+            return EvaluateHGPlusDraine(V, L);
+        }
+        #endif
     }
 
     public float EvaluateHGPlusDraine(float3 V, float3 L)
     {
-        float HG = EvaluateHenyeyGreenstein(V, L);
-        float D = EvaluateDraine(V, L);
+        const float d = m_DropletSize;
+        const float GHG = exp(-(0.0990567f / (d - 1.67154)));
+        const float GD = exp(-(2.20679f / (d + 3.91029)) - 0.428934);
+        const float ALPHA_D = exp(3.62489f - (8.29288f / (d + 5.52825)));
+        const float W_D = exp(-(0.599085f / (d - 0.641583)) - 0.665888);
+
+        float HG = EvaluateHenyeyGreenstein(V, L, GHG);
+        float D = EvaluateDraine(V, L, GD, ALPHA_D);
         return lerp(HG, D, W_D);
     }
 
-    public float EvaluateHenyeyGreenstein(float3 V, float3 L)
+    public float EvaluateHenyeyGreenstein(float3 V, float3 L, in float g)
     {
-        float g = m_Anisotropy;
+        if (g == 0.0f)
+            return 1.0f / (4.0f * M_PI);
+
         return (1.0f / (4.0f * M_PI)) * ((1.0f - g * g) / pow(1.0f + g * g - 2.0f * g * dot(V, L), 1.5f));
     }
 
-    public float EvaluateDraine(float3 V, float3 L)
+    public float EvaluateDraine(float3 V, float3 L, in float g, in float a)
     {
         float u = dot(V, L);
-        float g = GD;
-        float a = ALPHA_GD;
+        
         return ((1 - g*g)*(1 + a*u*u))/(4.*(1 + (a*(1 + 2*g*g))/3.) * M_PI * pow(1 + g*g - 2*g*u,1.5));
     }
 
@@ -153,7 +193,7 @@ public struct Volume
 
                 float t = 0.0f;
                 // Max 200 steps
-                for (int j = 0; j < 200; j++)
+                for (int j = 0; j < 500; j++)
                 {
                     t += sampler.SampleScatteringDistance(uVolumes[i].GetDensity());
 
@@ -169,10 +209,10 @@ public struct Volume
 
                     uint3 textureSize;
                     uint numberOfLevels;
-                    uVolumeDensityTexture[0].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+                    uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_HeterogeneousTextureIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
                     UV.z *= textureSize.z; // Scale Z to fit in the texture array
 
-                    float densityTextureValue = clamp(uVolumeDensityTexture[0].SampleLevel(uTextureSampler, UV, 0).r * uVolumes[i].m_HeterogenousSmoothing, 0.0f, 1.0f) * uVolumes[i].GetDensity();
+                    float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_HeterogeneousTextureIndex)].SampleLevel(uTextureSampler, UV, 0).r * uVolumes[i].m_HeterogenousSmoothing, 0.0f, 1.0f) * uVolumes[i].GetDensity();
                     transmittance *= 1.0f - (densityTextureValue / uVolumes[i].GetDensity());
 
                     // Russian roulette based on transmittance
