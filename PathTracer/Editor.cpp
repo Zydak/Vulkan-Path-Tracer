@@ -4,6 +4,7 @@
 #include <portable-file-dialogs.h>
 #include <memory>
 #include <filesystem>
+#include <chrono>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
@@ -22,6 +23,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
 
     m_CurrentSceneFilepath = selection[0];
     m_PathTracer.SetScene(selection[0]);
+    
     // Create ImGui sampler
     VulkanHelper::Sampler::Config samplerConfig;
     samplerConfig.Device = device;
@@ -37,6 +39,9 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
         m_PostProcessor.SetTonemappingData({}, commandBuffer);
     });
+    
+    // Initialize camera with scene data
+    m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
 }
@@ -86,6 +91,13 @@ void Editor::RenderViewportTab()
 
     ImGui::SameLine();
     ImGui::SetCursorPos(ImVec2((viewportSize.x - pathTraceImageSize.x * scale) / 2.0f, ImGui::GetCursorPos().y + (viewportSize.y - pathTraceImageSize.y * scale) / 2.0f));
+    
+    // Handle camera input when over the viewport
+    if (ImGui::IsWindowHovered() && ImGui::IsWindowFocused())
+    {
+        ProcessCameraInput();
+    }
+    
     m_Renderer.RenderImGuiImage(m_CurrentImGuiDescriptorIndex, pathTraceImageSize * scale);
     ImGui::End();
     ImGui::PopStyleVar();
@@ -97,6 +109,7 @@ void Editor::RenderSettingsTab()
 
     RenderInfo();
     RenderViewportSettings();
+    RenderCameraSettings();
     RenderMaterialSettings();
     RenderPostProcessingSettings();
     RenderPathTracingSettings();
@@ -135,11 +148,82 @@ void Editor::RenderViewportSettings()
     }
 }
 
+void Editor::RenderCameraSettings()
+{
+    if (!ImGui::CollapsingHeader("Camera Settings"))
+        return;
+
+    glm::vec3 position = m_Camera.GetPosition();
+
+    float fov = m_Camera.GetFov();
+    float yaw = m_Camera.GetYaw();
+    float pitch = m_Camera.GetPitch();
+    float movementSpeed = m_Camera.GetMovementSpeed();
+    float mouseSensitivity = m_Camera.GetMouseSensitivity();
+    
+    bool cameraChanged = false;
+    
+    if (ImGui::DragFloat3("Position", &position.x, 0.1f))
+    {
+        m_Camera.SetPosition(position);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("FOV", &fov, 10.0f, 120.0f))
+    {
+        m_Camera.SetFov(fov);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Yaw", &yaw, -180.0f, 180.0f))
+    {
+        m_Camera.SetRotation(yaw, pitch);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Pitch", &pitch, -89.0f, 89.0f))
+    {
+        m_Camera.SetRotation(yaw, pitch);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Movement Speed", &movementSpeed, 0.1f, 20.0f))
+    {
+        m_Camera.SetMovementSpeed(movementSpeed);
+    }
+    
+    if (ImGui::SliderFloat("Mouse Sensitivity", &mouseSensitivity, 0.01f, 1.0f))
+    {
+        m_Camera.SetMouseSensitivity(mouseSensitivity);
+    }
+    
+    if (cameraChanged)
+    {
+        UpdateCamera();
+    }
+        
+    if (ImGui::Button("Reset Camera"))
+    {
+        m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 3.0f));
+        m_Camera.SetRotation(-90.0f, 0.0f);
+        m_Camera.SetFov(45.0f);
+        UpdateCamera();
+    }
+        
+    ImGui::Text("Controls:");
+    ImGui::BulletText("Mouse drag to look around");
+    ImGui::BulletText("WASD to move forward/back/left/right");
+    ImGui::BulletText("Q/E to move up/down");
+}
+
 void Editor::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_PathTracer.ResizeImage(width, height, commandBuffer);
     m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+    
+    // Update camera aspect ratio when image is resized
+    UpdateCamera();
 }
 
 void Editor::RenderMaterialSettings()
@@ -458,6 +542,7 @@ void Editor::RenderInfo()
                 m_RenderTime = 0.0f;
                 m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
                 m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+                m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
             });
         }
     }
@@ -713,9 +798,14 @@ void Editor::RenderVolumeSettings()
 
     if (ImGui::Button("Import Volume"))
     {
-        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.ImportVolume("/home/p551/Desktop/wdas_cloud/wdas_cloud_quarter.vdb", commandBuffer);
-        });
+        static std::vector<std::string> selection;
+        selection = pfd::open_file("Select Volume", ".", {"OpenVDB Files", "*.vdb"}).result();
+        if (!selection.empty())
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_PathTracer.ImportVolume(selection[0], commandBuffer);
+            });
+        }
     }
 
     if (m_PathTracer.GetVolumes().empty())
@@ -757,6 +847,10 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::InputFloat3("Corner Max", &selectedVolume.CornerMax.x))
         volumeModified = true;
+    if (ImGui::InputFloat3("Translation", &selectedVolume.Position.x))
+        volumeModified = true;
+    if (ImGui::InputFloat3("Scale", &selectedVolume.Scale.x))
+        volumeModified = true;
 
     if (ImGui::ColorEdit3("Color", &selectedVolume.Color.r, ImGuiColorEditFlags_Float))
         volumeModified = true;
@@ -789,5 +883,91 @@ void Editor::RenderVolumeSettings()
             m_PathTracer.SetVolume((uint32_t)selectedVolumeIndex, selectedVolume, cmd);
             m_RenderTime = 0.0f;
         });
+    }
+}
+
+void Editor::UpdateCamera()
+{    
+    // Update the path tracer with the new camera matrices (pass inverses)
+    PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
+        glm::mat4 viewMatrix = m_Camera.GetViewMatrix();
+        glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), cmd);
+        m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), cmd);
+    });
+}
+
+void Editor::ProcessCameraInput()
+{
+    // Calculate delta time
+    auto currentTime = std::chrono::steady_clock::now();
+    float deltaTime = std::chrono::duration<float>(currentTime - m_LastFrameTime).count();
+    m_LastFrameTime = currentTime;
+    
+    bool cameraChanged = false;
+    
+    // Mouse rotation (only when dragging)
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    {
+        m_IsDraggingViewport = true;
+        ImVec2 mousePos = ImGui::GetMousePos();
+        m_LastMousePos = {mousePos.x, mousePos.y};
+    }
+    
+    if (m_IsDraggingViewport && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        ImVec2 mousePos = ImGui::GetMousePos();
+        glm::vec2 currentMousePos = {mousePos.x, mousePos.y};
+        glm::vec2 deltaPos = currentMousePos - m_LastMousePos;
+        
+        m_Camera.ProcessMouseMovement(deltaPos.x, deltaPos.y);
+
+        if (m_LastMousePos != currentMousePos)
+            cameraChanged = true;
+
+        m_LastMousePos = currentMousePos;
+    }
+
+    // Keyboard movement (WASD + space/left shift for up/down)
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_W))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::FORWARD, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_S))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::BACKWARD, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_A))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::LEFT, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_D))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::RIGHT, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_Space))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::UP, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_LeftShift))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::DOWN, deltaTime);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_IsDraggingViewport = false;
+    }
+    
+    if (cameraChanged)
+    {
+        UpdateCamera();
+        m_RenderTime = 0.0f;
     }
 }

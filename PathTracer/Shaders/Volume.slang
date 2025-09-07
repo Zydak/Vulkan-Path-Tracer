@@ -3,7 +3,7 @@ import Sampler;
 import Defines;
 
 [[vk::image_format("r32f")]]
-[[vk::binding(19, 0)]] public Texture2DArray uVolumeDensityTexture;
+[[vk::binding(19, 0)]] Texture2DArray uVolumeDensityTexture[];
 
 public struct VolumeIntersection
 {
@@ -90,10 +90,10 @@ public struct Volume
 
             uint3 textureSize;
             uint numberOfLevels;
-            uVolumeDensityTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+            uVolumeDensityTexture[NonUniformResourceIndex(m_HeterogeneousTextureIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
             UV.z *= textureSize.z; // Scale Z to fit in the texture array
 
-            float densityTextureValue = clamp(uVolumeDensityTexture.SampleLevel(uTextureSampler, UV, 0).r * m_HeterogenousSmoothing, 0.0f, 1.0f) * m_Density;
+            float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_HeterogeneousTextureIndex)].SampleLevel(uTextureSampler, UV, 0).r * m_HeterogenousSmoothing, 0.0f, 1.0f) * m_Density;
 
             if (densityTextureValue / m_Density < sampler.UniformFloat())
             {
@@ -118,9 +118,25 @@ public struct Volume
         return newdir;
     }
 
+    public float EvaluateHGPlusDraine(float3 V, float3 L)
+    {
+        float HG = EvaluateHenyeyGreenstein(V, L);
+        float D = EvaluateDraine(V, L);
+        return lerp(HG, D, W_D);
+    }
+
     public float EvaluateHenyeyGreenstein(float3 V, float3 L)
     {
-        return (1.0f / (4.0f * M_PI)) * ((1.0f - m_Anisotropy * m_Anisotropy) / pow(1.0f + m_Anisotropy * m_Anisotropy - 2.0f * m_Anisotropy * dot(V, L), 1.5f));
+        float g = m_Anisotropy;
+        return (1.0f / (4.0f * M_PI)) * ((1.0f - g * g) / pow(1.0f + g * g - 2.0f * g * dot(V, L), 1.5f));
+    }
+
+    public float EvaluateDraine(float3 V, float3 L)
+    {
+        float u = dot(V, L);
+        float g = GD;
+        float a = ALPHA_GD;
+        return ((1 - g*g)*(1 + a*u*u))/(4.*(1 + (a*(1 + 2*g*g))/3.) * M_PI * pow(1 + g*g - 2*g*u,1.5));
     }
 
     static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in StructuredBuffer<Volume, ScalarDataLayout> uVolumes, in uint volumesCount, in SamplerState uTextureSampler)
@@ -131,7 +147,7 @@ public struct Volume
             VolumeIntersection intersection = uVolumes[i].IntersectWithRay(origin, direction);
             intersection.HitPointNear = max(intersection.HitPointNear, 0.0f); // Clamp to 0, ray is inside AABB
 
-            if (uVolumes[i].m_HeterogeneousTextureIndex >= 0)
+            if (uVolumes[i].m_HeterogeneousTextureIndex >= 0 && intersection.HitPointFar >= 0.0f)
             {
                 // Heterogeneous volume, transmittance has to be integrated numerically
 
@@ -153,10 +169,10 @@ public struct Volume
 
                     uint3 textureSize;
                     uint numberOfLevels;
-                    uVolumeDensityTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+                    uVolumeDensityTexture[0].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
                     UV.z *= textureSize.z; // Scale Z to fit in the texture array
 
-                    float densityTextureValue = clamp(uVolumeDensityTexture.SampleLevel(uTextureSampler, UV, 0).r * uVolumes[i].m_HeterogenousSmoothing, 0.0f, 1.0f) * uVolumes[i].GetDensity();
+                    float densityTextureValue = clamp(uVolumeDensityTexture[0].SampleLevel(uTextureSampler, UV, 0).r * uVolumes[i].m_HeterogenousSmoothing, 0.0f, 1.0f) * uVolumes[i].GetDensity();
                     transmittance *= 1.0f - (densityTextureValue / uVolumes[i].GetDensity());
 
                     // Russian roulette based on transmittance

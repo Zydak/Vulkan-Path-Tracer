@@ -2,6 +2,8 @@
 
 #include "VulkanHelper.h"
 
+#include <unordered_map>
+
 class PathTracer
 {
 public:
@@ -28,12 +30,16 @@ public:
         // AABB
         glm::vec3 CornerMin = glm::vec3(-1.0f);
         glm::vec3 CornerMax = glm::vec3(1.0f);
+        glm::vec3 Position = glm::vec3(0.0f);
+        glm::vec3 Scale = glm::vec3(1.0f);
 
         glm::vec3 Color = glm::vec3(0.8f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
         float Density = 1.0f;
         float Anisotropy = 0.0f;
 
+        std::string DensityTextureFilepath;
+        VulkanHelper::ImageView DensityTextureView;
         int HeterogeneousTextureIndex = -1; // -1 if homogeneous
         float HeterogenousSmoothing = 1.0f;
     };
@@ -93,6 +99,12 @@ public:
     [[nodiscard]] inline float GetEnvironmentIntensity() const { return m_EnvironmentIntensity; }
     [[nodiscard]] inline bool UseRayQueries() const { return m_UseRayQueries; }
 
+    // Camera accessors
+    [[nodiscard]] inline const glm::mat4& GetCameraViewInverse() const { return m_CameraViewInverse; }
+    [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
+    void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
+    void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
+
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
     void SetSamplesPerFrame(uint32_t samplesPerFrame, VulkanHelper::CommandBuffer commandBuffer);
@@ -122,6 +134,8 @@ private:
     VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
+    glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
+    glm::mat4 m_CameraProjectionInverse = glm::mat4(1.0f);
     uint32_t m_FrameCount = 0;
     uint32_t m_SamplesAccumulated = 0;
     uint32_t m_SamplesPerFrame = 1;
@@ -206,7 +220,39 @@ private:
 
     VulkanHelper::ThreadPool* m_ThreadPool;
 
+    struct VolumeGPU
+    {
+        // AABB
+        glm::vec3 CornerMin = glm::vec3(-1.0f);
+        glm::vec3 CornerMax = glm::vec3(1.0f);
+
+        glm::vec3 Color = glm::vec3(0.8f);
+        glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        float Density = 1.0f;
+        float Anisotropy = 0.0f;
+
+        int HeterogeneousTextureIndex = -1; // -1 if homogeneous
+        float HeterogenousSmoothing = 1.0f;
+
+        VolumeGPU() = default;
+
+        VolumeGPU(const Volume& volume)
+            : CornerMin(volume.CornerMin),
+              CornerMax(volume.CornerMax),
+              Color(volume.Color),
+              EmissiveColor(volume.EmissiveColor),
+              Density(volume.Density),
+              Anisotropy(volume.Anisotropy),
+              HeterogeneousTextureIndex(volume.HeterogeneousTextureIndex),
+              HeterogenousSmoothing(volume.HeterogenousSmoothing)
+        {
+            CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
+            CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
+        }
+    };
+
     std::vector<Volume> m_Volumes;
     VulkanHelper::Buffer m_VolumesBuffer;
-    std::vector<VulkanHelper::ImageView> m_VolumeDensityTextures;
+
+    std::unordered_map<std::string, Volume> m_ImportedVolumesCache;
 };

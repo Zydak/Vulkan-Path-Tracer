@@ -187,7 +187,7 @@ bool ScatteredInVolume(inout Payload payload, out bool nullCollision)
                 toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
 
                 bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
-                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(newDir, toLightEnv) * (float)!isObscuredByGeometry;
+                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, toLightEnv) * (float)!isObscuredByGeometry;
                 float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, newDir);
 
                 // Transmittance along the ray has to be accounted for
