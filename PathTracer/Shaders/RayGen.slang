@@ -115,7 +115,7 @@ void Main()
     accumulatedLight *= scale;
 
     float3 color;
-    if (uUBO.FrameCount > 0)
+    if (uUBO.FrameCount > 1)
     {
         float a = 1.0f / float(uUBO.FrameCount);
         color = lerp(prevColor, accumulatedLight, a);
@@ -142,32 +142,22 @@ bool ScatteredInVolume(inout Payload payload, out bool nullCollision)
         float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
 
         float scatterDistance = -1.0f;
-        bool isNullCollision = false;
         int scatteredVolumeIndex = -1;
         for (int i = 0; i < uUBO.VolumesCount; i++)
         {
-            bool isNullCollisionTemp = false;
-            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, uSampler, isNullCollisionTemp);
+            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, uSampler);
 
             // Choose the closest scatter distance
             if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
             {
                 scatterDistance = scatterDistanceTemp;
                 scatteredVolumeIndex = i;
-                isNullCollision = isNullCollisionTemp;
             }
         }
 
         if (scatterDistance >= 0.0f && (distanceToGeometry < 0.0f || scatterDistance < distanceToGeometry))
         {
             payload.Origin += payload.Direction * scatterDistance;
-            
-            if (isNullCollision)
-            {
-                // Null collision, just continue tracing
-                nullCollision = true;
-                return true;
-            }
             payload.Depth++;
 
             const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler);
