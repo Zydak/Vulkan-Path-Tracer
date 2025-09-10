@@ -122,7 +122,7 @@ void FlyCamera::InitializeFromMatrices(const glm::mat4& viewMatrix, const glm::m
     
     glm::vec3 forward = -glm::normalize(glm::vec3(viewMatrix[2]));
     
-    m_Yaw = glm::degrees(atan2f(forward.z, forward.x));
+    m_Yaw = glm::degrees(atan2f(forward.z, -forward.x));
     m_Pitch = glm::degrees(asinf(forward.y));
     m_Fov = glm::degrees(2.0f * atanf(1.0f / projectionMatrix[1][1]));
     m_AspectRatio = projectionMatrix[1][1] / projectionMatrix[0][0];

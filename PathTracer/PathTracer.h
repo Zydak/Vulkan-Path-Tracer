@@ -40,10 +40,14 @@ public:
         float Alpha = 1.0f;
         float DropletSize = 20.0f;
 
+        int HeterogeneousResourcesIndex = -1; // -1 if homogeneous
+        float HeterogenousSmoothing = 1.0f;
+
         std::string DensityTextureFilepath;
         VulkanHelper::ImageView DensityTextureView;
-        int HeterogeneousTextureIndex = -1; // -1 if homogeneous
-        float HeterogenousSmoothing = 1.0f;
+        
+        // Heterogeneous volumes are split into 4x4x4 regions for skipping empty space
+        VulkanHelper::Buffer MaxDensitiesBuffer;
     };
 
     enum class PhaseFunction
@@ -143,6 +147,8 @@ private:
     VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
+    constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 16;
+
     glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
     glm::mat4 m_CameraProjectionInverse = glm::mat4(1.0f);
     uint32_t m_FrameCount = 0;
@@ -243,7 +249,7 @@ private:
         float Alpha = 1.0f;
         float DropletSize = 20.0f;
 
-        int HeterogeneousTextureIndex = -1; // -1 if homogeneous
+        int HeterogeneousResourcesIndex = -1; // -1 if homogeneous
         float HeterogenousSmoothing = 1.0f;
 
         VolumeGPU() = default;
@@ -257,7 +263,7 @@ private:
               Anisotropy(volume.Anisotropy),
               Alpha(volume.Alpha),
               DropletSize(volume.DropletSize),
-              HeterogeneousTextureIndex(volume.HeterogeneousTextureIndex),
+              HeterogeneousResourcesIndex(volume.HeterogeneousResourcesIndex),
               HeterogenousSmoothing(volume.HeterogenousSmoothing)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);

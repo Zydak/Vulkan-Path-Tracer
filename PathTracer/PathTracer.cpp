@@ -413,7 +413,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     CreateOutputImageView();
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 20> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 21> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
@@ -433,7 +433,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{16, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
         VulkanHelper::DescriptorSet::BindingDescription{17, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
         VulkanHelper::DescriptorSet::BindingDescription{18, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
-        VulkanHelper::DescriptorSet::BindingDescription{19, 16, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE} // Volume density textures
+        VulkanHelper::DescriptorSet::BindingDescription{19, MAX_HETEROGENEOUS_VOLUMES, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume density textures
+        VulkanHelper::DescriptorSet::BindingDescription{20, MAX_HETEROGENEOUS_VOLUMES, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Volume max densities buffers
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -475,7 +476,13 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, 0, &m_EnvAliasMap) == VulkanHelper::VHResult::OK, "Failed to add env alias map buffer to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(17, 0, &m_VolumesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volumes buffer to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(18, 0, &m_LookupTableSampler) == VulkanHelper::VHResult::OK, "Failed to add lookup table sampler to descriptor set");
-    VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, 0, nullptr, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density texture to descriptor set");
+
+    for (int i = 0; i < (int)MAX_HETEROGENEOUS_VOLUMES; i++)
+    {
+        // Add empty descriptors for volume density textures and max density buffers, they will be updated when a volume is added
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)i, nullptr, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density texture to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(20, (uint32_t)i, nullptr) == VulkanHelper::VHResult::OK, "Failed to add volume max density buffer to descriptor set");
+    }
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
@@ -1126,7 +1133,7 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
             volume = entry;
 
             volume.DensityTextureView = vol.DensityTextureView;
-            volume.HeterogeneousTextureIndex = vol.HeterogeneousTextureIndex;
+            volume.HeterogeneousResourcesIndex = vol.HeterogeneousResourcesIndex;
             volume.DensityTextureFilepath = vol.DensityTextureFilepath;
             isAlreadyLoaded = true;
             break;
@@ -1172,6 +1179,7 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
 
         VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
         VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
+        VH_LOG_DEBUG("Max Density: {}", maxDensity);
 
         volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
         volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
@@ -1197,6 +1205,11 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
         densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
 
         // Prepare density data
+
+        // For each volume there is 32x32x32 grid of max densities precomputed for empty space skipping
+        std::array<float, 32768> volumeMaxDensities;
+        volumeMaxDensities.fill(0.0f);
+
         std::vector<float> densityData;
         densityData.reserve((size_t)dim.x() * (size_t)dim.y());
         for (int z = 0; z < dim.z(); z++)
@@ -1207,8 +1220,13 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
                 for (int x = 0; x < dim.x(); x++)
                 {
                     openvdb::math::Coord coord(min.x() + x, min.y() + y, min.z() + z);
-                    float value = floatGrid->tree().getValue(coord);
-                    densityData.push_back(value / maxDensity); // Normalize to [0, 1]
+                    float value = floatGrid->tree().getValue(coord) / maxDensity; // Normalize to [0, 1]
+
+                    int maxDensityGridIndex = ((x * 32) / dim.x()) + ((y * 32) / dim.y()) * 32 + ((z * 32) / dim.z()) * 1024;
+                    if (volumeMaxDensities[(uint32_t)maxDensityGridIndex] < value)
+                        volumeMaxDensities[(uint32_t)maxDensityGridIndex] = value;
+
+                    densityData.push_back(value);
                 }
             }
 
@@ -1235,11 +1253,20 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
 
         volume.DensityTextureView = VulkanHelper::ImageView::New(imageViewConfig).Value();
 
-        static int textureIndex = 0;
-        static const int MaxHeterogeneousVolumeTextures = 16; // I doubt you'd fit more than this in a scene
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)textureIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
-        volume.HeterogeneousTextureIndex = textureIndex;
-        textureIndex = (textureIndex + 1) % MaxHeterogeneousVolumeTextures;
+        VulkanHelper::Buffer::Config bufferConfig{};
+        bufferConfig.Device = m_Device;
+        bufferConfig.Size = sizeof(float) * volumeMaxDensities.size();
+        bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+        bufferConfig.DebugName = "VolumeMaxDensities";
+
+        volume.MaxDensitiesBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
+        VH_ASSERT(volume.MaxDensitiesBuffer.UploadData(volumeMaxDensities.data(), bufferConfig.Size, 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume max densities data");
+
+        static int hetVolumeIndex = 0;
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)hetVolumeIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(20, (uint32_t)hetVolumeIndex, &volume.MaxDensitiesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volume max densities buffer to descriptor set");
+        volume.HeterogeneousResourcesIndex = hetVolumeIndex;
+        hetVolumeIndex = (hetVolumeIndex + 1) % (int)MAX_HETEROGENEOUS_VOLUMES;
     }
 
     VolumeGPU volumeGPU(volume);
