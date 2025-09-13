@@ -81,13 +81,9 @@ void Main()
 
             payload.Emitted = float3(0.0f, 0.0f, 0.0f);
 
-            bool nullCollision = false;
-            bool scatteredInVolume = ScatteredInVolume(payload, nullCollision);
+            bool scatteredInVolume = ScatteredInVolume(payload);
 
-            if (nullCollision)
-                continue;
-
-            // If ray didn't scatter inside volume trace to the geometry surface
+            // If ray didn't scatter inside volume, trace to the geometry surface
             if (!scatteredInVolume)
                 TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
@@ -125,7 +121,7 @@ void Main()
         color = accumulatedLight;
     }
 
-    // I'm not exactly sure where, but a NAN happens from time to time. It's somewhere in the SampleGlass function
+    // I'm not exactly sure where, but a NAN happens from time to time. It's somewhere in the glass equations
     // but I can't pinpoint it. So just get rid of nans if there are any.
     if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
     {
@@ -133,10 +129,8 @@ void Main()
     }
 }
 
-bool ScatteredInVolume(inout Payload payload, out bool nullCollision)
+bool ScatteredInVolume(inout Payload payload)
 {
-    nullCollision = false;
-
     #ifdef ENABLE_VOLUMES
     {
         float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);

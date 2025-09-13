@@ -28,8 +28,7 @@ public struct Volume
     float m_Alpha;
     float m_DropletSize;
 
-    int m_HeterogeneousTextureIndex; // -1 if homogeneous
-    float m_HeterogenousSmoothing;
+    int m_DensityDataIndex; // -1 if homogeneous
 
     public float GetAnisotropy() { return m_Anisotropy; }
     public float GetDensity() { return m_Density; }
@@ -106,11 +105,11 @@ public struct Volume
         if (distanceInsideVolume <= 0.0f)
             return -1.0f; // No valid distance inside volume
 
-        if (m_HeterogeneousTextureIndex >= 0) // If volume is heterogeneous
+        if (m_DensityDataIndex >= 0) // If volume is heterogeneous
         {
             uint3 textureSize;
             uint numberOfLevels;
-            uVolumeDensityTexture[NonUniformResourceIndex(m_HeterogeneousTextureIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+            uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
 
             float3 blockSize = (m_CornerMax - m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
             float t = 0.0f;
@@ -135,7 +134,7 @@ public struct Volume
                 VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, rayDirection, blockMin, blockMax);  
 
                 // Use the precomputed max density for this block
-                float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_HeterogeneousTextureIndex)][blockIndex] * m_Density;
+                float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
                 maxDensity = max(maxDensity, 0.0001f); // Avoid zero max density
 
                 // Sample a distance based on the max density of the block
@@ -172,7 +171,7 @@ public struct Volume
                 float3 scatterPosition = rayOrigin + rayDirection * (tEnter + t);
                 float3 UV = (scatterPosition - m_CornerMin) / (m_CornerMax - m_CornerMin);
                 UV.z *= textureSize.z; // Scale Z to sample the texture array
-                float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_HeterogeneousTextureIndex)].SampleLevel(uTextureSampler, UV, 0).r * m_HeterogenousSmoothing, 0.0f, 1.0f) * m_Density;
+                float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * m_Density;
 
                 if (densityTextureValue / maxDensity < sampler.UniformFloat())
                 {
@@ -277,13 +276,13 @@ public struct Volume
             VolumeIntersection intersection = uVolumes[i].IntersectWithRay(origin, direction);
             intersection.HitPointNear = max(intersection.HitPointNear, 0.0f); // Clamp to 0, ray is inside AABB
 
-            if (uVolumes[i].m_HeterogeneousTextureIndex >= 0 && intersection.HitPointFar >= 0.0f)
+            if (uVolumes[i].m_DensityDataIndex >= 0 && intersection.HitPointFar >= 0.0f)
             {
                 // Heterogeneous volume, transmittance has to be integrated numerically
                 
                 uint3 textureSize;
                 uint numberOfLevels;
-                uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_HeterogeneousTextureIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+                uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
 
                 float3 blockSize = (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
                 float t = 0.0f;
@@ -310,7 +309,7 @@ public struct Volume
                     VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, direction, blockMin, blockMax);
 
                     // Use the precomputed max density for this block
-                    float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_HeterogeneousTextureIndex)][blockIndex] * uVolumes[i].m_Density;
+                    float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
                     maxDensity = max(maxDensity, 0.0001f); // Avoid zero max density
 
                     // Sample a distance based on the max density of the block
@@ -347,7 +346,7 @@ public struct Volume
                     float3 interactionPosition = origin + direction * (tEnter + t);
                     float3 UV = (interactionPosition - uVolumes[i].m_CornerMin) / (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin);
                     UV.z *= textureSize.z; // Scale Z to sample the texture array
-                    float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_HeterogeneousTextureIndex)].SampleLevel(uTextureSampler, UV, 0).r * uVolumes[i].m_HeterogenousSmoothing, 0.0f, 1.0f) * uVolumes[i].GetDensity();
+                    float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * uVolumes[i].GetDensity();
 
                     // Update transmittance based on actual density vs max density
                     transmittance *= 1.0f - (densityTextureValue / maxDensity);

@@ -40,8 +40,7 @@ public:
         float Alpha = 1.0f;
         float DropletSize = 20.0f;
 
-        int HeterogeneousResourcesIndex = -1; // -1 if homogeneous
-        float HeterogenousSmoothing = 1.0f;
+        int DensityDataIndex = -1; // -1 if homogeneous
 
         std::string DensityTextureFilepath;
         VulkanHelper::ImageView DensityTextureView;
@@ -135,7 +134,8 @@ public:
     void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
-    void ImportVolume(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
+    void AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
+    void RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
 
@@ -147,7 +147,7 @@ private:
     VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
-    constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 16;
+    constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 100;
 
     glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
     glm::mat4 m_CameraProjectionInverse = glm::mat4(1.0f);
@@ -249,8 +249,7 @@ private:
         float Alpha = 1.0f;
         float DropletSize = 20.0f;
 
-        int HeterogeneousResourcesIndex = -1; // -1 if homogeneous
-        float HeterogenousSmoothing = 1.0f;
+        int DensityDataIndex = -1; // -1 if homogeneous
 
         VolumeGPU() = default;
 
@@ -263,8 +262,7 @@ private:
               Anisotropy(volume.Anisotropy),
               Alpha(volume.Alpha),
               DropletSize(volume.DropletSize),
-              HeterogeneousResourcesIndex(volume.HeterogeneousResourcesIndex),
-              HeterogenousSmoothing(volume.HeterogenousSmoothing)
+              DensityDataIndex(volume.DensityDataIndex)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
@@ -273,6 +271,4 @@ private:
 
     std::vector<Volume> m_Volumes;
     VulkanHelper::Buffer m_VolumesBuffer;
-
-    std::unordered_map<std::string, Volume> m_ImportedVolumesCache;
 };

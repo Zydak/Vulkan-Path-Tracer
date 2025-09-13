@@ -1093,79 +1093,80 @@ void PathTracer::AddVolume(const Volume& volume, VulkanHelper::CommandBuffer com
         ReloadShaders(commandBuffer);
 }
 
-void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
 {
-    Volume volume{};
-    volume.DensityTextureFilepath = filepath;
+    if (volumeIndex >= m_Volumes.size())
+    {
+        VH_LOG_ERROR("Volume index out of range: {}/{}", volumeIndex, m_Volumes.size());
+        return;
+    }
+    auto& volume = m_Volumes[volumeIndex];
 
-    bool isAlreadyLoaded = false;
+    // Check if the density data is already loaded for another volume, if so just reuse it, no point in wasting memory
+    bool isDensityDataAlreadyLoaded = false;
     for (const auto& vol : m_Volumes)
     {
         if (vol.DensityTextureFilepath == filepath)
         {
-            VH_ASSERT(m_ImportedVolumesCache.find(filepath) != m_ImportedVolumesCache.end(), "This should never happen. Filepath: {}", filepath);
-            const auto& entry = m_ImportedVolumesCache[filepath];
-
-            volume = entry;
-
             volume.DensityTextureView = vol.DensityTextureView;
-            volume.HeterogeneousResourcesIndex = vol.HeterogeneousResourcesIndex;
+            volume.DensityDataIndex = vol.DensityDataIndex;
             volume.DensityTextureFilepath = vol.DensityTextureFilepath;
-            isAlreadyLoaded = true;
+            volume.MaxDensitiesBuffer = vol.MaxDensitiesBuffer;
+            isDensityDataAlreadyLoaded = true;
             break;
         }
     }
 
-    if (!isAlreadyLoaded)
+    if (std::filesystem::exists(filepath) == false)
     {
-        if (std::filesystem::exists(filepath) == false)
+        VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
+        return;
+    }
+
+    VH_LOG_DEBUG("Loading OPENDVDB volume: {}", filepath);
+    openvdb::io::File file(filepath);
+
+    try {
+        file.open();  // This will throw if the file can't be opened
+    } catch (const openvdb::IoError& e) {
+        VH_LOG_ERROR("Failed to open OpenVDB file '{}': {}", filepath, e.what());
+        return;
+    }
+
+    openvdb::GridBase::Ptr densityGrid;
+    for (openvdb::io::File::NameIterator nameIter = file.beginName(); nameIter != file.endName(); ++nameIter)
+    {
+        if (nameIter.gridName() == "density")
         {
-            VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
-            return;
+            densityGrid = file.readGrid(nameIter.gridName());
+            break;
         }
+    }
+    file.close();
 
-        VH_LOG_DEBUG("Loading OPENDVDB volume: {}", filepath);
-        openvdb::io::File file(filepath);
+    openvdb::FloatGrid::Ptr floatGrid = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
 
-        try {
-            file.open();  // This will throw if the file can't be opened
-        } catch (const openvdb::IoError& e) {
-            VH_LOG_ERROR("Failed to open OpenVDB file '{}': {}", filepath, e.what());
-            return;
-        }
+    float maxDensity = openvdb::tools::minMax(floatGrid->tree(), true).max();
 
-        openvdb::GridBase::Ptr densityGrid;
-        for (openvdb::io::File::NameIterator nameIter = file.beginName(); nameIter != file.endName(); ++nameIter)
-        {
-            if (nameIter.gridName() == "density")
-            {
-                densityGrid = file.readGrid(nameIter.gridName());
-                break;
-            }
-        }
-        file.close();
+    openvdb::math::Coord dim = floatGrid->evalActiveVoxelDim();
+    openvdb::math::Coord min = floatGrid->evalActiveVoxelBoundingBox().min();
+    openvdb::math::Coord max = floatGrid->evalActiveVoxelBoundingBox().max();
 
-        openvdb::FloatGrid::Ptr floatGrid = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
+    VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
+    VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
+    VH_LOG_DEBUG("Max Density: {}", maxDensity);
 
-        float maxDensity = openvdb::tools::minMax(floatGrid->tree(), true).max();
+    volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
+    volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
 
-        openvdb::math::Coord dim = floatGrid->evalActiveVoxelDim();
-        openvdb::math::Coord min = floatGrid->evalActiveVoxelBoundingBox().min();
-        openvdb::math::Coord max = floatGrid->evalActiveVoxelBoundingBox().max();
+    // Scale it down so AABB is more or less -1 to 1
+    float maxDim = glm::max(glm::max(dim.x(), dim.y()), dim.z());
+    volume.CornerMin /= maxDim / 2.0f;
+    volume.CornerMax /= maxDim / 2.0f;
 
-        VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
-        VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
-        VH_LOG_DEBUG("Max Density: {}", maxDensity);
-
-        volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
-        volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
-
-        // Scale it down so AABB is more or less -1 to 1
-        float maxDim = glm::max(glm::max(dim.x(), dim.y()), dim.z());
-        volume.CornerMin /= maxDim / 2.0f;
-        volume.CornerMax /= maxDim / 2.0f;
-
-        m_ImportedVolumesCache[filepath] = volume;
+    if (!isDensityDataAlreadyLoaded)
+    {
+        volume.DensityTextureFilepath = filepath;
 
         // Prepare density texture
         VulkanHelper::Image::Config imageConfig{};
@@ -1238,26 +1239,26 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
         volume.MaxDensitiesBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
         VH_ASSERT(volume.MaxDensitiesBuffer.UploadData(volumeMaxDensities.data(), bufferConfig.Size, 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume max densities data");
 
-        static int hetVolumeIndex = 0;
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)hetVolumeIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
-        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(20, (uint32_t)hetVolumeIndex, &volume.MaxDensitiesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volume max densities buffer to descriptor set");
-        volume.HeterogeneousResourcesIndex = hetVolumeIndex;
-        hetVolumeIndex = (hetVolumeIndex + 1) % (int)MAX_HETEROGENEOUS_VOLUMES;
+        static int densityDataIndex = 0;
+        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)densityDataIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
+        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(20, (uint32_t)densityDataIndex, &volume.MaxDensitiesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volume max densities buffer to descriptor set");
+        volume.DensityDataIndex = densityDataIndex;
+        densityDataIndex = (densityDataIndex + 1) % (int)MAX_HETEROGENEOUS_VOLUMES;
     }
 
-    VolumeGPU volumeGPU(volume);
+    SetVolume(volumeIndex, volume, commandBuffer);
+}
 
-    const uint32_t initialSize = m_Volumes.size();
-    VH_ASSERT(m_VolumesBuffer.UploadData(&volumeGPU, sizeof(VolumeGPU), m_Volumes.size() * sizeof(VolumeGPU), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume data");
-    m_Volumes.push_back(volume);
-
-    // Update Uniform Buffer
-    uint32_t count = (uint32_t)m_Volumes.size();
-    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&count, sizeof(uint32_t), offsetof(PathTracerUniform, VolumesCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload volume count");
-    ResetPathTracing();
-
-    if (initialSize == 0)
-        ReloadShaders(commandBuffer);
+void PathTracer::RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer)
+{
+    auto& volume = m_Volumes[volumeIndex];
+    volume.DensityTextureFilepath = "";
+    volume.DensityTextureView = VulkanHelper::ImageView();
+    volume.DensityDataIndex = -1;
+    volume.MaxDensitiesBuffer = VulkanHelper::Buffer();
+    volume.CornerMin = glm::vec3(-1.0f);
+    volume.CornerMax = glm::vec3(1.0f);
+    SetVolume(volumeIndex, volume, commandBuffer);
 }
 
 void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer)
