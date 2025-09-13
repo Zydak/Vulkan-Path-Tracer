@@ -44,6 +44,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     m_InitialViewMatrix = glm::inverse(m_PathTracer.GetCameraViewInverse());
     m_InitialProjectionMatrix = glm::inverse(m_PathTracer.GetCameraProjectionInverse());
     m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
+    UpdateCamera();
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
 }
@@ -797,18 +798,6 @@ void Editor::RenderVolumeSettings()
         });
     }
 
-    if (ImGui::Button("Import Volume"))
-    {
-        static std::vector<std::string> selection;
-        selection = pfd::open_file("Select Volume", ".", {"OpenVDB Files", "*.vdb"}).result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.ImportVolume(selection[0], commandBuffer);
-            });
-        }
-    }
-
     if (m_PathTracer.GetVolumes().empty())
     {
         ImGui::Text("No volumes in the scene.");
@@ -841,6 +830,31 @@ void Editor::RenderVolumeSettings()
     bool volumeModified = false;
     PathTracer::Volume selectedVolume = volumes[(size_t)selectedVolumeIndex];
 
+    if (ImGui::Button("Import Density Data (.vdb)"))
+    {
+        static std::vector<std::string> selection;
+        selection = pfd::open_file("Select Volume", ".", {"OpenVDB Files", "*.vdb"}).result();
+        if (!selection.empty())
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_PathTracer.AddDensityDataToVolume((uint32_t)selectedVolumeIndex, selection[0], commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+    }
+
+    if (selectedVolume.DensityDataIndex != -1)
+    {
+        ImGui::SameLine();
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_PathTracer.RemoveDensityDataFromVolume((uint32_t)selectedVolumeIndex, commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+    }
+
     ImGui::PushID("VolumeSettings");
 
     if (ImGui::InputFloat3("Corner Min", &selectedVolume.CornerMin.x))
@@ -858,11 +872,6 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
-    if (ImGui::SliderFloat("Heterogenous Smoothness", &selectedVolume.HeterogenousSmoothing, 0.0f, 10.0f))
-    {
-        volumeModified = true;
-        selectedVolume.HeterogenousSmoothing = selectedVolume.HeterogenousSmoothing;
-    }
 
     if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN || 
         selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
