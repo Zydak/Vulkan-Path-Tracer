@@ -14,9 +14,12 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 
 # Building
 ## Prerequisites
-- [Vulkan SDK](https://vulkan.lunarg.com/sdk/home).
-- Cmake 3.12
-- C++ 20
+- [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
+- Cmake 3.5
+- OpenVDB (building this is absolutely beyond me for now)
+
+On Windows you can install OpenVDB with vcpkg using `vcpkg install openvdb`.
+On Linux you can use whichever package manager you want e.g. `sudo apt install libopenvdb-dev`.
 
 ## Windows
 ```
@@ -24,7 +27,7 @@ git clone --recursive https://github.com/Zydak/Vulkan-Path-Tracer
 cd Vulkan-Path-Tracer
 mkdir build
 cd build
-cmake ..
+cmake .. -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 ```
 Then open generated Visual Studio solution and build.
 
