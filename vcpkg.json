@@ -2,7 +2,8 @@
     "name": "vulkan-path-tracer",
     "version": "0.1.0",
     "dependencies": [
-        "openvdb"
+        "openvdb",
+		"blosc"
     ],
     "builtin-baseline": "62efe42f53b1886a20cbeb22ee9a27736d20f149"
 }
