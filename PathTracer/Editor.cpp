@@ -41,6 +41,8 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     });
     
     // Initialize camera with scene data
+    m_InitialViewMatrix = glm::inverse(m_PathTracer.GetCameraViewInverse());
+    m_InitialProjectionMatrix = glm::inverse(m_PathTracer.GetCameraProjectionInverse());
     m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
@@ -141,8 +143,8 @@ void Editor::RenderViewportSettings()
 
         PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
             Data* d = (Data*)data.get();
-            m_Device.WaitUntilIdle();
             ResizeImage(d->Width, d->Height, commandBuffer);
+            m_Camera.SetAspectRatio((float)d->Width / (float)d->Height);
             m_RenderTime = 0.0f;
         });
     }
@@ -204,10 +206,9 @@ void Editor::RenderCameraSettings()
         
     if (ImGui::Button("Reset Camera"))
     {
-        m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 3.0f));
-        m_Camera.SetRotation(-90.0f, 0.0f);
-        m_Camera.SetFov(45.0f);
+        m_Camera = FlyCamera(m_InitialViewMatrix, m_InitialProjectionMatrix);
         UpdateCamera();
+        m_RenderTime = 0.0f;
     }
         
     ImGui::Text("Controls:");
@@ -284,7 +285,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetBaseColorTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -298,7 +298,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetBaseColorTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -313,7 +312,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetNormalTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -327,7 +325,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetNormalTexture((uint32_t)selectedMaterialIndex, "Default Normal Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -342,7 +339,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetRoughnessTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -356,7 +352,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetRoughnessTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -371,7 +366,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetMetallicTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -385,7 +379,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetMetallicTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -400,7 +393,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetEmissiveTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -414,7 +406,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetEmissiveTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -520,7 +511,6 @@ void Editor::RenderInfo()
     if(ImGui::Button("Reload Shaders"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_Device.WaitUntilIdle();
             m_PathTracer.ReloadShaders(commandBuffer);
             m_RenderTime = 0.0f;
         });
@@ -537,11 +527,12 @@ void Editor::RenderInfo()
             m_CurrentSceneFilepath = selection[0];
 
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetScene(m_CurrentSceneFilepath);
                 m_RenderTime = 0.0f;
                 m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
                 m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+                m_InitialViewMatrix = glm::inverse(m_PathTracer.GetCameraViewInverse());
+                m_InitialProjectionMatrix = glm::inverse(m_PathTracer.GetCameraProjectionInverse());
                 m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
             });
         }
@@ -704,7 +695,6 @@ void Editor::RenderEnvMapSettings()
         {
             envMapFilepath = selection[0];
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetEnvMapFilepath(envMapFilepath, commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -849,8 +839,7 @@ void Editor::RenderVolumeSettings()
     ImGui::ListBox("Volumes", &selectedVolumeIndex, volumeNamesCStr.data(), volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
 
     bool volumeModified = false;
-    static PathTracer::Volume selectedVolume;
-    selectedVolume = volumes[(size_t)selectedVolumeIndex];
+    PathTracer::Volume selectedVolume = volumes[(size_t)selectedVolumeIndex];
 
     ImGui::PushID("VolumeSettings");
 
@@ -912,8 +901,9 @@ void Editor::RenderVolumeSettings()
             int volumeIndex;
         };
 
-        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
-            m_PathTracer.SetVolume((uint32_t)selectedVolumeIndex, selectedVolume, cmd);
+        PushDeferredTask(std::make_shared<DataVol>(DataVol{ selectedVolume, (int)selectedVolumeIndex }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
+            auto volumeData = std::static_pointer_cast<DataVol>(data);
+            m_PathTracer.SetVolume((uint32_t)volumeData->volumeIndex, volumeData->vol, cmd);
             m_RenderTime = 0.0f;
         });
     }

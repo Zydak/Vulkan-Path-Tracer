@@ -53,6 +53,8 @@ private:
     bool m_IsDraggingViewport = false;
     glm::vec2 m_LastMousePos = {0.0f, 0.0f};
     std::chrono::steady_clock::time_point m_LastFrameTime = std::chrono::steady_clock::now();
+    glm::mat4 m_InitialViewMatrix = glm::mat4(1.0f);
+    glm::mat4 m_InitialProjectionMatrix = glm::mat4(1.0f);
 
     // A lot of vulkan commands can't be called when the render pass is active. And because ImGui
     // Is an immediate mode GUI, they have to be deferred to the beginning of the next frame.

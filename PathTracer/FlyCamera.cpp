@@ -45,10 +45,10 @@ void FlyCamera::ProcessKeyboard(Direction direction, float deltaTime)
             m_Position += m_Right * velocity;
             break;
         case Direction::UP:
-            m_Position -= m_WorldUp * velocity;
+            m_Position -= m_Up * velocity;
             break;
         case Direction::DOWN:
-            m_Position += m_WorldUp * velocity;
+            m_Position += m_Up * velocity;
             break;
     }
 }
@@ -85,14 +85,7 @@ glm::mat4 FlyCamera::GetViewMatrix() const
 {
     glm::mat4 view = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
 
-    glm::mat4 vulkanTransform = glm::mat4(
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, -1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
-    );
-
-    return view * vulkanTransform;
+    return view;
 }
 
 glm::mat4 FlyCamera::GetProjectionMatrix() const
@@ -116,16 +109,33 @@ void FlyCamera::UpdateCameraVectors()
 
 void FlyCamera::InitializeFromMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
 {
-    glm::mat3 rotation = glm::mat3(viewMatrix);
-    glm::vec3 translation = glm::vec3(viewMatrix[3]);
-    m_Position = -glm::transpose(rotation) * translation;
+    glm::mat4 invView = glm::inverse(viewMatrix);
+    m_Position = glm::vec3(invView[3]);
     
-    glm::vec3 forward = -glm::normalize(glm::vec3(viewMatrix[2]));
+    // In a view matrix, the forward direction is the negative third row (negative Z axis)
+    glm::vec3 forward = -glm::vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+    forward = glm::normalize(forward);
     
-    m_Yaw = glm::degrees(atan2f(forward.z, -forward.x));
-    m_Pitch = glm::degrees(asinf(forward.y));
-    m_Fov = glm::degrees(2.0f * atanf(1.0f / projectionMatrix[1][1]));
-    m_AspectRatio = projectionMatrix[1][1] / projectionMatrix[0][0];
+    // Calculate yaw and pitch from the forward direction
+    // Yaw is rotation around Y axis (horizontal rotation)
+    m_Yaw = glm::degrees((float)atan2(forward.z, forward.x));
+    
+    // Pitch is rotation around X axis (vertical rotation)
+    m_Pitch = glm::degrees((float)asin(forward.y));
+    
+    // For perspective projection: P[1][1] = 1 / tan(fov/2)
+    // Therefore: fov = 2 * atan(1 / P[1][1])
+    if (projectionMatrix[1][1] != 0.0f)
+    {
+        m_Fov = glm::degrees(2.0f * (float)atan(1.0f / projectionMatrix[1][1]));
+    }
+    
+    // For perspective projection: P[0][0] = P[1][1] / aspectRatio
+    // Therefore: aspectRatio = P[1][1] / P[0][0]
+    if (projectionMatrix[0][0] != 0.0f && projectionMatrix[1][1] != 0.0f)
+    {
+        m_AspectRatio = projectionMatrix[1][1] / projectionMatrix[0][0];
+    }
     
     UpdateCameraVectors();
 }
