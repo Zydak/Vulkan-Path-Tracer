@@ -262,13 +262,5 @@ void Main(inout Payload payload, in float2 attrib)
     // Invalid samples have to be discarded
     bool isInvalid = scatterSample.PDF <= 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
-
-    if (isInvalid)
-    {
-        payload.BxDF = float3(0.0f, 0.0f, 0.0f);
-        payload.PDF = 1.0f;
-        payload.Emitted = float3(10.0f, 0.0f, 0.0f); // Debug red color to see when this happens
-    }
-
     // ---------------------------------------------------------------------------------
 }
