@@ -778,9 +778,6 @@ void PathTracer::SetEmissiveTexture(uint32_t index, const std::string& filePath,
 
 void PathTracer::SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_MaxDepth == maxDepth)
-        return;
-    
     m_MaxDepth = maxDepth;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&maxDepth, sizeof(uint32_t), offsetof(PathTracerUniform, MaxDepth), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -793,9 +790,6 @@ void PathTracer::SetMaxSamplesAccumulated(uint32_t maxSamples)
 
 void PathTracer::SetSamplesPerFrame(uint32_t samplesPerFrame, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_SamplesPerFrame == samplesPerFrame)
-        return;
-
     m_SamplesPerFrame = samplesPerFrame;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&samplesPerFrame, sizeof(uint32_t), offsetof(PathTracerUniform, SampleCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -803,9 +797,6 @@ void PathTracer::SetSamplesPerFrame(uint32_t samplesPerFrame, VulkanHelper::Comm
 
 void PathTracer::SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_MaxLuminance == maxLuminance)
-        return;
-
     m_MaxLuminance = maxLuminance;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&maxLuminance, sizeof(float), offsetof(PathTracerUniform, MaxLuminance), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -813,9 +804,6 @@ void PathTracer::SetMaxLuminance(float maxLuminance, VulkanHelper::CommandBuffer
 
 void PathTracer::SetFocusDistance(float focusDistance, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_FocusDistance == focusDistance)
-        return;
-
     m_FocusDistance = focusDistance;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&focusDistance, sizeof(float), offsetof(PathTracerUniform, FocusDistance), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -823,9 +811,6 @@ void PathTracer::SetFocusDistance(float focusDistance, VulkanHelper::CommandBuff
 
 void PathTracer::SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_DepthOfFieldStrength == depthOfFieldStrength)
-        return;
-
     m_DepthOfFieldStrength = depthOfFieldStrength;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&depthOfFieldStrength, sizeof(float), offsetof(PathTracerUniform, DepthOfFieldStrength), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -833,9 +818,6 @@ void PathTracer::SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelpe
 
 void PathTracer::SetEnvMapFilepath(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_EnvMapFilepath == filePath)
-        return;
-    
     m_EnvMapFilepath = filePath;
 
     LoadEnvironmentMap(filePath, commandBuffer);
@@ -846,9 +828,6 @@ void PathTracer::SetEnvMapFilepath(const std::string& filePath, VulkanHelper::Co
 
 void PathTracer::SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_EnvMapRotationAzimuth == azimuth)
-        return;
-
     m_EnvMapRotationAzimuth = azimuth;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&azimuth, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAzimuth), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -856,9 +835,6 @@ void PathTracer::SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer com
 
 void PathTracer::SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_EnvMapRotationAltitude == altitude)
-        return;
-
     m_EnvMapRotationAltitude = altitude;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&altitude, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAltitude), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     ResetPathTracing();
@@ -1219,7 +1195,7 @@ void PathTracer::ImportVolume(const std::string& filepath, VulkanHelper::Command
             {
                 for (int x = 0; x < dim.x(); x++)
                 {
-                    openvdb::math::Coord coord(min.x() + x, min.y() + y, min.z() + z);
+                    openvdb::math::Coord coord(min.x() + x, min.y() + (dim.y() - 1 - y), min.z() + z); // Y has to be flipped for vulkan
                     float value = floatGrid->tree().getValue(coord) / maxDensity; // Normalize to [0, 1]
 
                     int maxDensityGridIndex = ((x * 32) / dim.x()) + ((y * 32) / dim.y()) * 32 + ((z * 32) / dim.z()) * 1024;
@@ -1366,9 +1342,6 @@ VulkanHelper::ImageView PathTracer::LoadDefaultTexture(VulkanHelper::CommandBuff
 
 void PathTracer::SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_EnableEnvMapMIS == value)
-        return;
-    
     m_EnableEnvMapMIS = value;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1376,9 +1349,6 @@ void PathTracer::SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuf
 
 void PathTracer::SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_ShowEnvMapDirectly == value)
-        return;
-
     m_ShowEnvMapDirectly = value;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1386,9 +1356,6 @@ void PathTracer::SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer 
 
 void PathTracer::SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_UseOnlyGeometryNormals == useOnlyGeometryNormals)
-        return;
-
     m_UseOnlyGeometryNormals = useOnlyGeometryNormals;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1396,9 +1363,6 @@ void PathTracer::SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHe
 
 void PathTracer::SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_UseEnergyCompensation == useEnergyCompensation)
-        return;
-
     m_UseEnergyCompensation = useEnergyCompensation;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1406,9 +1370,6 @@ void PathTracer::SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelp
 
 void PathTracer::SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_FurnaceTestMode == furnaceTestMode)
-        return;
-
     m_FurnaceTestMode = furnaceTestMode;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1416,9 +1377,6 @@ void PathTracer::SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandB
 
 void PathTracer::SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_EnvironmentIntensity == environmentIntensity)
-        return;
-
     m_EnvironmentIntensity = environmentIntensity;
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_EnvironmentIntensity, sizeof(float), offsetof(PathTracerUniform, EnvironmentIntensity), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload environment intensity");
     ResetPathTracing();
@@ -1426,9 +1384,6 @@ void PathTracer::SetEnvironmentIntensity(float environmentIntensity, VulkanHelpe
 
 void PathTracer::SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_UseRayQueries == useRayQueries)
-        return;
-
     m_UseRayQueries = useRayQueries;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
@@ -1436,33 +1391,24 @@ void PathTracer::SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffe
 
 void PathTracer::SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_CameraViewInverse != view)
-    {
-        m_CameraViewInverse = view;
+    m_CameraViewInverse = view;
 
-        VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraViewInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraViewInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraViewInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraViewInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
-        ResetPathTracing();
-    }
+    ResetPathTracing();
 }
 
 void PathTracer::SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_CameraProjectionInverse != projection)
-    {
-        m_CameraProjectionInverse = projection;
+    m_CameraProjectionInverse = projection;
 
-        VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraProjectionInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&m_CameraProjectionInverse, sizeof(glm::mat4), offsetof(PathTracerUniform, CameraProjectionInverse), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
-        ResetPathTracing();
-    }
+    ResetPathTracing();
 }
 
 void PathTracer::SetPhaseFunction(PhaseFunction phaseFunction, VulkanHelper::CommandBuffer commandBuffer)
 {
-    if (m_PhaseFunction == phaseFunction)
-        return;
-
     m_PhaseFunction = phaseFunction;
     ResetPathTracing();
     ReloadShaders(commandBuffer);

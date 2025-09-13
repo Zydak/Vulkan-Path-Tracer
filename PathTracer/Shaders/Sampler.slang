@@ -291,7 +291,7 @@ public struct Sampler
         const float sinTheta = sin(theta);
         const float v = theta * M_1_OVER_PI;
 
-        toLight = float3(sinPhi * sinTheta, cosTheta, -cosPhi * sinTheta);
+        toLight = float3(sinPhi * sinTheta, -cosTheta, -cosPhi * sinTheta);
 
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);

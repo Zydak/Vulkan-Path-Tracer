@@ -129,7 +129,7 @@ public float PowerHeuristics(float pdfA, float pdfB)
 
 public float2 DirectionToUV(in float3 v)
 {
-    float gamma = asin(-v.y);
+    float gamma = asin(v.y);
     float theta = atan2(v.x, -v.z);
 
     float2 uv = float2(theta * M_1_OVER_PI * 0.5F, gamma * M_1_OVER_PI) + 0.5F;
