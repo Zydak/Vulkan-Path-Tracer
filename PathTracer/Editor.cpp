@@ -653,6 +653,15 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static int splitScreenCount = (int)m_PathTracer.GetSplitScreenCount();
+    if (ImGui::SliderInt("Split Screen Count", &splitScreenCount, 1, 4, "%d"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetSplitScreenCount((uint32_t)splitScreenCount, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderEnvMapSettings()

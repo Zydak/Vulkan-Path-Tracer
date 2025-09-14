@@ -30,12 +30,17 @@ public struct Vertex
     public float2 TexCoord;
 };
 
+public struct PushConstantData
+{
+    public uint FrameCount;
+    public uint Seed;
+    public uint ChunkIndex;
+};
+
 public struct UniformBuffer
 {
     public float4x4 ViewInverse;
     public float4x4 ProjectionInverse;
-    public uint FrameCount;
-    public uint Seed;
     public uint SampleCount;
     public uint MaxDepth;
     public float MaxLuminance;
@@ -45,6 +50,7 @@ public struct UniformBuffer
     public float EnvMapRotationAltitude;
     public uint VolumesCount;
     public float EnvironmentIntensity;
+    public uint ScreenSplitCount;
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)

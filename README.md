@@ -41,10 +41,12 @@ Executable will be in `build/PathTracer/VulkanPathTracer`.
 # Features Overview
 
 - BSDF with importance sampling
-- Energy compensation implemented according to [[Turquin 2018]](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf) paper.
+- Energy compensation implemented according to [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf).
 - HDR Environment Maps with importance sampling
 - NEE for environment map light
 - Volumetric scattering with importance sampling implemented according to [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
+- Non uniform volumes imported from OpenVDB files.
+- Henyey-Greenstein, Draine, and approximated MIE implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Textures and Normal Maps
 - Editor
@@ -64,14 +66,17 @@ If you're interested in details of the implementation of these features, look at
 <p align="center">
 
 <img src="./Gallery/GodRays.png"/>
+<img src="./Gallery/Cloud2.png"/>
 <img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/DragonHead.png"/>
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
+<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/CornellBox.png"/>
 <img src="./Gallery/VolumeLight.png"/>
+<img src="./Gallery/CloudBackLight.png">
 <img src="./Gallery/Mustang0.png"/>
 <img src="./Gallery/FogCarUndenoised.png"/>
 <img src="./Gallery/TeapotMarble.png"/>
@@ -93,6 +98,7 @@ If you're interested in details of the implementation of these features, look at
 - [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
 - [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - [Scratch a pixel article on volumes](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html)
+- [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/)
 
 ## Models
 - https://developer.nvidia.com/orca/amazon-lumberyard-bistro - Bistro
@@ -107,3 +113,5 @@ If you're interested in details of the implementation of these features, look at
 - https://www.cgbookcase.com/ - Textures for teapots
 - https://casual-effects.com/g3d/data10/ - Breakfast Room
 - https://luxcorerender.org/example-scenes/ - Cannele & Fromage
+- https://disneyanimation.com/resources/clouds/ - Disney Cloud
+- https://www.blackboxcolour.com/assets - Other clouds
