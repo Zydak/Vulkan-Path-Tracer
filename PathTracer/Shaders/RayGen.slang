@@ -20,22 +20,20 @@ import Defines;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
+[[vk::push_constant]] PushConstantData uPushConstants;
+
 [shader("raygeneration")]
 void Main()
 {
-    uint3 size = DispatchRaysDimensions();
+    uint3 size = DispatchRaysDimensions() * uUBO.ScreenSplitCount;
     uint3 LaunchID = DispatchRaysIndex();
 
-    // // TEST
-
-    // const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f);
-    // const float2 pixelUV = pixelCenter / float2(size.xy);
-
-    // uImage[LaunchID.xy] = uVolumeDensityTexture.SampleLevel(uSampler, float3(pixelUV, uUBO.FrameCount % 154), 0);
-    // return;
+    uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
+    LaunchID.x += (splitScreenDispatchIndex % uUBO.ScreenSplitCount) * (size.x / uUBO.ScreenSplitCount);
+    LaunchID.y += (splitScreenDispatchIndex / uUBO.ScreenSplitCount) * (size.y / uUBO.ScreenSplitCount);
 
     Payload payload;
-    payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uUBO.Seed);
+    payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uPushConstants.Seed);
 
     float3 prevColor = uImage[LaunchID.xy].rgb;
 
@@ -111,9 +109,9 @@ void Main()
     accumulatedLight *= scale;
 
     float3 color;
-    if (uUBO.FrameCount > 1)
+    if (uPushConstants.FrameCount > 1)
     {
-        float a = 1.0f / float(uUBO.FrameCount);
+        float a = 1.0f / float(uPushConstants.FrameCount);
         color = lerp(prevColor, accumulatedLight, a);
     }
     else

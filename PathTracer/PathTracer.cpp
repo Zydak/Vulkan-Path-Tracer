@@ -40,7 +40,6 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     uniformBufferConfig.Device = device;
     uniformBufferConfig.Size = sizeof(PathTracerUniform);
     uniformBufferConfig.Usage = VulkanHelper::Buffer::Usage::UNIFORM_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
-    uniformBufferConfig.CpuMapable = true;
     pathTracer.m_PathTracerUniformBuffer = VulkanHelper::Buffer::New(uniformBufferConfig).Value();
 
     VulkanHelper::Buffer::Config materialsBufferConfig{};
@@ -79,6 +78,12 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
         pathTracer.m_UseRayQueries = false;
     }
 
+    VulkanHelper::PushConstant::Config pushConstantConfig{};
+    pushConstantConfig.Stage = VulkanHelper::ShaderStages::RAYGEN_BIT;
+    pushConstantConfig.Size = sizeof(PushConstantData);
+
+    pathTracer.m_PathTracerPushConstant = VulkanHelper::PushConstant::New(pushConstantConfig).Value();
+
     return pathTracer;
 }
 
@@ -90,12 +95,6 @@ bool PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
     static auto timer = std::chrono::high_resolution_clock::now();
     m_OutputImageView.GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::GENERAL, commandBuffer);
 
-    struct Data
-    {
-        uint32_t FrameCount;
-        uint32_t Seed;
-    };
-
     auto PCGHash = [](uint32_t input){
         uint32_t state = input * 747796405u + 2891336453u;
         uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
@@ -104,16 +103,18 @@ bool PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
 
     uint32_t timeElapsed = (uint32_t)((uint64_t)std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - timer).count() % UINT32_MAX);
 
-    Data data;
+    PushConstantData data;
     data.FrameCount = m_FrameCount;
     data.Seed = PCGHash(timeElapsed); // Random seed for each frame
-    
-    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&data, sizeof(Data), offsetof(PathTracerUniform, FrameCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform buffer");
-    
+    data.ChunkIndex = m_DispatchCount % (m_ScreenChunkCount * m_ScreenChunkCount);
+
+    VH_ASSERT(m_PathTracerPushConstant.SetData(&data, sizeof(PushConstantData)) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
+
     m_PathTracerPipeline.Bind(commandBuffer);
-    m_PathTracerPipeline.RayTrace(commandBuffer, m_OutputImageView.GetImage().GetWidth(), m_OutputImageView.GetImage().GetHeight());
-    m_FrameCount++;
-    m_SamplesAccumulated += m_SamplesPerFrame;
+    m_PathTracerPipeline.RayTrace(commandBuffer, m_OutputImageView.GetImage().GetWidth() / m_ScreenChunkCount, m_OutputImageView.GetImage().GetHeight() / m_ScreenChunkCount);
+    m_DispatchCount++;
+    m_FrameCount = (uint32_t)glm::floor((float)m_DispatchCount / (float)(m_ScreenChunkCount * m_ScreenChunkCount));
+    m_SamplesAccumulated = (m_FrameCount * m_SamplesPerFrame);
 
     return false;
 }
@@ -498,6 +499,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.EnvMapRotationAltitude = m_EnvMapRotationAltitude;
     pathTracerUniform.VolumesCount = 0; // Starts empty
     pathTracerUniform.EnvironmentIntensity = m_EnvironmentIntensity;
+    pathTracerUniform.ScreenChunkCount = m_ScreenChunkCount;
 
     VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&pathTracerUniform, sizeof(PathTracerUniform), 0, &initializationCmd) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
 
@@ -551,6 +553,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pipelineConfig.MissShaders.PushBack(missShader);
     pipelineConfig.MissShaders.PushBack(shadowMissShader);
     pipelineConfig.DescriptorSets.PushBack(m_PathTracerDescriptorSet);
+    pipelineConfig.PushConstant = &m_PathTracerPushConstant;
     pipelineConfig.CommandBuffer = &initializationCmd;
 
     m_PathTracerPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
@@ -894,6 +897,7 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
     pipelineConfig.MissShaders.PushBack(missShaderRes.Value());
     pipelineConfig.MissShaders.PushBack(shadowMissShaderRes.Value());
     pipelineConfig.DescriptorSets.PushBack(m_PathTracerDescriptorSet);
+    pipelineConfig.PushConstant = &m_PathTracerPushConstant;
     pipelineConfig.CommandBuffer = &commandBuffer;
 
     m_PathTracerPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
@@ -1413,4 +1417,11 @@ void PathTracer::SetPhaseFunction(PhaseFunction phaseFunction, VulkanHelper::Com
     m_PhaseFunction = phaseFunction;
     ResetPathTracing();
     ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_ScreenChunkCount = count;
+    VH_ASSERT(m_PathTracerUniformBuffer.UploadData(&count, sizeof(uint32_t), offsetof(PathTracerUniform, ScreenChunkCount), &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
+    ResetPathTracing();
 }

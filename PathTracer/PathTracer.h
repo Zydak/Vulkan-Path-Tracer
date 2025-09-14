@@ -116,6 +116,7 @@ public:
     [[nodiscard]] inline const glm::mat4& GetCameraViewInverse() const { return m_CameraViewInverse; }
     [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
     [[nodiscard]] inline PhaseFunction GetPhaseFunction() const { return m_PhaseFunction; }
+    [[nodiscard]] inline uint32_t GetSplitScreenCount() const { return m_ScreenChunkCount; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -136,8 +137,9 @@ public:
     void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
     void AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
     void RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer commandBuffer);
 
-    void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
+    void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
 private:
     void CreateOutputImageView();
@@ -151,6 +153,7 @@ private:
 
     glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
     glm::mat4 m_CameraProjectionInverse = glm::mat4(1.0f);
+    uint64_t m_DispatchCount = 0;
     uint32_t m_FrameCount = 0;
     uint32_t m_SamplesAccumulated = 0;
     uint32_t m_SamplesPerFrame = 1;
@@ -170,6 +173,7 @@ private:
     float m_EnvironmentIntensity = 1.0f;
     bool m_UseRayQueries = true;
     PhaseFunction m_PhaseFunction = PhaseFunction::HENYEY_GREENSTEIN;
+    uint32_t m_ScreenChunkCount = 1;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -213,8 +217,6 @@ private:
     {
         glm::mat4 CameraViewInverse;
         glm::mat4 CameraProjectionInverse;
-        uint32_t FrameCount;
-        uint32_t Seed;
         uint32_t SampleCount;
         uint32_t MaxDepth;
         float MaxLuminance;
@@ -224,8 +226,17 @@ private:
         float EnvMapRotationAltitude;
         uint32_t VolumesCount;
         float EnvironmentIntensity;
+        uint32_t ScreenChunkCount;
+    };
+
+    struct PushConstantData
+    {
+        uint32_t FrameCount;
+        uint32_t Seed;
+        uint32_t ChunkIndex;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
+    VulkanHelper::PushConstant m_PathTracerPushConstant;
 
     std::vector<Material> m_Materials;
     std::vector<std::string> m_MaterialNames;
