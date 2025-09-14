@@ -56,14 +56,14 @@
             <h2>Next Event Estimation</h2>
             <div class="chapter-content">
                 <p>
-                    So to reduce the amount of noise I decided to implement <b>NEE</b> (next event estimation), so explicitly sampling light sources at each bounce to accurately estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unoccluded, direct lighting is estimated.
+                    So to reduce the amount of noise I decided to implement <b>NEE</b> (next event estimation), so explicitly sampling light sources at each bounce to estimate direct lighting from them. It's done by shooting a shadow ray from the surface point to a sampled light source and checking for occlusion. If surface point is unoccluded, direct lighting is estimated.
                 </p>
             </div>
 
             <h2>Multiple Importance Sampling</h2>
             <div class="chapter-content">
                 <p>
-                    To combine current BSDF importance sampling with NEE I implemented MIS according to <a href="https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf">Optimally Combining Sampling Techniques for Monte Carlo Rendering</a>.
+                    To combine current BSDF importance sampling with light sampling I implemented MIS according to <a href="https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf">Optimally Combining Sampling Techniques for Monte Carlo Rendering</a>.
                 </p>
                 <p>
                     I take two samples, one from each sampling strategy:
@@ -113,7 +113,24 @@
                     This approach ensures that both sampling strategies contribute appropriately while avoiding double counting.
                 </p>
                 <p>
-                    Also, because there are volumes in the scene, transmittance must be taken into account. That is, how much light is blocked by a volume in the way. It's computed with a simple Beer-Lambert law: $T = e^{-\sigma_t \cdot t}$.
+                    Also, because there are volumes in the scene, transmittance must be taken into account. That is, how much light is blocked by a volume in the way.
+                </p>
+                <p>
+                    For simple homogeneous volumes, it can be computed analytically with Beer-Lambert law: $T = e^{-\sigma_t \cdot t}$.
+                </p>
+                <p>
+                    For heterogeneous volumes, it has to be integrated numerically with delta tracking. So when shadow ray is shot towards the light, it has to march through the volume and estimate transmittance at each step. This is done in <code>Volume.slang</code> based on the ratio between density at a point and a majorant.
+                </p>
+                <pre>
+                    <code>
+transmittance *= 1.0f - (densityAtAPoint / majorantDensity);
+                    </code>
+                </pre>
+                <p>
+                    Then the light emission is multiplied by the transmittance before being added to the surface' emitted light.
+                    $$
+                    \text{light}_\text{emission}^\prime = \text{light}_\text{emission} \cdot T
+                    $$
                 </p>
             </div>
 
@@ -181,15 +198,17 @@ pixelValue *= scale;
                 </div>
 
                 <p>
-                    Scattering inside volumes also doesn't take an eternity to converge now, the only difference here is that instead of calculating the surface BSDF, I evaluate the phase function. Both images below are 25K samples per pixels. First one is naive path tracing, and the second on is NEE with importance sampling.
+                    Scattering inside volumes also doesn't take an eternity to converge now, the only difference here is that instead of calculating the surface BSDF, I evaluate the phase function. Both images below are 25K samples per pixels.
                 </p>
-                <div class="centered-container">
-                    <img src="../Images/SuzanneRoomNaive25K.png" width="100%" />
-                    <p>Naive</p>
-                </div>
-                <div class="centered-container">
-                    <img src="../Images/SuzanneNEEImportance25K.png" width="100%" />
-                    <p>NEE with Importance Sampling</p>
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/SuzanneRoomNaive25K.png" width="100%" />
+                        <p>Naive</p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/SuzanneNEEImportance25K.png" width="100%" />
+                        <p>NEE with Importance Sampling</p>
+                    </div>
                 </div>
             </div>
 

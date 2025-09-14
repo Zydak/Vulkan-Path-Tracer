@@ -71,7 +71,7 @@
                     Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K samples per pixel (10'000'000'000 samples in total) were taken, bounce limit was set to 20. It took 45s to compute. Image on the right has russian roulette enabled, dimensions and sample count are identical, but this time it took only 20s to compute. It is visually identical to one on the left but the render time has been cut in half. And the performance boost of the russian roulette only increases as the scenes become more complex, and more bounces are needed.
                 </p>
                 <p>
-                    Of course I still had to set maximum bounce limit. Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
+                    Of course I still had to set maximum bounce limit. If I set termination probability based on the ray energy, Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
                 </p>
             </div>
 

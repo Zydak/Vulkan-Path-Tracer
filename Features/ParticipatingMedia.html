@@ -32,7 +32,7 @@
         <div class="feature-content">
 
             <div class="centered-container">
-                <img src="../Images/FogCarUndenoised.png" width="100%">
+                <img src="../Images/Cloud2.png" width="100%">
             </div>
             
             <h2>Participating Media</h2>
@@ -42,7 +42,7 @@
                     I implement two distinct types of volumes:
                     <ul>
                         <li><strong>Nested Volumes</strong> - Volumes contained within mesh boundaries</li>
-                        <li><strong>AABB volumes</strong> - Volumes contained within axis aligned bounding boxes</li>
+                        <li><strong>AABB volumes</strong> - Volumes contained within axis aligned bounding box</li>
                     </ul>
                 </p>
 
@@ -51,56 +51,147 @@
             <h2>Why Two Separate Approaches?</h2>
             <div class="chapter-content">
                 <p>
-                    The main challenge was determining whether a point is inside or outside a volume. For mesh-based volumes, this requires ray casting to count boundary intersections (odd = inside, even = outside). But this approach has problems:
-
+                    Initially, I tried using a simple flag tracking approach where a boolean in the ray payload tracks whether the ray is inside or outside a volume. When a ray enters through refraction, the flag is set to true, when exiting, it's set to false. This works well for basic scattering for things like subsurface scattering, but has some serious limitations: it can't handle rays that spawn inside volumes (like when the camera is positioned within fog) because the flag is set only when explicitly entering or exiting, and it can't compute transmittance values needed for NEE since it doesn't know the actual distance traveled through the medium in any arbitrary direction.
+                </p>
+                <p>
+                    So I needed a more robust method for determining whether a point is inside or outside a volume. To find whether a ray is inside a mesh-based volume, ray has to be cast and the number of intersections counted (odd = inside, even = outside). But this approach has significant problems:
                     <ul>
-                        <li><strong>Mesh requirements</strong>: Must be perfectly watertight with no holes or non-manifold geometry.</li>
-                        <li><strong>Performance cost</strong>: This requires additional expensive ray queries per pixel for every volume in the scene, scaling poorly with scene complexity. Also, transmittance calculations for NEE require even more ray queries. This time on every bounce.</li>
+                        <li><strong>Mesh requirements</strong>: Must be perfectly watertight with no holes or non-manifold geometry. (And even then there will be issues and edge cases due to floating point precision)</li>
+                        <li><strong>Performance cost</strong>: Requires additional expensive ray queries per pixel for every volume in the scene, scaling poorly with mesh complexity and volume count. (Technically, since all rays start in the same position, only a single ray would have to be cast once and cached, but this would be almost impossible to implement due to the need for accurate intersection counting, which is absent due to the precision errors)</li>
                     </ul>
                 </p>
-            </div>
-
-            <h2>Axis Aligned Bounding Boxes</h2>
-            <div class="chapter-content">
                 <p>
-                    AABBs solve these problems. Ray AABB intersection tests are fast and simple. So for large scene spanning volumes, I use AABBs. Mesh volumes are still useful for subsurface scattering, but with performance limitations: rays spawning inside mesh volumes ignore scattering, and NEE is disabled within them.
+                    And for the transmittance for NEE length of the ray path inside the volume in an arbitrary direction is needed, and for that enter and exit points have to be found. This of course requires even more ray queries, this time on every scattering event, which is very very expensive.
+                </p>
+
+                <p>
+                    So I had a pretty big problem, simple flag tracking is fast but insufficient, while ray casting is too expensive. Without being able to spawn rays inside volumes, atmospheric effects like fog are impossible to simulate. And without NEE, render times become impractically long, since probability of ray scattering multiple times inside the volume, and then hitting a light source on it's own is extremely low.
                 </p>
             </div>
 
-            <h2>Nested Volumes</h2>
+            <h2>Solution</h2>
             <div class="chapter-content">
                 <p>
-                    For mesh volumes, I use a global flag in the ray payload to track inside/outside state. When a ray enters through refraction, the flag is set to true; when exiting, it's set to false. This eliminates the need for expensive intersection tests during traversal.
+                    The solution was to implement two separate approaches. For mesh based volumes, I stuck with the simple flag tracking approach. This allows me to still simulate subsurface scattering and other simple effects, which is the main use case for mesh volumes. But it can't handle rays spawning inside them, and NEE is disabled within them. But it doesn't work for atmospheric effects like fog or clouds.
                 </p>
-            </div>
-
-            <h2>AABB Volumes</h2>
-            <div class="chapter-content">
                 <p>
-                    AABB volumes work similarly but perform intersection tests every time since rays can spawn inside them and transmittance for NEE has to be calculated. The math is dirt cheap, so even multiple volumes don't cause any performance issues.
+                    So for the atmospheric effects I use Axis Aligned Bounding Boxes (AABBs). Determining whether a ray is inside or outside an AABB is trivial and extremely fast. Ray AABB intersection tests are also dirt cheap, so I can afford to do them on every scattering to find the transmittance for NEE. This way, rays can spawn inside the volume and NEE works correctly.
                 </p>
             </div>
 
             <h2>Scattering Inside Volumes</h2>
             <div class="chapter-content">
                 <p>
-                    To simulate scattering I use a simple tracking approach. I implemented it according to <a href="https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html">this article</a> and <a href="https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf">Production Volume Rendering</a> paper. Distance along the ray at which scattering has occurred is given by:
+                    So after determining whether the ray is currently inside the volume and is able to scatter, the scattering itself has to be simulated. To do that I use a standard stochastic monte carlo approach, where on each scattering event a new direction is sampled and the ray continues to move in that direction. I implemented this according to <a href="https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html">this article</a> and <a href="https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf">Production Volume Rendering</a> paper.
+                </p>
+
+                <p>
+                    To get distance at which scattering occurs density of the volume has to be known. Here volumes diverge into two categories again:
+                    <ul>
+                        <li><strong>Homogeneous Volumes</strong> - Volumes with uniform density</li>
+                        <li><strong>Heterogeneous Volumes</strong> - Volumes with varying density</li>
+                    </ul>
+
+                    (Note that heterogeneous are not implemented for mesh based volumes, only for AABB volumes. Because like, what would be the point of that?)
+                </p>
+
+                <p>
+                    For homogeneous volumes it's simple, just a single density value for the whole volume. But in heterogeneous volumes the density varies per position. So the density data has to be stored and a different sampling technique used.
+                </p>
+            </div>
+
+            <h3>Homogeneous Volumes</h3>
+            <div class="chapter-content">
+                <p>
+                    To determine the distance at which the scattering occurs, I use the following formula:
 
                     $$
                     t = -\frac{\ln(1 - \xi)}{\sigma_t}
                     $$
                 </p>
                 <p>
-                    If this distance is shorter than the distance to the other side of the volume, or any other closest geometry, the ray has scattered inside the volume.
+                    where $\sigma_t$ is the scattering coefficient, or how I call it, density. If this distance is shorter than the distance to the other side of the volume, or any other closest geometry, the ray has scattered inside the volume.
+                </p>
+            </div>
+            <h3>Heterogeneous Volumes</h3>
+            <div class="chapter-content">
+                <p>
+                    For heterogeneous volumes it's not that simple. First I had to store the density data somehow. Volumetric data is usually stored in a OpenVDB file format as a sparse voxel grid, and it's hard to store that on a GPU for various reasons (e.g. lack of pointers in shader languages). So I decided to convert the voxel grid into a 3D texture, which is easy to sample on the GPU. The downside is that it takes a lot more memory, since the whole grid has to be stored instead of just the non empty voxels. But since this is just a personal project, I don't really care about memory usage that much, but this could definitely be improved. The memory usage isn't that bad anyway, example volume that I used in my renders was 994x676x1225 voxels, in .vdb file it was 469MB, after converting to a 3D texture, it became 3.2GB, which is a lot, but still manageable.
                 </p>
                 <p>
-                    To get the scattering direction I used phase function $p(\mathbf{V} \cdot \mathbf{L})$. I decided to use Henyey-Greenstein since it's really easy to implement and use.
+                    Another problem is sampling the distance. The formula used for homogeneous volumes assumes constant density along the ray path, which isn't the case here. So I had to use delta tracking, which is a rejection sampling method. The idea is to sample a distance assuming a maximum density (also called majorant) $\sigma_{max}$ along the ray path which can be just precomputed as a maximum density in the entire volume, and then accept or reject that distance based on the actual density at that point. If the distance is rejected (a null collision occurred), a new distance is sampled from that point again, until a distance is accepted or the ray exits the volume. The formula for sampling the distance is the same as for homogeneous volumes, just using $\sigma_{max}$ instead of $\sigma_t$:
+
+                    $$
+                    t = -\frac{\ln(1 - \xi)}{\sigma_{max}}
+                    $$
+
+                    And the probability of accepting that distance is:
+
+                    $$
+                    p_{accept} = \frac{\sigma(t)}{\sigma_{max}}
+                    $$
+                </p>
+
+                <p>
+                    After getting the distance at which scattering occurs, a new direction has to be sampled and evaluated. This is done using the phase function.
+                </p>
+            </div>
+
+            <h2>Phase Functions</h2>
+            <div class="chapter-content">
+                <p>
+                    To get the scattering direction I used phase function $p(\mathbf{V} \cdot \mathbf{L})$. I implement 3 different phase functions:
+                    <ul>
+                        <li><strong>Henyey-Greenstein</strong></li>
+                        <li><strong>Draine</strong></li>
+                        <li><strong>Approximated MIE</strong></li>
+                    </ul>
+                </p>
+                <p>
+                    Henyey-Greenstein phase function has a single parameter $g$ which controls the anisotropy of the scattering. $g = -1$ means full backscattering, $g = 0$ means isotropic scattering, and $g = 1$ means full forward scattering. It's a pretty simple phase function, but it's widely used in computer graphics because it's easy to implement and sample from, and it provides a good approximation for many types of media.
 
                     $$
                     p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g(\mathbf{V} \cdot \mathbf{L}))^{\frac{3}{2}}}
                     $$
+                </p>
+                <p>
+                    Draine phase function is a bit more complex, it has two parameters $g$ and $\alpha$ which control the shape of the phase function. It's a better approximation for media like dust. for $\alpha = 0$, it reduces to the Henyey-Greenstein phase function, and for $\alpha = 1$ $g = 0$, it reduces to Rayleigh phase function.
 
-                    So to sample the direction I had to use inverse transform sampling:
+                    $$
+                    p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g \cdot (\mathbf{V} \cdot \mathbf{L}))^{3 / 2}} \cdot \frac{1 + \alpha \cdot (\mathbf{V} \cdot \mathbf{L})^2}{1 + \alpha (1 + 2g^2) / 3}
+                    $$
+                </p>
+                <p>
+                    Approximated MIE phase function is implemented according to <a href="https://research.nvidia.com/labs/rtr/approximate-mie/">this paper</a>. It is a blend of Draine and HG based on the water droplets size. It's a pretty good approximation for media with high forward scattering like fog and clouds. For the formula for the blend weight look into the paper.
+                </p>
+
+                <p>
+                    The results I got pretty much match the reference images in the paper.
+                </p>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/HG.png">
+                        <p>
+                            Henyey-Greenstein, $g = 0.85$
+                        </p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/DRAINE.png">
+                        <p>
+                            Draine, $g = 0.85$, $\alpha = 0.5$
+                        </p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/HG_PLUS_DRAINE.png">
+                        <p>
+                            Henyey-Greenstein + Draine, droplet size = 20$\mu m$
+                        </p>
+                    </div>
+                </div>
+
+                <p>
+                    For sampling the direction I use importance sampling, the same as I did in the BSDF for the exactly same reason: it highly reduces variance. To importance sample the Henyey-Greenstein phase function, I use inverse transform sampling: 
 
                     $$
                     \mathbf{V} \cdot \mathbf{L} = 
@@ -110,7 +201,10 @@
                     \end{cases}
                     $$
 
-                    The problem was that this gives only the cosine of the angle between $\mathbf{V}$ and $\mathbf{L}$. To get the full 3D direction, another angle around the cone has to be sampled and a 3D direction has to be created from both of them.
+                    Unfortunately Draine phase function doesn't have an analytical solution for inverse CDF, so I use some approximated analytic sampling function that's included with <a href="https://research.nvidia.com/labs/rtr/approximate-mie/">this paper</a>. I won't include the formula here since it's an absolute mess.
+                </p>
+                <p>
+                    So after sampling the cosine of the scattering angle, to get the full 3D direction, another angle around the cone has to be sampled and a 3D direction has to be created from both of them.
 
                     $$
                     \begin{gather*}
@@ -133,7 +227,12 @@
                     \mathbf{L} = \mathbf{L}_{local}.x \cdot \mathbf{T}_1 + \mathbf{L}_{local}.y \cdot \mathbf{T}_2 + \mathbf{L}_{local}.z \cdot \mathbf{V}
                     \end{gather*}
                     $$
+                </p>
+            </div>
 
+            <h2>Results</h2>
+            <div class="chapter-content">
+                <p>
                     The rest was easy. Since both $\mathbf{V}$ and $\mathbf{L}$ were in place, all that's left was to evaluate how much light gets scattered from $\mathbf{L}$ to $\mathbf{V}$. BxDF $f = \mathbf{C} \cdot p$. $\mathbf{C}$ being the medium color. And PDF is just the phase function $p$. With this, it's possible to simulate a lot of effects, subsurface scattering being the best example.
                 </p>
 
@@ -209,12 +308,63 @@
                 </div>
 
                 <p>
-                    When it comes to AABB volumes there's really not much to see without any explicit light sampling. The most you can do, is place fog around the scene and wait eternity for it to converge. Probability of a light ray bouncing in a volume multiple times and then hitting a light source is abysmally low, most of the paths won't contribute anything. Image below is an example of that, it took 1 millions samples <b>per pixel</b> (2'073'600'000'000 samples in total, god bless GPUs) to look somewhat decent, I had to path trace this for almost 2 hours, which is quite long considering how simple the scene is.
+                    And with AABB Volumes you can simulate effects like fog using homogeneous volumes, or clouds using heterogeneous ones.
                 </p>
 
                 <div class="centered-container">
-                    <img src="../Images/FogCarUndenoised.png" width="80%">
+                    <img src="../Images/FogCarUndenoised.png" width="100%">
                 </div>
+                <div class="centered-container">
+                    <img src="../Images/Cloud.png" width="100%">
+                </div>
+            </div>
+
+            <h2>Performance Issues With Heterogeneous Volumes</h2>
+            <div class="chapter-content">
+                <p>
+                    The biggest issue with heterogeneous volumes was performance. Since I use delta tracking, in areas where the density is low compared to the majorant, a lot of null collisions occur. If I map the amount of null collisions in an image it looks like this:
+                </p>
+                <div class="centered-container">
+                    <img src="../Images/NullCollisionOptOff.png" width="50%">
+                </div>
+                <p>
+                    The brighter the area, the more null collisions occurred there. I made the volume quite dense and on each null collision I incremented pixel value by $0.001$. As you can see, in most areas of the volume, the amount of null collisions is in the thousands (the image is tonemapped so it's not entirely accurate). This is because the majorant was set to the maximum density in the entire volume, but most of the volume is actually very low density if not completely empty. And so most of the sampled distances are rejected, and new distances have to be sampled again and again, which is very expensive.
+                </p>
+
+                <p>
+                    I solved this by implementing a simple optimization: subdividing the volume into a 32x32x32 grid of smaller regions, and computing the majorant for each region separately. Then when sampling a distance, the majorant of the region that the ray is currently in is used. This way, in low density areas, the majorant is much lower, and so the amount of null collisions is greatly reduced. The downside is that this requires additional memory to store the majorants for each region, but it's not that much, since it's just a single float per region. And the performance improvement is definitely worth it.
+                </p>
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/NullCollisionOptOff.png">
+                        <p>
+                            No Subdivision
+                        </p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/NullCollisionOptOn.png">
+                        <p>
+                            Subdivision into 32x32x32 regions
+                        </p>
+                    </div>
+                </div>
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/NullCollisionOptOff216s.png">
+                        <p>
+                            No Subdivision, render time 216s
+                        </p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/NullCollisionOptOn33s.png">
+                        <p>
+                            Subdivision into 32x32x32 regions, render time 33s
+                        </p>
+                    </div>
+                </div>
+                <p>
+                    As you can see, the amount of null collisions is greatly reduced, and the render time has improved by a lot. Now null collisions mostly happen on the borders between regions with different majorants, which is unavoidable. But it's not too bad since the grid is pretty small. And no visual fidelity is lost. This could be further improved by using a more complex data structure like a tree to store the region majorants, but again, storing and traversing a tree on a GPU is hard, so I didn't want to go down that rabbit hole.
+                </p>
             </div>
 
         </div>
