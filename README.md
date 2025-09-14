@@ -67,8 +67,9 @@ If you're interested in details of the implementation of these features, look at
 
 <img src="./Gallery/GodRays.png"/>
 <img src="./Gallery/Cloud2.png"/>
-<img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/DragonHead.png"/>
+<img src="./Gallery/CannelleEtFromage.png"/>
+<img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
 <img src="./Gallery/Cloud3.png">
