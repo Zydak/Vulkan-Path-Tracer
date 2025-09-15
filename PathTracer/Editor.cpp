@@ -756,16 +756,17 @@ void Editor::SaveToFileSettings()
 
 void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
 {
+    VulkanHelper::Image postProcessorImage = m_PostProcessor.GetOutputImageView().GetImage();
     VulkanHelper::Buffer::Config bufferConfig{};
     bufferConfig.Device = m_Device;
-    bufferConfig.Size = (uint64_t)(m_PostProcessor.GetOutputImageView().GetImage().GetWidth() * m_PostProcessor.GetOutputImageView().GetImage().GetHeight() * 4);
+    bufferConfig.Size = (uint64_t)(postProcessorImage.GetWidth() * postProcessorImage.GetHeight() * 4);
     bufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
     bufferConfig.CpuMapable = true;
     bufferConfig.DebugName = "Save to file Buffer";
     VulkanHelper::Buffer buffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
-    m_PostProcessor.GetOutputImageView().GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_SRC_OPTIMAL, commandBuffer);
-    VH_ASSERT(buffer.CopyFromImage(commandBuffer, m_PostProcessor.GetOutputImageView().GetImage()) == VulkanHelper::VHResult::OK, "Failed to copy image to buffer");
+    postProcessorImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_SRC_OPTIMAL, commandBuffer);
+    VH_ASSERT(buffer.CopyFromImage(commandBuffer, postProcessorImage) == VulkanHelper::VHResult::OK, "Failed to copy image to buffer");
 
     VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
     VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
@@ -773,15 +774,14 @@ void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer
     void* mappedData = buffer.Map().Value();
     stbi_write_png(
         filepath.c_str(),
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetWidth(),
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetHeight(),
+        (int)postProcessorImage.GetWidth(),
+        (int)postProcessorImage.GetHeight(),
         4,
         mappedData,
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetWidth() * 4
+        (int)postProcessorImage.GetWidth() * 4
     );
 
     buffer.Unmap();
-    VulkanHelper::Buffer imageBuffer;
 }
 
 void Editor::RenderVolumeSettings()
@@ -907,6 +907,39 @@ void Editor::RenderVolumeSettings()
             volumeModified = true;
             selectedVolume.DropletSize = glm::clamp(selectedVolume.DropletSize, 5.0f, 50.0f);
         }
+    }
+
+    if(selectedVolume.TemperatureTextureView != nullptr)
+    {
+        if (ImGui::SliderFloat("Temperature Scale", &selectedVolume.TemperatureScale, 0.0f, 10.0f, "%.2f"))
+            volumeModified = true;
+        if (ImGui::SliderFloat("Temperature Gamma", &selectedVolume.TemperatureGamma, 0.1f, 5.0f, "%.2f"))
+            volumeModified = true;
+    }
+
+    static bool useBlackbody = selectedVolume.UseBlackbody;
+    if (ImGui::Checkbox("Use Blackbody", &useBlackbody))
+    {
+        selectedVolume.UseBlackbody = (int)useBlackbody;
+        volumeModified = true;
+    }
+
+    if (useBlackbody && selectedVolume.TemperatureTextureView != nullptr)
+    {
+        if (ImGui::InputInt("Kelvin Min", &selectedVolume.KelvinMin))
+        {
+            volumeModified = true;
+        }
+        if (ImGui::InputInt("Kelvin Max", &selectedVolume.KelvinMax))
+        {
+            volumeModified = true;
+        }
+    }
+
+    if (!useBlackbody)
+    {
+        if (ImGui::ColorEdit3("Emissive Color For Grid", &selectedVolume.TemperatureColor.r, ImGuiColorEditFlags_Float))
+            volumeModified = true;
     }
 
     ImGui::PopID();

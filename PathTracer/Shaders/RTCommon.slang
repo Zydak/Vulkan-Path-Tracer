@@ -142,6 +142,42 @@ public float2 DirectionToUV(in float3 v)
     return uv;
 }
 
+/// [https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html] source
+public float3 Blackbody(float temperature)
+{
+    // Temperature is in Kelvin
+    float temp = temperature / 100.0f;
+
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+
+    // Red
+    if (temp <= 66.0f) {
+        r = 255.0f;
+    } else {
+        r = 329.698727446 * pow(temp - 60.0f, -0.1332047592f);
+    }
+
+    // Green
+    if (temp <= 66.0f) {
+        g = 99.4708025861 * log(temp) - 161.1195681661;
+    } else {
+        g = 288.1221695283 * pow(temp - 60.0f, -0.0755148492f);
+    }
+
+    // Blue
+    if (temp >= 66.0f) {
+        b = 255.0f;
+    } else if (temp <= 19.0f) {
+        b = 0.0f;
+    } else {
+        b = 138.5177312231 * log(temp - 10.0f) - 305.0447927307;
+    }
+
+    return clamp(float3(r, g, b) / 255.0f, 0.0f, 1.0f);
+}
+
 // Perlin Noise
 // source: https://github.com/stegu/webgl-noise
 

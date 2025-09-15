@@ -61,8 +61,14 @@ std::vector<float> LookupTableCalculator::CalculateTable(glm::uvec3 tableSize, u
 
     VulkanHelper::Buffer buffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
+    // Create staging buffer
+    bufferConfig.CpuMapable = true;
+    bufferConfig.DeleteDelayInFrames = 0;
+    VulkanHelper::Buffer stagingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
+
     // Set all values to 0
-    VH_ASSERT(buffer.UploadData(result.data(), bufferConfig.Size, 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload data to buffer");
+    VH_ASSERT(stagingBuffer.UploadData(result.data(), bufferConfig.Size, 0) == VulkanHelper::VHResult::OK, "Failed to upload data to staging buffer");
+    VH_ASSERT(buffer.CopyFromBuffer(commandBuffer, stagingBuffer, 0, 0, bufferConfig.Size) == VulkanHelper::VHResult::OK, "Failed to copy data from staging buffer to device local buffer");
     VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording command buffer");
     VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
     VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording command buffer");
@@ -132,10 +138,15 @@ std::vector<float> LookupTableCalculator::CalculateTable(glm::uvec3 tableSize, u
         VulkanHelper::PipelineStages::ALL_COMMANDS_BIT
     );
 
-    VH_ASSERT(buffer.DownloadData(result.data(), result.size() * sizeof(float), 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to download data from buffer");
-
+    // Copy data to the staging buffer
+    VH_ASSERT(stagingBuffer.CopyFromBuffer(commandBuffer, buffer, 0, 0, bufferConfig.Size) == VulkanHelper::VHResult::OK, "Failed to copy data from buffer to staging buffer");
     VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording command buffer");
     VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
+
+    // Copy data to CPU
+    void* data = stagingBuffer.Map().Value();
+    memcpy(result.data(), data, bufferConfig.Size);
+    stagingBuffer.Unmap();
 
     // Normalize all data
     for (size_t i = 0; i < result.size(); i++)

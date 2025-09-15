@@ -5,8 +5,11 @@ import Defines;
 [[vk::image_format("r32f")]]
 [[vk::binding(19, 0)]] Texture2DArray uVolumeDensityTexture[];
 
+[[vk::image_format("r32f")]]
+[[vk::binding(20, 0)]] Texture2DArray uVolumeTemperatureTexture[];
+
 // 32x32x32 grid of max densities for each heterogeneous volume texture to speed up ray tracing by skipping empty space
-[[vk::binding(20, 0)]] StructuredBuffer<float> uVolumeMaxDensities[];
+[[vk::binding(21, 0)]] StructuredBuffer<float> uVolumeMaxDensities[];
 #define MAX_DENSITY_GRID_DIM 32
 
 public struct VolumeIntersection
@@ -23,12 +26,21 @@ public struct Volume
 
     float3 m_Color;
     float3 m_EmissiveColor;
+    float3 m_TemperatureColor;
     float m_Density;
     float m_Anisotropy;
     float m_Alpha;
     float m_DropletSize;
 
     int m_DensityDataIndex; // -1 if homogeneous
+
+    // I have no clue why I can't use bool here, the layout ends up incorrect even tho I use ScalarDataLayout
+    int m_UseBlackbody; // 1 to use blackbody radiation, 0 to use m_TemperatureColor
+    int m_HasTemperatureData; // 1 if temperature data is available, 0 otherwise
+    float m_TemperatureGamma; // Exponent for temperature to compute blackbody radiation
+    float m_TemperatureScale; // Scales the temperature value read from the grid before using it to compute emission
+    int m_KelvinMin = 500;
+    int m_KelvinMax = 8000;
 
     public float GetAnisotropy() { return m_Anisotropy; }
     public float GetDensity() { return m_Density; }
@@ -88,6 +100,35 @@ public struct Volume
     public bool IsPointInside(in float3 point)
     {
         return all(point >= m_CornerMin) && all(point <= m_CornerMax);
+    }
+
+    public float3 GetEmissionFromTemperatureAtPoint(float3 x, in SamplerState uTextureSampler)
+    {
+        if (!(bool)m_HasTemperatureData)
+           return 0.0f;
+
+        uint3 textureSize;
+        uint numberOfLevels;
+        uVolumeTemperatureTexture[NonUniformResourceIndex(m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
+
+        float3 UV = (x - m_CornerMin) / (m_CornerMax - m_CornerMin);
+        UV.z *= textureSize.z; // Scale Z to sample the texture array
+        float temperatureNormalized = uVolumeTemperatureTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r;
+
+        float3 color;
+
+        if ((bool)m_UseBlackbody)
+        {
+            // Map normalized temperature to Kelvin range
+            float temperatureKelvins = temperatureNormalized * (m_KelvinMax - m_KelvinMin) + m_KelvinMin;
+            color = Blackbody(temperatureKelvins);
+        }
+        else
+            color = pow(m_TemperatureColor, float3(2.2f));
+
+        float intensity = pow(temperatureNormalized, m_TemperatureGamma) * m_TemperatureScale;
+
+        return intensity * color;
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred

@@ -44,6 +44,7 @@ private:
     
     VulkanHelper::Pipeline m_TonemappingPipeline;
     VulkanHelper::Buffer m_TonemappingBuffer;
+    VulkanHelper::Buffer m_TonemappingStagingBuffer;
     
     std::vector<VulkanHelper::Pipeline> m_BloomDownSamplePipelines;
     std::vector<VulkanHelper::Pipeline> m_BloomUpSamplePipelines;
