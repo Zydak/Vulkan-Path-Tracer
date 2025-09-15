@@ -178,10 +178,13 @@ bool ScatteredInVolume(inout Payload payload)
                 float3 colorSample = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
                 float3 colorLight = uVolumes[scatteredVolumeIndex].GetColor() * phaseLightDir;
 
+                payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler);
+
                 if (!isObscuredByGeometry && phaseLightDir > 0.0f)
                 {
-                   payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
+                   payload.Emitted += transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
                 }
+
                 payload.Direction = newDir;
                 payload.BxDF = colorSample;
                 payload.PDF = phaseSampledDir;
@@ -189,6 +192,7 @@ bool ScatteredInVolume(inout Payload payload)
             #else
             {
                 payload.Direction = newDir;
+                payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler));
                 payload.BxDF = uVolumes[scatteredVolumeIndex].GetColor();
                 payload.PDF = 1.0f;
             }

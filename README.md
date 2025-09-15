@@ -46,7 +46,7 @@ Executable will be in `build/PathTracer/VulkanPathTracer`.
 - NEE for environment map light
 - Volumetric scattering with importance sampling implemented according to [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
 - Non uniform volumes imported from OpenVDB files.
-- Henyey-Greenstein, Draine, and approximated MIE implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
+- Henyey-Greenstein, Draine, and approximated MIE phase functions implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Textures and Normal Maps
 - Editor
@@ -68,11 +68,12 @@ If you're interested in details of the implementation of these features, look at
 <img src="./Gallery/GodRays.png"/>
 <img src="./Gallery/Cloud2.png"/>
 <img src="./Gallery/DragonHead.png"/>
+<img src="./Gallery/EmissiveVolumes.png">
+<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
-<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/CornellBox.png"/>
@@ -115,4 +116,6 @@ If you're interested in details of the implementation of these features, look at
 - https://casual-effects.com/g3d/data10/ - Breakfast Room
 - https://luxcorerender.org/example-scenes/ - Cannele & Fromage
 - https://disneyanimation.com/resources/clouds/ - Disney Cloud
+- https://www.openvdb.org/download/ - Bunny Cloud
 - https://www.blackboxcolour.com/assets - Other clouds
+- https://jangafx.com/software/embergen/download/free-vdb-animations - Smoke Plume

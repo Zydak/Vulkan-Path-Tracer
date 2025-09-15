@@ -35,6 +35,7 @@ public:
 
         glm::vec3 Color = glm::vec3(0.8f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 TemperatureColor = glm::vec3(1.0f, 0.5f, 0.0f); // If blackbody is disabled
         float Density = 1.0f;
         float Anisotropy = 0.0f;
         float Alpha = 1.0f;
@@ -42,10 +43,18 @@ public:
 
         int DensityDataIndex = -1; // -1 if homogeneous
 
-        std::string DensityTextureFilepath;
+        int UseBlackbody = 1;
+        int HasTemperatureData = 0;
+        float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
+        float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        int KelvinMin = 500;
+        int KelvinMax = 8000;
+
+        std::string DensityDataFilepath;
         VulkanHelper::ImageView DensityTextureView;
+        VulkanHelper::ImageView TemperatureTextureView;
         
-        // Heterogeneous volumes are split into 4x4x4 regions for skipping empty space
+        // Heterogeneous volumes are split into 32x32x32 regions for skipping empty space
         VulkanHelper::Buffer MaxDensitiesBuffer;
     };
 
@@ -238,6 +247,9 @@ private:
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
     VulkanHelper::PushConstant m_PathTracerPushConstant;
 
+    void UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
+    void DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
+
     std::vector<Material> m_Materials;
     std::vector<std::string> m_MaterialNames;
     VulkanHelper::Buffer m_MaterialsBuffer;
@@ -247,6 +259,7 @@ private:
 
     VulkanHelper::ThreadPool* m_ThreadPool;
 
+    // Data that gets sent to the GPU
     struct VolumeGPU
     {
         // AABB
@@ -255,6 +268,7 @@ private:
 
         glm::vec3 Color = glm::vec3(0.8f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 TemperatureColor = glm::vec3(1.0f, 0.5f, 0.0f); // If blackbody is disabled
         float Density = 1.0f;
         float Anisotropy = 0.0f;
         float Alpha = 1.0f;
@@ -262,21 +276,35 @@ private:
 
         int DensityDataIndex = -1; // -1 if homogeneous
 
+        int UseBlackbody = 1;
+        int HasTemperatureData = 0;
+        float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
+        float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        int KelvinMin = 500;
+        int KelvinMax = 8000;
+
         VolumeGPU() = default;
 
         VolumeGPU(const Volume& volume)
-            : CornerMin(volume.CornerMin),
-              CornerMax(volume.CornerMax),
-              Color(volume.Color),
-              EmissiveColor(volume.EmissiveColor),
-              Density(volume.Density),
-              Anisotropy(volume.Anisotropy),
-              Alpha(volume.Alpha),
-              DropletSize(volume.DropletSize),
-              DensityDataIndex(volume.DensityDataIndex)
+            : CornerMin(volume.CornerMin)
+            , CornerMax(volume.CornerMax)
+            , Color(volume.Color)
+            , EmissiveColor(volume.EmissiveColor)
+            , TemperatureColor(volume.TemperatureColor)
+            , Density(volume.Density)
+            , Anisotropy(volume.Anisotropy)
+            , Alpha(volume.Alpha)
+            , DropletSize(volume.DropletSize)
+            , DensityDataIndex(volume.DensityDataIndex)
+            , UseBlackbody(volume.UseBlackbody)
+            , TemperatureGamma(volume.TemperatureGamma)
+            , TemperatureScale(volume.TemperatureScale)
+            , KelvinMin(volume.KelvinMin)
+            , KelvinMax(volume.KelvinMax)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
+            HasTemperatureData = volume.TemperatureTextureView != nullptr;
         }
     };
 

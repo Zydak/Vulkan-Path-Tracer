@@ -53,6 +53,10 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
 
         postProcessor.m_TonemappingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
+        bufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
+        bufferConfig.CpuMapable = true;
+        postProcessor.m_TonemappingStagingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
+
         VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddBuffer(2, 0, &postProcessor.m_TonemappingBuffer) == VulkanHelper::VHResult::OK, "Failed to add tonemapping buffer to descriptor set");
     
         postProcessor.m_Sampler = VulkanHelper::Sampler::New({ device, VulkanHelper::Sampler::AddressMode::CLAMP_TO_EDGE }).Value();
@@ -238,7 +242,9 @@ void PostProcessor::PostProcess(VulkanHelper::CommandBuffer& commandBuffer)
 
 void PostProcessor::SetTonemappingData(const TonemappingData& data, VulkanHelper::CommandBuffer& commandBuffer)
 {
-    VH_ASSERT(m_TonemappingBuffer.UploadData(&data, sizeof(data), 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload tonemapping data");
+    // Use staging buffer to upload tonemapping data
+    VH_ASSERT(m_TonemappingStagingBuffer.UploadData(&data, sizeof(data), 0) == VulkanHelper::VHResult::OK, "Failed to upload tonemapping data to staging buffer");
+    VH_ASSERT(m_TonemappingBuffer.CopyFromBuffer(commandBuffer, m_TonemappingStagingBuffer, 0, 0, sizeof(data)) == VulkanHelper::VHResult::OK, "Failed to copy tonemapping data from staging buffer to device local buffer");
 }
 
 void PostProcessor::SetBloomData(const BloomData& data)
