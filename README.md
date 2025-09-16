@@ -48,6 +48,7 @@ Executable will be in `build/PathTracer/VulkanPathTracer`.
 - Non uniform volumes imported from OpenVDB files.
 - Henyey-Greenstein, Draine, and approximated MIE phase functions implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
+- Emissive Volumes with [temperature parametrization](https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
 - Textures and Normal Maps
 - Editor
   - Changing material and path tracing properties at runtime
@@ -70,6 +71,7 @@ If you're interested in details of the implementation of these features, look at
 <img src="./Gallery/DragonHead.png"/>
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/Cloud3.png">
+<img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
@@ -77,13 +79,11 @@ If you're interested in details of the implementation of these features, look at
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/CornellBox.png"/>
-<img src="./Gallery/VolumeLight.png"/>
 <img src="./Gallery/CloudBackLight.png">
 <img src="./Gallery/Mustang0.png"/>
 <img src="./Gallery/FogCarUndenoised.png"/>
-<img src="./Gallery/TeapotMarble.png"/>
-<img src="./Gallery/TeapotTiled.png"/>
-<img src="./Gallery/SubsurfaceBall.png"/>
+<img src="./Gallery/TeapotMarble.png" width="49%"/>
+<img src="./Gallery/TeapotTiled.png" width="49%"/>
 <img src="./Gallery/Caustics.png"/>
 
 </p>

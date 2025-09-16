@@ -47,6 +47,7 @@ public:
         int HasTemperatureData = 0;
         float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
         float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        float EmissiveColorGamma = 1.0f; // Exponent for emissive color
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
@@ -72,7 +73,7 @@ public:
     // True when all samples were accumulated
     bool PathTrace(VulkanHelper::CommandBuffer& commandBuffer);
 
-    void ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer);
+    void ResizeImage(uint32_t width, uint32_t height);
 
     void ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer);
 
@@ -192,7 +193,6 @@ private:
     VulkanHelper::ImageView m_OutputImageView;
     uint32_t m_Width;
     uint32_t m_Height;
-    float m_FOV = 45.0f;
 
     VulkanHelper::ImageView m_EnvMapTexture;
     VulkanHelper::Buffer m_EnvAliasMap;
@@ -280,6 +280,7 @@ private:
         int HasTemperatureData = 0;
         float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
         float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        float EmissiveColorGamma = 1.0f; // Exponent for emissive color
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
@@ -299,6 +300,7 @@ private:
             , UseBlackbody(volume.UseBlackbody)
             , TemperatureGamma(volume.TemperatureGamma)
             , TemperatureScale(volume.TemperatureScale)
+            , EmissiveColorGamma(volume.EmissiveColorGamma) // Default value
             , KelvinMin(volume.KelvinMin)
             , KelvinMax(volume.KelvinMax)
         {

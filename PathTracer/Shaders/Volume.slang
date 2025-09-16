@@ -39,6 +39,7 @@ public struct Volume
     int m_HasTemperatureData; // 1 if temperature data is available, 0 otherwise
     float m_TemperatureGamma; // Exponent for temperature to compute blackbody radiation
     float m_TemperatureScale; // Scales the temperature value read from the grid before using it to compute emission
+    float m_EmissiveColorGamma; // Exponent for emissive color
     int m_KelvinMin = 500;
     int m_KelvinMax = 8000;
 
@@ -124,11 +125,11 @@ public struct Volume
             color = Blackbody(temperatureKelvins);
         }
         else
-            color = pow(m_TemperatureColor, float3(2.2f));
+            color = m_TemperatureColor;
 
         float intensity = pow(temperatureNormalized, m_TemperatureGamma) * m_TemperatureScale;
 
-        return intensity * color;
+        return intensity * pow(color, float3(m_EmissiveColorGamma));
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
@@ -411,6 +412,6 @@ public struct Volume
             }
         }
 
-        return transmittance;
+        return clamp(transmittance, 0.0f, 1.0f);
     }
 };
