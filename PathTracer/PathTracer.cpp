@@ -136,7 +136,6 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
-    m_FOV = scene.Value().Cameras[0].FOV;
     m_CameraViewInverse = glm::inverse(scene.Value().Cameras[0].ViewMatrix);
 
     std::array<VulkanHelper::Format, 3> vertexAttributes = {
@@ -550,7 +549,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
-    m_CameraProjectionInverse = glm::inverse(glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f));
+    m_CameraProjectionInverse = glm::inverse(glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f));
     pathTracerUniform.CameraViewInverse = m_CameraViewInverse;
     pathTracerUniform.CameraProjectionInverse = m_CameraProjectionInverse;
     pathTracerUniform.MaxDepth = m_MaxDepth;
@@ -634,7 +633,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(initializationCmd.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit initialization command buffer");
 }
 
-void PathTracer::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::ResizeImage(uint32_t width, uint32_t height)
 {
     m_Width = width;
     m_Height = height;
@@ -644,23 +643,6 @@ void PathTracer::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::Comm
 
     // Update descriptor set
     VH_ASSERT(m_PathTracerDescriptorSet.AddImage(0, 0, &m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
-
-    // Update projection
-    const float aspectRatio = static_cast<float>(m_Width) / static_cast<float>(m_Height);
-    m_CameraProjectionInverse = glm::perspective(glm::radians(m_FOV), aspectRatio, 0.1f, 100.0f);
-
-    m_CameraProjectionInverse = glm::inverse(m_CameraProjectionInverse);
-
-    // Create a staging buffer to upload uniform data
-    VulkanHelper::Buffer::Config uniformStagingBufferConfig{};
-    uniformStagingBufferConfig.Device = m_Device;
-    uniformStagingBufferConfig.Size = sizeof(glm::mat4);
-    uniformStagingBufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
-    uniformStagingBufferConfig.CpuMapable = true;
-    VulkanHelper::Buffer uniformStagingBuffer = VulkanHelper::Buffer::New(uniformStagingBufferConfig).Value();
-
-    VH_ASSERT(uniformStagingBuffer.UploadData(&m_CameraProjectionInverse, sizeof(glm::mat4), 0) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
-    VH_ASSERT(m_PathTracerUniformBuffer.CopyFromBuffer(commandBuffer, uniformStagingBuffer, 0, offsetof(PathTracerUniform, CameraProjectionInverse), sizeof(glm::mat4)) == VulkanHelper::VHResult::OK, "Failed to copy path tracer uniform buffer");
 
     ResetPathTracing();
 }
@@ -932,6 +914,9 @@ void PathTracer::DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data,
     VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording command buffer");
     VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
 
+    // Restart the command buffer for future use
+    VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording command buffer");
+
     // Download data from the staging buffer
     VH_ASSERT(stagingBuffer.DownloadData(data, size, 0) == VulkanHelper::VHResult::OK, "Failed to download path tracer uniform data");
 }
@@ -1147,7 +1132,10 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
     float average = sum / float(size);
     for (uint32_t i = 0; i < size; i++)
     {
-        aliasMap[i].Importance = importanceData[i] / average;
+        if (average == 0.0f)
+            aliasMap[i].Importance = 0.0f;
+        else
+            aliasMap[i].Importance = importanceData[i] / average;
 
         // Initialize the alias index to self
         aliasMap[i].Alias = i;
@@ -1213,7 +1201,10 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 	{
 		const uint32_t idx4 = i * 4;
 		// Store the PDF inside Alpha channel(idx4 + 3)
-		pixels[idx4 + 3] = glm::max(pixels[idx4], glm::max(pixels[idx4 + 1], pixels[idx4 + 2])) / sum;
+        if (sum == 0.0f)
+            pixels[idx4 + 3] = 0.0f;
+        else
+		    pixels[idx4 + 3] = glm::max(pixels[idx4], glm::max(pixels[idx4 + 1], pixels[idx4 + 2])) / sum;
 	}
 
     // Create a staging buffer
@@ -1529,9 +1520,9 @@ void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer comman
     m_Volumes.erase(m_Volumes.begin() + index);
     if (volumesToMove > 0)
     {
-        VolumeGPU volume;
-        DownloadDataFromBuffer(m_VolumesBuffer, &volume, sizeof(VolumeGPU) * volumesToMove, (index + 1) * sizeof(VolumeGPU), commandBuffer);
-        UploadDataToBuffer(m_VolumesBuffer, &volume, sizeof(VolumeGPU) * volumesToMove, index * sizeof(VolumeGPU), commandBuffer);
+        std::vector<VolumeGPU> volumes(volumesToMove);
+        DownloadDataFromBuffer(m_VolumesBuffer, volumes.data(), sizeof(VolumeGPU) * volumesToMove, (index + 1) * sizeof(VolumeGPU), commandBuffer);
+        UploadDataToBuffer(m_VolumesBuffer, volumes.data(), sizeof(VolumeGPU) * volumesToMove, index * sizeof(VolumeGPU), commandBuffer);
     }
 
     uint32_t volumeCount = (uint32_t)m_Volumes.size();

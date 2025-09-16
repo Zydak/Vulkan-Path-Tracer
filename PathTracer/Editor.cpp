@@ -142,10 +142,14 @@ void Editor::RenderViewportSettings()
             uint32_t Height;
         };
 
-        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
+        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
             Data* d = (Data*)data.get();
-            ResizeImage(d->Width, d->Height, commandBuffer);
+            ResizeImage(d->Width, d->Height);
             m_Camera.SetAspectRatio((float)d->Width / (float)d->Height);
+            glm::mat4 viewMatrix = m_Camera.GetViewMatrix();
+            glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+            m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), cmd);
+            m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), cmd);
             m_RenderTime = 0.0f;
         });
     }
@@ -218,9 +222,9 @@ void Editor::RenderCameraSettings()
     ImGui::BulletText("Space/LShift to move up/down");
 }
 
-void Editor::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
+void Editor::ResizeImage(uint32_t width, uint32_t height)
 {
-    m_PathTracer.ResizeImage(width, height, commandBuffer);
+    m_PathTracer.ResizeImage(width, height);
     m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
     
@@ -941,6 +945,9 @@ void Editor::RenderVolumeSettings()
         if (ImGui::ColorEdit3("Emissive Color For Grid", &selectedVolume.TemperatureColor.r, ImGuiColorEditFlags_Float))
             volumeModified = true;
     }
+
+    if (ImGui::SliderFloat("m_EmissiveColorGamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
+        volumeModified = true;
 
     ImGui::PopID();
 
