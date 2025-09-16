@@ -15,7 +15,7 @@ Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline ex
 # Building
 ## Prerequisites
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
-- Cmake 3.5
+- [Cmake](https://cmake.org/) 3.5 or higher
 
 ## Windows
 ```
@@ -55,13 +55,13 @@ Executable will be in `build/PathTracer/VulkanPathTracer`.
   - Loading your own scenes in any format supported by [assimp](https://github.com/assimp/assimp/blob/master/doc/Fileformats.md)
   - Exporting renders into .PNG files
 - Post Processing
-  - Bloom using Mip Maps
+  - Bloom
   - ACES tonemapping
 - Anti Aliasing
 - Depth of Field
 - Russian roulette
 
-If you're interested in details of the implementation of these features, look at [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/).
+There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) explaining some of the features.
 
 # Gallery
 <p align="center">
@@ -71,13 +71,13 @@ If you're interested in details of the implementation of these features, look at
 <img src="./Gallery/DragonHead.png"/>
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/Cloud3.png">
-<img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
+<img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CornellBox.png"/>
 <img src="./Gallery/CloudBackLight.png">
 <img src="./Gallery/Mustang0.png"/>
@@ -117,5 +117,5 @@ If you're interested in details of the implementation of these features, look at
 - https://luxcorerender.org/example-scenes/ - Cannele & Fromage
 - https://disneyanimation.com/resources/clouds/ - Disney Cloud
 - https://www.openvdb.org/download/ - Bunny Cloud
-- https://www.blackboxcolour.com/assets - Other clouds
 - https://jangafx.com/software/embergen/download/free-vdb-animations - Smoke Plume
+- https://www.blackboxcolour.com/assets - Other clouds
