@@ -39,7 +39,7 @@
                 <h2>BSDF</h2>
                 <div class="chapter-content">
                     <p>
-                        When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there is no material type per se. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a <b>multi-lobe BSDF with scalar-weighted blending</b>. This approach is useful because it allows for a lot of artistic control. I can easily import materials from different file formats like glTF or OBJ, so I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, it was more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
+                        When making the BSDF I did not aim for being 100% physically correct, I just wanted something good looking, and easy to play with. That's why materials use a principled BSDF (Bidirectional Scattering Distribution Function), which means that there are no fixed material types. You edit the material property values (like metallic) and the lobes are blended between for you. So to put it into words nicely: it's a <b>multi lobe BSDF with scalar weighted blending</b>. This approach is useful because it allows for a lot of artistic control. I can easily import materials from different file formats like glTF or OBJ, so I don't have to roll my own format. As a reference I mostly used Blenders' cycles, I didn't aim to get everything 100% the same, because cycles is a really complex renderer, it was more like a loosely defined frame of reference. This way, I can easily create scenes in blender and export them to my renderer, since I have neither proper editor nor a custom file format. They won't look 100% the same, but they'll be similar enough to look good.
                     </p>
                     <p>
                         Currently supported material properties are:
@@ -76,19 +76,21 @@
                     </div>
                 </div>
 
-                <h1>Code Conventions</h1>
+                <h2>Code Conventions</h2>
                 <div class="chapter-content">
                     <p>
                         I deviated from the standard path tracing notation ($\omega_o$ and $\omega_i$) because it felt counterintuitive for a backward path tracer. Since rays are traced from camera to scene, calling the direction they're traveling in the "incoming" direction was confusing. So I chose to use $\mathbf{V}$ for the direction to the view point and $\mathbf{L}$ for outgoing direction to the light source. It's also shorter to write so the shader code is much cleaner.
                     </p>
+                </div>
 
-                    <h1>Microsurface</h1>
+                <h2>Microsurface</h2>
+                <div class="chapter-content">
                     <p>
                         As I've mentioned before, microfacet theory is used to simulate surfaces. So when a ray hits the surface, the microsurface $\mathbf{H}$ is sampled according to the $\text{VNDF}$ for GGX. Sampling implementation follows the method described in <a href="https://jcgt.org/published/0007/04/01/paper.pdf">Sampling the GGX Distribution of Visible Normals</a>.
                     </p>
                 </div>
 
-                <h1>Lobes</h1>
+                <h2>Lobes</h2>
                 <div class="chapter-content">
                     <p>
                         From code standpoint, materials are split into 3 different types:
@@ -195,7 +197,7 @@
                 <h2>Dielectric Lobe</h2>
                 <div class="chapter-content">
                     <p>
-                        Unlike metals, where I only simulate reflection, I handle both reflection and refraction, so the light can either reflect from the surface, or transmit into it. If ray got reflected then it's the same as in the metallic lobe. If light ray got transmitted, I scatter it diffusely. This creates a kind of specular lobe/layer on top of the diffuse one, so materials like varnished wood can be simulated. This specular intensity is parameterized with materials' IOR. Dielectric materials are also influenced by roughness and specular tint.
+                        Unlike metals, where I only simulate reflection, here I handle both reflection and refraction, so the light can either reflect from the surface, or transmit into it. If ray got reflected then it's the same as in the metallic lobe. If light ray got transmitted, I scatter it diffusely. This creates a kind of specular lobe/layer on top of the diffuse one, so materials like varnished wood can be simulated. This specular intensity is parameterized with materials' IOR. Dielectric materials are also influenced by roughness and specular tint.
                     </p>
                     <p>
                         Sampling weight is $w_\text{dielectric} = (1 - \text{metallic}) \cdot (1 - \text{transmission})$.
@@ -302,13 +304,10 @@
                         Ideally, I could have implemented glass as part of the dielectric (since glass is also a dielectric material), then I could choose between scattering diffusely and refracting based on material's $\text{transmission}$ value, but I had to make it a separate thing due to a constraint with the energy compensation system.
                     </p>
                     <p>
-                        The problem is that the <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a> paper doesn't provide a method to calculate energy compensation separately for just the transmission component, it only gives the combined reflection + transmission compensation. According to it, the energy compensation lookup tables need to account for all possible light paths, and for refractive materials like glass, this includes both reflected and transmitted rays: $E_\text{ss}^S = E_\text{ss}^R + E_\text{ss}^T$. This means I need to apply the same energy compensation to both the reflection and transmission parts of the glass BSDF. So reflecting ray requires knowing whether the material will be refractive or not. I have to know whether to apply only reflection compensation (like in dielectric) or reflection + transmission compensation.
+                        The problem is that the <a href="https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf">[Turquin 2019]</a> paper doesn't provide a method to calculate energy compensation separately for just the transmission component, it only gives the combined reflection + transmission compensation. According to it, the energy compensation lookup tables need to account for all possible light paths, and for refractive materials like glass, this includes both reflected and transmitted rays: $E_\text{ss}^S = E_\text{ss}^R + E_\text{ss}^T$. This means I need to apply the same energy compensation to both the reflection and transmission parts of the glass BSDF. So reflecting ray requires knowing whether the material will be refractive or not. I have to know whether to apply only reflection compensation (like in dielectric) or reflection + transmission compensation. So I kinda ended up with glass a separate lobe.
                     </p>
                     <p>
-                        I had an attempt at making refractive only lookup table but it failed miserably. I'm not really sure whether it's not possible at all or I had made some mistake along the way, because they didn't really expand on that in the paper. So anyway, that's why I have glass as a separate type alongside dielectric. I hope that made any sense.
-                    </p>
-                    <p>
-                        To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled, if ray got reflected, outgoing direction is computed the same way as for dielectric and metallic. And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
+                        To determine whether the ray is reflected or refracted I use the same logic as in dielectric, a random variable $\xi \sim \mathcal{U}(0, 1)$ is sampled and compared against the fresnel, if ray got reflected, outgoing direction is computed the same way as for dielectric and metallic. And for refraction, instead of $\text{reflect}$, $\text{refract}$ is called.
                     </p>
                     
                     <p>
@@ -399,16 +398,16 @@
                 <div class="chapter-content">
                     <p>
                         After the BxDF and PDF of each lobe have been evaluated, they have to be combined. For that I multiply each BxDF and PDF by their respective probabilities of being sampled, and then simply add them all together.
-
-                        <p>
-                            $$
-                            \begin{gather*}
-                            f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
-                            p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
-                            \end{gather*}
-                            $$
-                        </p>
-
+                    </p>
+                    <p>
+                        $$
+                        \begin{gather*}
+                        f = f_\text{metallic} \cdot w_\text{metallic} + f_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + f_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + f_\text{glass}^R \cdot w_\text{glass} \cdot F_D + f_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)\\
+                        p = p_\text{metallic} \cdot w_\text{metallic} + p_\text{dielectric}^R \cdot w_\text{dielectric} \cdot F_D + p_\text{dielectric}^T \cdot w_\text{dielectric} \cdot (1 - F_D) + p_\text{glass}^R \cdot w_\text{glass} \cdot F_D + p_\text{glass}^T \cdot w_\text{glass} \cdot (1 - F_D)
+                        \end{gather*}
+                        $$
+                    </p>
+                    <p>
                         And that gives me the final BSDF $f$ and it's PDF $p$ given outgoing direction $\mathbf{L}$.
                     </p>
                     <div class="centered-container">

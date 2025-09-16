@@ -98,7 +98,7 @@
                     \end{gather*}
                     $$
 
-                    Explicitly sampling lights is happening in <code>ClosestHit.slang</code>, where the weighted contribution of the sampled light is added to the surface' emitted light.
+                    Explicitly sampling lights is happening at every scattering event, be that a surface or a volume, where the weighted contribution of the sampled light is added to the emitted light.
 
                     $$
                     L_e = L_e + w_\text{light} \cdot \frac{f(\omega_\text{light}) \cdot \text{light}_\text{emission}}{p_\text{light}(\omega _\text{light})}
@@ -127,7 +127,7 @@ transmittance *= 1.0f - (densityAtAPoint / majorantDensity);
                     </code>
                 </pre>
                 <p>
-                    Then the light emission is multiplied by the transmittance before being added to the surface' emitted light.
+                    Light emission is then multiplied by the transmittance before being added to the emitted light.
                     $$
                     \text{light}_\text{emission}^\prime = \text{light}_\text{emission} \cdot T
                     $$
@@ -198,7 +198,7 @@ pixelValue *= scale;
                 </div>
 
                 <p>
-                    Scattering inside volumes also doesn't take an eternity to converge now, the only difference here is that instead of calculating the surface BSDF, I evaluate the phase function. Both images below are 25K samples per pixels.
+                    Scattering inside volumes also doesn't take an eternity to converge now, the only difference here is that instead of evaluating the surface BSDF, I evaluate the phase function. Both images below are 25K samples per pixels.
                 </p>
                 <div class="image-row">
                     <div class="centered-container">

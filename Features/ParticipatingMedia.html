@@ -51,17 +51,17 @@
             <h2>Why Two Separate Approaches?</h2>
             <div class="chapter-content">
                 <p>
-                    Initially, I tried using a simple flag tracking approach where a boolean in the ray payload tracks whether the ray is inside or outside a volume. When a ray enters through refraction, the flag is set to true, when exiting, it's set to false. This works well for basic scattering for things like subsurface scattering, but has some serious limitations: it can't handle rays that spawn inside volumes (like when the camera is positioned within fog) because the flag is set only when explicitly entering or exiting, and it can't compute transmittance values needed for NEE since it doesn't know the actual distance traveled through the medium in any arbitrary direction.
+                    Initially, I tried using a simple flag tracking approach with meshes, where a boolean in the ray payload tracks whether the ray is inside or outside a volume. When a ray enters through refraction, the flag is set to true, when exiting, it's set to false. This works well for basic scattering for things like subsurface scattering, but has some serious limitations: it can't handle rays that spawn inside volumes (like when the camera is positioned within fog) because the flag is set only when explicitly entering or exiting, and it can't compute transmittance values needed for NEE since it doesn't know the actual distance traveled through the medium in any arbitrary direction.
                 </p>
                 <p>
-                    So I needed a more robust method for determining whether a point is inside or outside a volume. To find whether a ray is inside a mesh-based volume, ray has to be cast and the number of intersections counted (odd = inside, even = outside). But this approach has significant problems:
+                    So I needed a different method for determining whether a point is inside or outside a volume. To find whether a ray is inside a mesh based volume, ray has to be cast and the number of intersections counted (odd = inside, even = outside). But this approach has significant problems:
                     <ul>
-                        <li><strong>Mesh requirements</strong>: Must be perfectly watertight with no holes or non-manifold geometry. (And even then there will be issues and edge cases due to floating point precision)</li>
+                        <li><strong>Mesh requirements</strong>: Must be perfectly watertight with no holes or non manifold geometry. (And even then there will be issues and edge cases due to floating point precision)</li>
                         <li><strong>Performance cost</strong>: Requires additional expensive ray queries per pixel for every volume in the scene, scaling poorly with mesh complexity and volume count. (Technically, since all rays start in the same position, only a single ray would have to be cast once and cached, but this would be almost impossible to implement due to the need for accurate intersection counting, which is absent due to the precision errors)</li>
                     </ul>
                 </p>
                 <p>
-                    And for the transmittance for NEE length of the ray path inside the volume in an arbitrary direction is needed, and for that enter and exit points have to be found. This of course requires even more ray queries, this time on every scattering event, which is very very expensive.
+                    And for the transmittance for NEE, length of the ray path inside the volume in an arbitrary direction is needed, and for that enter and exit points have to be found. This of course requires even more ray queries, this time on every scattering event, which is very very expensive. The framerates were absolutely abysmal with this approach.
                 </p>
 
                 <p>
@@ -72,7 +72,7 @@
             <h2>Solution</h2>
             <div class="chapter-content">
                 <p>
-                    The solution was to implement two separate approaches. For mesh based volumes, I stuck with the simple flag tracking approach. This allows me to still simulate subsurface scattering and other simple effects, which is the main use case for mesh volumes. But it can't handle rays spawning inside them, and NEE is disabled within them. But it doesn't work for atmospheric effects like fog or clouds.
+                    The solution was to implement two separate approaches. For mesh based volumes, I stuck with the simple flag tracking approach. This allows me to still simulate subsurface scattering and other simple effects, which is the main use case for mesh volumes. But it can't handle rays spawning inside them, and NEE is disabled within them. So it doesn't work for atmospheric effects like fog or clouds.
                 </p>
                 <p>
                     So for the atmospheric effects I use Axis Aligned Bounding Boxes (AABBs). Determining whether a ray is inside or outside an AABB is trivial and extremely fast. Ray AABB intersection tests are also dirt cheap, so I can afford to do them on every scattering to find the transmittance for NEE. This way, rays can spawn inside the volume and NEE works correctly.
@@ -148,14 +148,14 @@
                     </ul>
                 </p>
                 <p>
-                    Henyey-Greenstein phase function has a single parameter $g$ which controls the anisotropy of the scattering. $g = -1$ means full backscattering, $g = 0$ means isotropic scattering, and $g = 1$ means full forward scattering. It's a pretty simple phase function, but it's widely used in computer graphics because it's easy to implement and sample from, and it provides a good approximation for many types of media.
+                    Henyey Greenstein phase function has a single parameter $g$ which controls the anisotropy of the scattering. $g = -1$ means full backscattering, $g = 0$ means isotropic scattering, and $g = 1$ means full forward scattering. It's a pretty simple phase function, but it's widely used in computer graphics because it's easy to implement and sample from, and it provides a good approximation for many types of media.
 
                     $$
                     p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g(\mathbf{V} \cdot \mathbf{L}))^{\frac{3}{2}}}
                     $$
                 </p>
                 <p>
-                    Draine phase function is a bit more complex, it has two parameters $g$ and $\alpha$ which control the shape of the phase function. It's a better approximation for media like dust. for $\alpha = 0$, it reduces to the Henyey-Greenstein phase function, and for $\alpha = 1$ $g = 0$, it reduces to Rayleigh phase function.
+                    Draine phase function is a bit more complex, it has two parameters $g$ and $\alpha$ which control the shape of the phase function. It's a better approximation for media like dust. for $\alpha = 0$, it reduces to the Henyey Greenstein phase function, and for $\alpha = 1$ $g = 0$, it reduces to Rayleigh phase function.
 
                     $$
                     p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g \cdot (\mathbf{V} \cdot \mathbf{L}))^{3 / 2}} \cdot \frac{1 + \alpha \cdot (\mathbf{V} \cdot \mathbf{L})^2}{1 + \alpha (1 + 2g^2) / 3}
@@ -224,7 +224,7 @@
                     \text{normalize}(\mathbf{V} \times (0, 1, 0)) & \text{otherwise}
                     \end{cases}\\\\
                     \mathbf{T}_2 = \mathbf{V} \times \mathbf{T}_1\\\\
-                    \mathbf{L} = \mathbf{L}_{local}.x \cdot \mathbf{T}_1 + \mathbf{L}_{local}.y \cdot \mathbf{T}_2 + \mathbf{L}_{local}.z \cdot \mathbf{V}
+                    \mathbf{L} = \mathbf{L}_{local}{_x} \cdot \mathbf{T}_1 + \mathbf{L}_{local}{_y} \cdot \mathbf{T}_2 + \mathbf{L}_{local}{_z} \cdot \mathbf{V}
                     \end{gather*}
                     $$
                 </p>
@@ -332,7 +332,7 @@
                 </p>
 
                 <p>
-                    I solved this by implementing a simple optimization: subdividing the volume into a 32x32x32 grid of smaller regions, and computing the majorant for each region separately. Then when sampling a distance, the majorant of the region that the ray is currently in is used. This way, in low density areas, the majorant is much lower, and so the amount of null collisions is greatly reduced. The downside is that this requires additional memory to store the majorants for each region, but it's not that much, since it's just a single float per region. And the performance improvement is definitely worth it.
+                    I solved this by implementing a simple optimization: subdividing the volume into a 32x32x32 grid of smaller regions, and computing the majorant for each region separately. Then sampling a distance with the majorant of the region that the ray is currently in is used instead of the majorant of the entire volume. This way, in low density areas, the majorant is much lower, and so the amount of null collisions is greatly reduced. The downside is that this requires additional memory to store the majorants for each region, but it's not that much, since it's just a single float per region. And the performance improvement is definitely worth it.
                 </p>
                 <div class="image-row">
                     <div class="centered-container">
@@ -363,8 +363,22 @@
                     </div>
                 </div>
                 <p>
-                    As you can see, the amount of null collisions is greatly reduced, and the render time has improved by a lot. Now null collisions mostly happen on the borders between regions with different majorants, which is unavoidable. But it's not too bad since the grid is pretty small. And no visual fidelity is lost. This could be further improved by using a more complex data structure like a tree to store the region majorants, but again, storing and traversing a tree on a GPU is hard, so I didn't want to go down that rabbit hole.
+                    As you can see, the amount of null collisions is greatly reduced, and the render time has improved by a lot. Now, null collisions mostly happen on the borders between regions, which is unavoidable. But it's not too bad since the grid is pretty small. And since this approach is unbiased, no visual fidelity is lost. This could be further improved by using a more complex data structure like a tree to store the region majorants, but again, storing and traversing a tree on a GPU is hard, so I didn't want to go down that rabbit hole.
                 </p>
+            </div>
+
+            <h2>Emissive Non Uniform Volumes</h2>
+            <div class="chapter-content">
+                <p>
+                    Another feature I implemented is emissive heterogeneous volumes. OpenVDB volumes often come around with not only density grid but also emission grid. So I just store the emission grid in a separate 3D texture alongside the density grid. Then on each scattering event, the emission value at the current position is sampled and added to the emitted light.
+                </p>
+                <p>
+                    The color of the emission is determined by a simple temperature to RGB conversion function, which is based on black body radiation made according to <a href="https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html">this article</a>. Although I also included an option to use a simple color instead of temperature for more artistic control.
+                </p>
+
+                <div class="centered-container">
+                    <img src="../Images/EmissiveVolumes.png" width="100%">
+                </div>
             </div>
 
         </div>

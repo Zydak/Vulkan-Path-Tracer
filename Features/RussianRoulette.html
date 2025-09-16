@@ -34,7 +34,7 @@
             <h2>Russian Roulette</h2>
             <div class="chapter-content">
                 <p>
-                    For complex scenes path length became a performance bottleneck. Setting a fixed bounce limit felt arbitrary, too low and I'd lose important indirect lighting, too high and I'd waste performance on negligible contributions. So for determining path length I decided to use *Russian Roulette*. After every bounce of the ray, probability of ray continuing it's path $p$ is set. It can be chosen in any manner. I set it based on the maximum value of one of three RGB channels of surface contribution. A random number $\xi \sim \mathcal{U}(0, 1)$ is then generated and if $\xi$ is greater or equal than $p$, the ray is terminated. If ray continues, contribution is weighted by $p$ to account for the termination of other paths.
+                    For complex scenes path length became a performance bottleneck. Setting a fixed bounce limit felt arbitrary, too low and I'd lose important indirect lighting, too high and I'd waste performance on negligible contributions. So for determining path length I decided to use <b>Russian Roulette</b>. After every bounce of the ray, probability of ray continuing it's path $p$ is set. It can be chosen in any manner. I set it based on the maximum value of one of three RGB channels of surface contribution. A random number $\xi \sim \mathcal{U}(0, 1)$ is then generated and if $\xi$ is greater or equal than $p$, the ray is terminated. If ray continues, contribution is weighted by $p$ to account for the termination of other paths.
                 </p>
                 <p>
                     If $f$ is contribution of each ray then
@@ -59,19 +59,44 @@
                 <div class="image-row">
                     <div class="centered-container">
                         <img src="../Images/RouletteOff.png" alt="No Russian Roulette" width="100%">
-                        <p class="image-caption">No Russian Roulette</p>
+                        <p class="image-caption">No Russian Roulette <br> Render time: 45s</p>
                     </div>
                     <div class="centered-container">
                         <img src="../Images/RouletteOn.png" alt="With Russian Roulette" width="100%">
-                        <p class="image-caption">Russian Roulette</p>
+                        <p class="image-caption">Russian Roulette <br> Render time: 20s</p>
                     </div>
                 </div>
 
                 <p>
-                    Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K samples per pixel (10'000'000'000 samples in total) were taken, bounce limit was set to 20. It took 45s to compute. Image on the right has russian roulette enabled, dimensions and sample count are identical, but this time it took only 20s to compute. It is visually identical to one on the left but the render time has been cut in half. And the performance boost of the russian roulette only increases as the scenes become more complex, and more bounces are needed.
+                    Image on the left has russian roulette disabled. It's 2000x2000 pixels, 2.5K samples per pixel were taken, bounce limit was set to 20. It took 45s to compute. Image on the right has russian roulette enabled, dimensions and sample count are identical, but this time it took only 20s to compute. It is visually identical to one on the left but the render time has been cut in half. And the performance boost of the russian roulette only increases as the scenes become more complex, and more bounces are needed. That's especially true for volumetrics, where ray can bounce pretty much indefinitely.
                 </p>
                 <p>
-                    Of course I still had to set maximum bounce limit. If I set termination probability based on the ray energy, Russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
+                    Of course I still had to set maximum bounce limit. If I set termination probability based on the ray energy, russian roulette gives no guarantee for ray to be terminated if it just keeps bouncing indefinitely between 100% energy conserving surfaces. And there's no place for infinite loops in shaders. So the default limit I use is 200 max bounces, after that, ray is terminated no matter how much energy it has left.
+                </p>
+            </div>
+
+            <h2>Transmittance Russian Roulette</h2>
+            <div class="chapter-content">
+                <p>
+                    Another place where I used Russian roulette is for transmittance calculation through heterogeneous media. Since in non uniform volumes transmittance can't be computed analytically, it has to be estimated using Monte Carlo integration. This means that the entire ray path has to be simulated, sampling the density field along the way. This can be very expensive if the medium is large or dense, since a lot of scattering event will happen along the way. To speed this up I used russian roulette to terminate the ray early if it has already accumulated enough extinction.
+                </p>
+                <p>
+                    The idea is the same as before, but this time the probability of continuation $p$ is based on the transmittance $T$ accumulated so far. If the ray has already lost a lot of energy, it probably won't contribute much to the final image, so it can be terminated early. I set $p = T$.
+                </p>
+
+                <div class="image-row">
+                    <div class="centered-container">
+                        <img src="../Images/2556s200spp.png" alt="No Russian Roulette" width="100%">
+                        <p class="image-caption">No Russian Roulette <br> Render time: 2556s</p>
+                    </div>
+                    <div class="centered-container">
+                        <img src="../Images/161s200spp.png" alt="With Russian Roulette" width="100%">
+                        <p class="image-caption">Russian Roulette <br> Render time: 161s</p>
+                    </div>
+                </div>
+
+                <p>
+                    Both images have 200 samples per pixel, but the one on the left has transmittance russian roulette disabled. I set the bounce limit to 200 since lower values would introduce a lot of bias (If you look closely you can still see some of the bias even with 200 bounces, so technically the value should be even higher). While the one on the right has russian roulette enabled. The scene is a large heterogeneous volume with a lot of density variation, so the ray paths can be very long due to null collisions. The image on the left took 2556s to compute, while the one on the right took only 161s. Again, the visual quality is almost identical (in this case it's even better with RR due to the lack of bias).
                 </p>
             </div>
 
