@@ -105,9 +105,11 @@
                 <p>
                     To determine the distance at which the scattering occurs, I use the following formula:
 
-                    $$
-                    t = -\frac{\ln(1 - \xi)}{\sigma_t}
-                    $$
+                    <p>
+                        $$
+                        t = -\frac{\ln(1 - \xi)}{\sigma_t}
+                        $$
+                    </p>
                 </p>
                 <p>
                     where $\sigma_t$ is the scattering coefficient, or how I call it, density. If this distance is shorter than the distance to the other side of the volume, or any other closest geometry, the ray has scattered inside the volume.
@@ -121,15 +123,19 @@
                 <p>
                     Another problem is sampling the distance. The formula used for homogeneous volumes assumes constant density along the ray path, which isn't the case here. So I had to use delta tracking, which is a rejection sampling method. The idea is to sample a distance assuming a maximum density (also called majorant) $\sigma_{max}$ along the ray path which can be just precomputed as a maximum density in the entire volume, and then accept or reject that distance based on the actual density at that point. If the distance is rejected (a null collision occurred), a new distance is sampled from that point again, until a distance is accepted or the ray exits the volume. The formula for sampling the distance is the same as for homogeneous volumes, just using $\sigma_{max}$ instead of $\sigma_t$:
 
-                    $$
-                    t = -\frac{\ln(1 - \xi)}{\sigma_{max}}
-                    $$
+                    <p>
+                        $$
+                        t = -\frac{\ln(1 - \xi)}{\sigma_{max}}
+                        $$
+                    </p>
 
                     And the probability of accepting that distance is:
 
-                    $$
-                    p_{accept} = \frac{\sigma(t)}{\sigma_{max}}
-                    $$
+                    <p>
+                        $$
+                        p_{accept} = \frac{\sigma(t)}{\sigma_{max}}
+                        $$
+                    </p>
                 </p>
 
                 <p>
@@ -150,16 +156,20 @@
                 <p>
                     Henyey Greenstein phase function has a single parameter $g$ which controls the anisotropy of the scattering. $g = -1$ means full backscattering, $g = 0$ means isotropic scattering, and $g = 1$ means full forward scattering. It's a pretty simple phase function, but it's widely used in computer graphics because it's easy to implement and sample from, and it provides a good approximation for many types of media.
 
-                    $$
-                    p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g(\mathbf{V} \cdot \mathbf{L}))^{\frac{3}{2}}}
-                    $$
+                    <p>
+                        $$
+                        p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g(\mathbf{V} \cdot \mathbf{L}))^{\frac{3}{2}}}
+                        $$
+                    </p>
                 </p>
                 <p>
                     Draine phase function is a bit more complex, it has two parameters $g$ and $\alpha$ which control the shape of the phase function. It's a better approximation for media like dust. for $\alpha = 0$, it reduces to the Henyey Greenstein phase function, and for $\alpha = 1$ $g = 0$, it reduces to Rayleigh phase function.
 
-                    $$
-                    p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g \cdot (\mathbf{V} \cdot \mathbf{L}))^{3 / 2}} \cdot \frac{1 + \alpha \cdot (\mathbf{V} \cdot \mathbf{L})^2}{1 + \alpha (1 + 2g^2) / 3}
-                    $$
+                    <p>
+                        $$
+                        p(\mathbf{V} \cdot \mathbf{L}) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g \cdot (\mathbf{V} \cdot \mathbf{L}))^{3 / 2}} \cdot \frac{1 + \alpha \cdot (\mathbf{V} \cdot \mathbf{L})^2}{1 + \alpha (1 + 2g^2) / 3}
+                        $$
+                    </p>
                 </p>
                 <p>
                     Approximated MIE phase function is implemented according to <a href="https://research.nvidia.com/labs/rtr/approximate-mie/">this paper</a>. It is a blend of Draine and HG based on the water droplets size. It's a pretty good approximation for media with high forward scattering like fog and clouds. For the formula for the blend weight look into the paper.
@@ -193,40 +203,48 @@
                 <p>
                     For sampling the direction I use importance sampling, the same as I did in the BSDF for the exactly same reason: it highly reduces variance. To importance sample the Henyey-Greenstein phase function, I use inverse transform sampling: 
 
-                    $$
-                    \mathbf{V} \cdot \mathbf{L} = 
-                    \begin{cases}
-                    \frac{1}{2g}(1 + g^2 - (\frac{1 - g^2}{1 - g + 2g \xi_1})^2) & if & g \neq 0\\
-                    1 - 2 \xi_1 & if & g = 0
-                    \end{cases}
-                    $$
-
+                    <p>
+                        $$
+                        \mathbf{V} \cdot \mathbf{L} = 
+                        \begin{cases}
+                        \frac{1}{2g}(1 + g^2 - (\frac{1 - g^2}{1 - g + 2g \xi_1})^2) & if & g \neq 0\\
+                        1 - 2 \xi_1 & if & g = 0
+                        \end{cases}
+                        $$
+                    </p>
+                </p>
+                <p>
                     Unfortunately Draine phase function doesn't have an analytical solution for inverse CDF, so I use some approximated analytic sampling function that's included with <a href="https://research.nvidia.com/labs/rtr/approximate-mie/">this paper</a>. I won't include the formula here since it's an absolute mess.
                 </p>
                 <p>
                     So after sampling the cosine of the scattering angle, to get the full 3D direction, another angle around the cone has to be sampled and a 3D direction has to be created from both of them.
 
-                    $$
-                    \begin{gather*}
-                    \sin\theta = \sqrt{1 - (\mathbf{V} \cdot \mathbf{L})^2}\\
-                    \phi = 2\pi \xi_2
-                    \end{gather*}
-                    $$
+                    <p>
+                        $$
+                        \begin{gather*}
+                        \sin\theta = \sqrt{1 - (\mathbf{V} \cdot \mathbf{L})^2}\\
+                        \phi = 2\pi \xi_2
+                        \end{gather*}
+                        $$
+                    </p>
 
+                <p>
                     So first I constructed $\mathbf{L}$ in a coordinate system where $\mathbf{V}$ points along the z-axis, and then transformed it to world space using orthonormal basis around $\mathbf{V}$:
 
-                    $$
-                    \begin{gather*}
-                    \mathbf{L}_{local} = (\sin\theta \cos\phi, \sin\theta \sin\phi, \mathbf{V} \cdot \mathbf{L})\\\\
-                    \mathbf{T}_1 = 
-                    \begin{cases}
-                    \text{normalize}(\mathbf{V} \times (0, 0, 1)) & \text{if } |\mathbf{V}_y| = 1\\
-                    \text{normalize}(\mathbf{V} \times (0, 1, 0)) & \text{otherwise}
-                    \end{cases}\\\\
-                    \mathbf{T}_2 = \mathbf{V} \times \mathbf{T}_1\\\\
-                    \mathbf{L} = \mathbf{L}_{local}{_x} \cdot \mathbf{T}_1 + \mathbf{L}_{local}{_y} \cdot \mathbf{T}_2 + \mathbf{L}_{local}{_z} \cdot \mathbf{V}
-                    \end{gather*}
-                    $$
+                    <p>
+                        $$
+                        \begin{gather*}
+                        \mathbf{L}_{local} = (\sin\theta \cos\phi, \sin\theta \sin\phi, \mathbf{V} \cdot \mathbf{L})\\\\
+                        \mathbf{T}_1 = 
+                        \begin{cases}
+                        \text{normalize}(\mathbf{V} \times (0, 0, 1)) & \text{if } |\mathbf{V}_y| = 1\\
+                        \text{normalize}(\mathbf{V} \times (0, 1, 0)) & \text{otherwise}
+                        \end{cases}\\\\
+                        \mathbf{T}_2 = \mathbf{V} \times \mathbf{T}_1\\\\
+                        \mathbf{L} = \mathbf{L}_{local}{_x} \cdot \mathbf{T}_1 + \mathbf{L}_{local}{_y} \cdot \mathbf{T}_2 + \mathbf{L}_{local}{_z} \cdot \mathbf{V}
+                        \end{gather*}
+                        $$
+                    </p>
                 </p>
             </div>
 

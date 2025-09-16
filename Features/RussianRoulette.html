@@ -39,21 +39,28 @@
                 <p>
                     If $f$ is contribution of each ray then
 
-                    $$
-                    f^\prime =
-                    \begin{cases}
-                    0 & \xi \ge p \\
-                    \frac{f}{p} & \text{otherwise}
-                    \end{cases}
-                    $$
+                    <p>
+                        $$
+                        f^\prime =
+                        \begin{cases}
+                        0 & \xi \ge p \\
+                        \frac{f}{p} & \text{otherwise}
+                        \end{cases}
+                        $$
+                    </p>
+                </p>
+                <p>
 
                     The expected value remains the same, so the image will converge to the same result eventually:
 
-                    $$
-                    E[f^\prime] = (1 - p) \cdot 0 + p \cdot \frac{E[f]}{p} = E[f]
-                    $$
+                    <p>
+                        $$
+                        E[f^\prime] = (1 - p) \cdot 0 + p \cdot \frac{E[f]}{p} = E[f]
+                        $$
+                    </p>
 
                     This of course introduces more variance, but as long as probability of ray continuation $p$ is chosen correctly, and rays aren't terminated too often, the performance boost will easily outweigh small variance.
+
                 </p>
 
                 <div class="image-row">
@@ -81,7 +88,7 @@
                     Another place where I used Russian roulette is for transmittance calculation through heterogeneous media. Since in non uniform volumes transmittance can't be computed analytically, it has to be estimated using Monte Carlo integration. This means that the entire ray path has to be simulated, sampling the density field along the way. This can be very expensive if the medium is large or dense, since a lot of scattering event will happen along the way. To speed this up I used russian roulette to terminate the ray early if it has already accumulated enough extinction.
                 </p>
                 <p>
-                    The idea is the same as before, but this time the probability of continuation $p$ is based on the transmittance $T$ accumulated so far. If the ray has already lost a lot of energy, it probably won't contribute much to the final image, so it can be terminated early. I set $p = T$.
+                    The idea is the same as before, but this time the probability of continuation $p$ is based on the transmittance $T$ accumulated so far $p = T$.
                 </p>
 
                 <div class="image-row">

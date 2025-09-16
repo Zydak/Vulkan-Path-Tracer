@@ -116,21 +116,30 @@
 
                     For metallic and dielectric reflection:
 
-                    $$
-                    f_\text{ms} = (1 + F_0 \cdot \frac{1 - E_\text{ss}}{E_\text{ss}}) \cdot f_\text{ss}
-                    $$
+                    <p>
+                        $$
+                        f_\text{ms} = (1 + F_0 \cdot \frac{1 - E_\text{ss}}{E_\text{ss}}) \cdot f_\text{ss}
+                        $$
+                    </p>
 
+                </p>
+                <p>
+
+                </p>
                     with $E_\text{ss}$ being the value from the LUT. $f_\text{ss}$ being the single scattering BRDF that's evaluated. And $f_\text{ms}$ being final multi scatter approximation.
 
                     and for glass
 
-                    $$
-                    \begin{gather*}
-                    f_\text{ms}^R = \frac{f_\text{ss}^R}{E_\text{ss}}\\
-                    f_\text{ms}^T = \frac{f_\text{ss}^T}{E_\text{ss}}
-                    \end{gather*}
-                    $$
-
+                    <p>
+                        $$
+                        \begin{gather*}
+                        f_\text{ms}^R = \frac{f_\text{ss}^R}{E_\text{ss}}\\
+                        f_\text{ms}^T = \frac{f_\text{ss}^T}{E_\text{ss}}
+                        \end{gather*}
+                        $$
+                    </p>
+                </p>
+                <p>
                     And that's it. To verify whether the compensation is actually working a furnace test can be used again. Here's side by side comparison. The difference is clearly visible.
                 </p>
 
