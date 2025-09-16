@@ -4,6 +4,7 @@
 #include <portable-file-dialogs.h>
 #include <memory>
 #include <filesystem>
+#include <chrono>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
@@ -22,6 +23,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
 
     m_CurrentSceneFilepath = selection[0];
     m_PathTracer.SetScene(selection[0]);
+    
     // Create ImGui sampler
     VulkanHelper::Sampler::Config samplerConfig;
     samplerConfig.Device = device;
@@ -37,6 +39,12 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
         m_PostProcessor.SetTonemappingData({}, commandBuffer);
     });
+    
+    // Initialize camera with scene data
+    m_InitialViewMatrix = glm::inverse(m_PathTracer.GetCameraViewInverse());
+    m_InitialProjectionMatrix = glm::inverse(m_PathTracer.GetCameraProjectionInverse());
+    m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
+    UpdateCamera();
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
 }
@@ -86,6 +94,13 @@ void Editor::RenderViewportTab()
 
     ImGui::SameLine();
     ImGui::SetCursorPos(ImVec2((viewportSize.x - pathTraceImageSize.x * scale) / 2.0f, ImGui::GetCursorPos().y + (viewportSize.y - pathTraceImageSize.y * scale) / 2.0f));
+    
+    // Handle camera input when over the viewport
+    if (ImGui::IsWindowHovered() && ImGui::IsWindowFocused())
+    {
+        ProcessCameraInput();
+    }
+    
     m_Renderer.RenderImGuiImage(m_CurrentImGuiDescriptorIndex, pathTraceImageSize * scale);
     ImGui::End();
     ImGui::PopStyleVar();
@@ -97,6 +112,7 @@ void Editor::RenderSettingsTab()
 
     RenderInfo();
     RenderViewportSettings();
+    RenderCameraSettings();
     RenderMaterialSettings();
     RenderPostProcessingSettings();
     RenderPathTracingSettings();
@@ -126,20 +142,94 @@ void Editor::RenderViewportSettings()
             uint32_t Height;
         };
 
-        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
+        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
             Data* d = (Data*)data.get();
-            m_Device.WaitUntilIdle();
-            ResizeImage(d->Width, d->Height, commandBuffer);
+            ResizeImage(d->Width, d->Height);
+            m_Camera.SetAspectRatio((float)d->Width / (float)d->Height);
+            glm::mat4 viewMatrix = m_Camera.GetViewMatrix();
+            glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+            m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), cmd);
+            m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), cmd);
             m_RenderTime = 0.0f;
         });
     }
 }
 
-void Editor::ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer)
+void Editor::RenderCameraSettings()
 {
-    m_PathTracer.ResizeImage(width, height, commandBuffer);
+    if (!ImGui::CollapsingHeader("Camera Settings"))
+        return;
+
+    glm::vec3 position = m_Camera.GetPosition();
+
+    float fov = m_Camera.GetFov();
+    float yaw = m_Camera.GetYaw();
+    float pitch = m_Camera.GetPitch();
+    float movementSpeed = m_Camera.GetMovementSpeed();
+    float mouseSensitivity = m_Camera.GetMouseSensitivity();
+    
+    bool cameraChanged = false;
+    
+    if (ImGui::DragFloat3("Position", &position.x, 0.1f))
+    {
+        m_Camera.SetPosition(position);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("FOV", &fov, 10.0f, 120.0f))
+    {
+        m_Camera.SetFov(fov);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Yaw", &yaw, -180.0f, 180.0f))
+    {
+        m_Camera.SetRotation(yaw, pitch);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Pitch", &pitch, -89.0f, 89.0f))
+    {
+        m_Camera.SetRotation(yaw, pitch);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::SliderFloat("Movement Speed", &movementSpeed, 0.1f, 20.0f))
+    {
+        m_Camera.SetMovementSpeed(movementSpeed);
+    }
+    
+    if (ImGui::SliderFloat("Mouse Sensitivity", &mouseSensitivity, 0.01f, 1.0f))
+    {
+        m_Camera.SetMouseSensitivity(mouseSensitivity);
+    }
+    
+    if (cameraChanged)
+    {
+        UpdateCamera();
+    }
+        
+    if (ImGui::Button("Reset Camera"))
+    {
+        m_Camera = FlyCamera(m_InitialViewMatrix, m_InitialProjectionMatrix);
+        UpdateCamera();
+        m_RenderTime = 0.0f;
+    }
+        
+    ImGui::Text("Controls:");
+    ImGui::BulletText("Mouse drag to look around");
+    ImGui::BulletText("WASD to move forward/back/left/right");
+    ImGui::BulletText("Space/LShift to move up/down");
+}
+
+void Editor::ResizeImage(uint32_t width, uint32_t height)
+{
+    m_PathTracer.ResizeImage(width, height);
     m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+    
+    // Update camera aspect ratio when image is resized
+    UpdateCamera();
 }
 
 void Editor::RenderMaterialSettings()
@@ -200,7 +290,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetBaseColorTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -214,7 +303,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetBaseColorTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -229,7 +317,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetNormalTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -243,7 +330,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetNormalTexture((uint32_t)selectedMaterialIndex, "Default Normal Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -258,7 +344,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetRoughnessTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -272,7 +357,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetRoughnessTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -287,7 +371,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetMetallicTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -301,7 +384,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetMetallicTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -316,7 +398,6 @@ void Editor::RenderMaterialSettings()
         if (!selection.empty())
         {
             PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                m_Device.WaitUntilIdle();
                 auto* d = static_cast<DataTex*>(data.get());
                 m_PathTracer.SetEmissiveTexture(d->MaterialIndex, d->FilePath, commandBuffer);
                 m_RenderTime = 0.0f;
@@ -330,7 +411,6 @@ void Editor::RenderMaterialSettings()
         if (ImGui::Button("X"))
         {
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetEmissiveTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -436,7 +516,6 @@ void Editor::RenderInfo()
     if(ImGui::Button("Reload Shaders"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_Device.WaitUntilIdle();
             m_PathTracer.ReloadShaders(commandBuffer);
             m_RenderTime = 0.0f;
         });
@@ -445,18 +524,21 @@ void Editor::RenderInfo()
     if (ImGui::Button("Select Scene"))
     {
         auto selection = pfd::open_file("Select scene file", "", {
-            "Scene Files", "*.gltf"
+            "Scene Files", "*.gltf",
+            "All Files", "*.*"
         }).result();
         if (!selection.empty())
         {
             m_CurrentSceneFilepath = selection[0];
 
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetScene(m_CurrentSceneFilepath);
                 m_RenderTime = 0.0f;
                 m_PostProcessor.SetInputImage(m_PathTracer.GetOutputImageView());
                 m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+                m_InitialViewMatrix = glm::inverse(m_PathTracer.GetCameraViewInverse());
+                m_InitialProjectionMatrix = glm::inverse(m_PathTracer.GetCameraProjectionInverse());
+                m_Camera = FlyCamera(glm::inverse(m_PathTracer.GetCameraViewInverse()), glm::inverse(m_PathTracer.GetCameraProjectionInverse()));
             });
         }
     }
@@ -575,6 +657,15 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static int splitScreenCount = (int)m_PathTracer.GetSplitScreenCount();
+    if (ImGui::SliderInt("Split Screen Count", &splitScreenCount, 1, 4, "%d"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetSplitScreenCount((uint32_t)splitScreenCount, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 }
 
 void Editor::RenderEnvMapSettings()
@@ -618,7 +709,6 @@ void Editor::RenderEnvMapSettings()
         {
             envMapFilepath = selection[0];
             PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_Device.WaitUntilIdle();
                 m_PathTracer.SetEnvMapFilepath(envMapFilepath, commandBuffer);
                 m_RenderTime = 0.0f;
             });
@@ -670,16 +760,17 @@ void Editor::SaveToFileSettings()
 
 void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
 {
+    VulkanHelper::Image postProcessorImage = m_PostProcessor.GetOutputImageView().GetImage();
     VulkanHelper::Buffer::Config bufferConfig{};
     bufferConfig.Device = m_Device;
-    bufferConfig.Size = (uint64_t)(m_PostProcessor.GetOutputImageView().GetImage().GetWidth() * m_PostProcessor.GetOutputImageView().GetImage().GetHeight() * 4);
+    bufferConfig.Size = (uint64_t)(postProcessorImage.GetWidth() * postProcessorImage.GetHeight() * 4);
     bufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
     bufferConfig.CpuMapable = true;
     bufferConfig.DebugName = "Save to file Buffer";
     VulkanHelper::Buffer buffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
-    m_PostProcessor.GetOutputImageView().GetImage().TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_SRC_OPTIMAL, commandBuffer);
-    VH_ASSERT(buffer.CopyFromImage(commandBuffer, m_PostProcessor.GetOutputImageView().GetImage()) == VulkanHelper::VHResult::OK, "Failed to copy image to buffer");
+    postProcessorImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_SRC_OPTIMAL, commandBuffer);
+    VH_ASSERT(buffer.CopyFromImage(commandBuffer, postProcessorImage) == VulkanHelper::VHResult::OK, "Failed to copy image to buffer");
 
     VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
     VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
@@ -687,21 +778,31 @@ void Editor::SaveToFile(const std::string& filepath, VulkanHelper::CommandBuffer
     void* mappedData = buffer.Map().Value();
     stbi_write_png(
         filepath.c_str(),
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetWidth(),
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetHeight(),
+        (int)postProcessorImage.GetWidth(),
+        (int)postProcessorImage.GetHeight(),
         4,
         mappedData,
-        (int)m_PostProcessor.GetOutputImageView().GetImage().GetWidth() * 4
+        (int)postProcessorImage.GetWidth() * 4
     );
 
     buffer.Unmap();
-    VulkanHelper::Buffer imageBuffer;
 }
 
 void Editor::RenderVolumeSettings()
 {
     if (!ImGui::CollapsingHeader("Volume Settings"))
         return;
+
+    const char* phaseFunctions[] = { "Henyey", "Draine", "Henyey-Plus-Draine"};
+
+    static int selectedPhaseFunction = 0;
+    if (ImGui::Combo("Phase Function", &selectedPhaseFunction, phaseFunctions, IM_ARRAYSIZE(phaseFunctions)))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetPhaseFunction((PathTracer::PhaseFunction)selectedPhaseFunction, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 
     if (ImGui::Button("Add Volume"))
     {
@@ -740,14 +841,42 @@ void Editor::RenderVolumeSettings()
     ImGui::ListBox("Volumes", &selectedVolumeIndex, volumeNamesCStr.data(), volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
 
     bool volumeModified = false;
-    static PathTracer::Volume selectedVolume;
-    selectedVolume = volumes[(size_t)selectedVolumeIndex];
+    PathTracer::Volume selectedVolume = volumes[(size_t)selectedVolumeIndex];
+
+    if (ImGui::Button("Import Density Data (.vdb)"))
+    {
+        static std::vector<std::string> selection;
+        selection = pfd::open_file("Select Volume", ".", {"OpenVDB Files", "*.vdb"}).result();
+        if (!selection.empty())
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_PathTracer.AddDensityDataToVolume((uint32_t)selectedVolumeIndex, selection[0], commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+    }
+
+    if (selectedVolume.DensityDataIndex != -1)
+    {
+        ImGui::SameLine();
+        if (ImGui::Button("X"))
+        {
+            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+                m_PathTracer.RemoveDensityDataFromVolume((uint32_t)selectedVolumeIndex, commandBuffer);
+                m_RenderTime = 0.0f;
+            });
+        }
+    }
 
     ImGui::PushID("VolumeSettings");
 
     if (ImGui::InputFloat3("Corner Min", &selectedVolume.CornerMin.x))
         volumeModified = true;
     if (ImGui::InputFloat3("Corner Max", &selectedVolume.CornerMax.x))
+        volumeModified = true;
+    if (ImGui::InputFloat3("Translation", &selectedVolume.Position.x))
+        volumeModified = true;
+    if (ImGui::InputFloat3("Scale", &selectedVolume.Scale.x))
         volumeModified = true;
 
     if (ImGui::ColorEdit3("Color", &selectedVolume.Color.r, ImGuiColorEditFlags_Float))
@@ -756,11 +885,69 @@ void Editor::RenderVolumeSettings()
         volumeModified = true;
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
-    if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -0.99999f, 0.99999f, "%.5f", ImGuiSliderFlags_AlwaysClamp))
+
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN || 
+        selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
     {
-        volumeModified = true;
-        selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.99999f, 0.99999f);
+        if (ImGui::SliderFloat("Anisotropy", &selectedVolume.Anisotropy, -0.9999f, 0.9999f, "%.4f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.Anisotropy = glm::clamp(selectedVolume.Anisotropy, -0.9999f, 0.9999f);
+        }
     }
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
+    {
+        if (ImGui::SliderFloat("Alpha", &selectedVolume.Alpha, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.Alpha = glm::clamp(selectedVolume.Alpha, 0.0f, 1.0f);
+        }
+    }
+
+    if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN_PLUS_DRAINE)
+    {
+        if (ImGui::SliderFloat("Droplet Size", &selectedVolume.DropletSize, 5.0f, 50.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        {
+            volumeModified = true;
+            selectedVolume.DropletSize = glm::clamp(selectedVolume.DropletSize, 5.0f, 50.0f);
+        }
+    }
+
+    if(selectedVolume.TemperatureTextureView != nullptr)
+    {
+        if (ImGui::SliderFloat("Temperature Scale", &selectedVolume.TemperatureScale, 0.0f, 10.0f, "%.2f"))
+            volumeModified = true;
+        if (ImGui::SliderFloat("Temperature Gamma", &selectedVolume.TemperatureGamma, 0.1f, 5.0f, "%.2f"))
+            volumeModified = true;
+    }
+
+    static bool useBlackbody = selectedVolume.UseBlackbody;
+    if (ImGui::Checkbox("Use Blackbody", &useBlackbody))
+    {
+        selectedVolume.UseBlackbody = (int)useBlackbody;
+        volumeModified = true;
+    }
+
+    if (useBlackbody && selectedVolume.TemperatureTextureView != nullptr)
+    {
+        if (ImGui::InputInt("Kelvin Min", &selectedVolume.KelvinMin))
+        {
+            volumeModified = true;
+        }
+        if (ImGui::InputInt("Kelvin Max", &selectedVolume.KelvinMax))
+        {
+            volumeModified = true;
+        }
+    }
+
+    if (!useBlackbody)
+    {
+        if (ImGui::ColorEdit3("Emissive Color For Grid", &selectedVolume.TemperatureColor.r, ImGuiColorEditFlags_Float))
+            volumeModified = true;
+    }
+
+    if (ImGui::SliderFloat("m_EmissiveColorGamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
+        volumeModified = true;
 
     ImGui::PopID();
 
@@ -772,9 +959,96 @@ void Editor::RenderVolumeSettings()
             int volumeIndex;
         };
 
-        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
-            m_PathTracer.SetVolume((uint32_t)selectedVolumeIndex, selectedVolume, cmd);
+        PushDeferredTask(std::make_shared<DataVol>(DataVol{ selectedVolume, (int)selectedVolumeIndex }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
+            auto volumeData = std::static_pointer_cast<DataVol>(data);
+            m_PathTracer.SetVolume((uint32_t)volumeData->volumeIndex, volumeData->vol, cmd);
             m_RenderTime = 0.0f;
         });
+    }
+}
+
+void Editor::UpdateCamera()
+{    
+    // Update the path tracer with the new camera matrices (pass inverses)
+    PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void>) {
+        glm::mat4 viewMatrix = m_Camera.GetViewMatrix();
+        glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), cmd);
+        m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), cmd);
+    });
+}
+
+void Editor::ProcessCameraInput()
+{
+    // Calculate delta time
+    auto currentTime = std::chrono::steady_clock::now();
+    float deltaTime = std::chrono::duration<float>(currentTime - m_LastFrameTime).count();
+    m_LastFrameTime = currentTime;
+    
+    bool cameraChanged = false;
+    
+    // Mouse rotation (only when dragging)
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    {
+        m_IsDraggingViewport = true;
+        ImVec2 mousePos = ImGui::GetMousePos();
+        m_LastMousePos = {mousePos.x, mousePos.y};
+    }
+    
+    if (m_IsDraggingViewport && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        ImVec2 mousePos = ImGui::GetMousePos();
+        glm::vec2 currentMousePos = {mousePos.x, mousePos.y};
+        glm::vec2 deltaPos = currentMousePos - m_LastMousePos;
+        
+        m_Camera.ProcessMouseMovement(deltaPos.x, deltaPos.y);
+
+        if (m_LastMousePos != currentMousePos)
+            cameraChanged = true;
+
+        m_LastMousePos = currentMousePos;
+    }
+
+    // Keyboard movement (WASD + space/left shift for up/down)
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_W))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::FORWARD, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_S))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::BACKWARD, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_A))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::LEFT, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_D))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::RIGHT, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_Space))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::UP, deltaTime);
+        cameraChanged = true;
+    }
+    if (m_IsDraggingViewport && ImGui::IsKeyDown(ImGuiKey_LeftShift))
+    {
+        m_Camera.ProcessKeyboard(FlyCamera::Direction::DOWN, deltaTime);
+        cameraChanged = true;
+    }
+    
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_IsDraggingViewport = false;
+    }
+    
+    if (cameraChanged)
+    {
+        UpdateCamera();
+        m_RenderTime = 0.0f;
     }
 }

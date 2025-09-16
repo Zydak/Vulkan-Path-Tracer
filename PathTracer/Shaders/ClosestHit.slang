@@ -177,7 +177,7 @@ void Main(inout Payload payload, in float2 attrib)
 
         if (canHitEnvMap)
         {
-            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 0.00001f, toEnvMapDirectionWorld);
+            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toEnvMapDirectionWorld);
         }
     }
     #endif
@@ -236,7 +236,7 @@ void Main(inout Payload payload, in float2 attrib)
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
-    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-0.00001f * (float)wasRefracted + 0.00001f * (float)(!wasRefracted));
+    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-5 * (float)wasRefracted + 1e-5 * (float)(!wasRefracted));
     payload.Direction = newDir;
 
     payload.BxDF *= scatterSample.BxDF;
@@ -249,20 +249,7 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitEnvMap)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float transmittance = 1.0f;
-            for (uint i = 0; i < uUBO.VolumesCount; i++)
-            {
-                const Volume volume = uVolumes[i];
-                VolumeIntersection intersection = volume.IntersectWithRay(payload.Origin, toEnvMapDirectionWorld);
-
-                if (volume.IsPointInside(payload.Origin))
-                {
-                    intersection.HitPointNear = 0.0f;
-                }
-
-                float pathThroughVolumeLength = intersection.HitPointFar - intersection.HitPointNear;
-                transmittance *= exp(-volume.GetDensity() * pathThroughVolumeLength);
-            }
+            float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
 
             if (envMapValue.a > 0.0f && envMapDirectionEval.PDF > 0.0f)
             {
@@ -275,6 +262,5 @@ void Main(inout Payload payload, in float2 attrib)
     // Invalid samples have to be discarded
     bool isInvalid = scatterSample.PDF <= 0.0f;
     payload.Depth = MAX_DEPTH * (isInvalid) + (payload.Depth + 1 * (!isInvalid));
-
     // ---------------------------------------------------------------------------------
 }

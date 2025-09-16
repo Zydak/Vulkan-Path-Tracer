@@ -176,6 +176,72 @@ public struct Sampler
     }
 
     [mutating]
+    public float3 SampleDraine(float3 incidentDir, float g, float a)
+    {        
+        float2 rand = UniformFloat2();
+
+        float cosTheta;
+        if (abs(g) < 1e-5) {
+            cosTheta = 2.0 * rand.x - 1.0f;
+        }
+        else if (abs(a) < 1e-5)
+        {
+            float sqrTerm = (1.0 - g * g) / (1.0 - g + 2.0 * g * rand.x);
+            cosTheta = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
+        }
+        else
+        {
+            const float g2 = g * g;
+            const float g3 = g * g2;
+            const float g4 = g2 * g2;
+            const float g6 = g2 * g4;
+            const float pgp1_2 = (1 + g2) * (1 + g2);
+            const float T1 = (-1 + g2) * (4 * g2 + a * pgp1_2);
+            const float T1a = -a + a * g4;
+            const float T1a3 = T1a * T1a * T1a;
+            const float T2 = -1296 * (-1 + g2) * (a - a * g2) * (T1a) * (4 * g2 + a * pgp1_2);
+            const float T3 = 3 * g2 * (1 + g * (-1 + 2 * rand.x)) + a * (2 + g2 + g3 * (1 + 2 * g2) * (-1 + 2 * rand.x));
+            const float T4a = 432 * T1a3 + T2 + 432 * (a - a * g2) * T3 * T3;
+            const float T4b = -144 * a * g2 + 288 * a * g4 - 144 * a * g6;
+            const float T4b3 = T4b * T4b * T4b;
+            const float T4 = T4a + sqrt(-4 * T4b3 + T4a * T4a);
+            const float T4p3 = pow(T4, 1.0 / 3.0);
+            const float T6 = (2 * T1a + (48 * pow(2, 1.0 / 3.0) *
+                (-(a * g2) + 2 * a * g4 - a * g6)) / T4p3 + T4p3 / (3. * pow(2, 1.0 / 3.0))) / (a - a * g2);
+            const float T5 = 6 * (1 + g2) + T6;
+            cosTheta = (1 + g2 - pow(-0.5 * sqrt(T5) + sqrt(6 * (1 + g2) - (8 * T3) / (a * (-1 + g2) * sqrt(T5)) - T6) / 2., 2)) / (2. * g);
+        }
+
+        float phi = 2.0 * M_PI * rand.y;
+
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+        // new dir is created in tangent space, so rotate it by incidentDir
+        float3 up = abs(incidentDir.y) < 0.9999999 ? float3(0, 1, 0) : float3(0, 0, 1);
+        float3 tangent = normalize(cross(up, incidentDir));
+        float3 bitangent = cross(incidentDir, tangent);
+        float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
+
+        return scatteredDir;
+    }
+
+    [mutating]
+    public float3 SampleHGPlusDraine(float3 incidentDir, float d)
+    {
+        const float GHG = exp(-(0.0990567f / (d - 1.67154)));
+        const float GD = exp(-(2.20679f / (d + 3.91029)) - 0.428934);
+        const float ALPHA_D = exp(3.62489f - (8.29288f / (d + 5.52825)));
+        const float W_D = exp(-(0.599085f / (d - 0.641583)) - 0.665888);
+
+        float u = UniformFloat();
+        if (u < W_D)
+            return SampleHenyeyGreenstein(incidentDir, GHG);
+        else
+            return SampleDraine(incidentDir, GD, ALPHA_D);
+    }
+
+    [mutating]
     public void ImportanceSampleEnvMap(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
     {
         // Uniformly pick a texel index idx in the environment map
@@ -225,7 +291,7 @@ public struct Sampler
         const float sinTheta = sin(theta);
         const float v = theta * M_1_OVER_PI;
 
-        toLight = float3(sinPhi * sinTheta, cosTheta, -cosPhi * sinTheta);
+        toLight = float3(sinPhi * sinTheta, -cosTheta, -cosPhi * sinTheta);
 
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);

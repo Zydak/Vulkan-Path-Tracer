@@ -298,7 +298,7 @@ public struct Material
     //
     public BxDFEval EvaluateReflection(in float3 V, in float3 L, in float3 F)
     {
-        if (L.z <= 0.01f)
+        if (L.z <= 1e-5)
             return { float3(0.0f, 0.0f, 0.0f), 0.0f };
         
         float3 H = normalize(V + L);
@@ -326,7 +326,7 @@ public struct Material
     //
     public BxDFEval EvaluateRefraction(in float3 V, in float3 L, in float3 F)
     {
-        if (L.z >= 0.0f)
+        if (L.z >= 1e-5)
             return { float3(0.0f, 0.0f, 0.0f), 0.0f };
 
         float3 H = normalize(Eta * V + L);

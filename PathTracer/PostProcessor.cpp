@@ -53,10 +53,14 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
 
         postProcessor.m_TonemappingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
-        VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddBuffer(2, 0, postProcessor.m_TonemappingBuffer) == VulkanHelper::VHResult::OK, "Failed to add tonemapping buffer to descriptor set");
+        bufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
+        bufferConfig.CpuMapable = true;
+        postProcessor.m_TonemappingStagingBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+        VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddBuffer(2, 0, &postProcessor.m_TonemappingBuffer) == VulkanHelper::VHResult::OK, "Failed to add tonemapping buffer to descriptor set");
     
-        postProcessor.m_Sampler = VulkanHelper::Sampler::New({ device }).Value();
-        VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddSampler(4, 0, postProcessor.m_Sampler) == VulkanHelper::VHResult::OK, "Failed to add sampler to tonemapping descriptor set");
+        postProcessor.m_Sampler = VulkanHelper::Sampler::New({ device, VulkanHelper::Sampler::AddressMode::CLAMP_TO_EDGE }).Value();
+        VH_ASSERT(postProcessor.m_TonemappingDescriptorSet.AddSampler(4, 0, &postProcessor.m_Sampler) == VulkanHelper::VHResult::OK, "Failed to add sampler to tonemapping descriptor set");
     }
 
     // Bloom
@@ -76,7 +80,7 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
         for (uint32_t i = 0; i < MAX_BLOOM_LEVELS; i++)
         {
             postProcessor.m_BloomDescriptorSets.push_back(postProcessor.m_DescriptorPool.AllocateDescriptorSet({ bindingDescriptions.data(), static_cast<uint32_t>(bindingDescriptions.size()) }).Value());
-            VH_ASSERT(postProcessor.m_BloomDescriptorSets[i].AddSampler(2, 0, postProcessor.m_BloomSampler) == VulkanHelper::VHResult::OK, "Failed to add bloom sampler to descriptor set");
+            VH_ASSERT(postProcessor.m_BloomDescriptorSets[i].AddSampler(2, 0, &postProcessor.m_BloomSampler) == VulkanHelper::VHResult::OK, "Failed to add bloom sampler to descriptor set");
         }
 
         VulkanHelper::Shader downSampleShader = VulkanHelper::Shader::New({
@@ -151,14 +155,14 @@ void PostProcessor::SetInputImage(VulkanHelper::ImageView inputImageView)
         {
             if (i == 0)
             {
-                VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(0, 0, inputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image input view to descriptor set");
+                VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(0, 0, &inputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image input view to descriptor set");
             }
             else
             {
-                VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(0, 0, m_BloomViews[(size_t)glm::max(i - 1, 0)], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image input view to descriptor set");
+                VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(0, 0, &m_BloomViews[(size_t)glm::max(i - 1, 0)], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image input view to descriptor set");
             }
 
-            VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(1, 0, m_BloomViews[(size_t)i], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image output view to descriptor set");
+            VH_ASSERT(m_BloomDescriptorSets[(size_t)i].AddImage(1, 0, &m_BloomViews[(size_t)i], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image output view to descriptor set");
         }
     }
 
@@ -175,9 +179,9 @@ void PostProcessor::SetInputImage(VulkanHelper::ImageView inputImageView)
 
         m_OutputImageView = VulkanHelper::ImageView::New({ outputImage, VulkanHelper::ImageView::ViewType::VIEW_2D }).Value();
 
-        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(0, 0, inputImageView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add input image view to descriptor set");
-        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(1, 0, m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
-        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(3, 0, m_BloomViews[0], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image view to descriptor set");
+        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(0, 0, &inputImageView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add input image view to descriptor set");
+        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(1, 0, &m_OutputImageView, VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add output image view to descriptor set");
+        VH_ASSERT(m_TonemappingDescriptorSet.AddImage(3, 0, &m_BloomViews[0], VulkanHelper::Image::Layout::GENERAL) == VulkanHelper::VHResult::OK, "Failed to add bloom image view to descriptor set");
     }
 }
 
@@ -238,7 +242,9 @@ void PostProcessor::PostProcess(VulkanHelper::CommandBuffer& commandBuffer)
 
 void PostProcessor::SetTonemappingData(const TonemappingData& data, VulkanHelper::CommandBuffer& commandBuffer)
 {
-    VH_ASSERT(m_TonemappingBuffer.UploadData(&data, sizeof(data), 0, &commandBuffer) == VulkanHelper::VHResult::OK, "Failed to upload tonemapping data");
+    // Use staging buffer to upload tonemapping data
+    VH_ASSERT(m_TonemappingStagingBuffer.UploadData(&data, sizeof(data), 0) == VulkanHelper::VHResult::OK, "Failed to upload tonemapping data to staging buffer");
+    VH_ASSERT(m_TonemappingBuffer.CopyFromBuffer(commandBuffer, m_TonemappingStagingBuffer, 0, 0, sizeof(data)) == VulkanHelper::VHResult::OK, "Failed to copy tonemapping data from staging buffer to device local buffer");
 }
 
 void PostProcessor::SetBloomData(const BloomData& data)

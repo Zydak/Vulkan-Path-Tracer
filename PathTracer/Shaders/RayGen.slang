@@ -20,14 +20,20 @@ import Defines;
 
 [[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
+[[vk::push_constant]] PushConstantData uPushConstants;
+
 [shader("raygeneration")]
 void Main()
 {
-    uint3 size = DispatchRaysDimensions();
+    uint3 size = DispatchRaysDimensions() * uUBO.ScreenSplitCount;
     uint3 LaunchID = DispatchRaysIndex();
 
+    uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
+    LaunchID.x += (splitScreenDispatchIndex % uUBO.ScreenSplitCount) * (size.x / uUBO.ScreenSplitCount);
+    LaunchID.y += (splitScreenDispatchIndex / uUBO.ScreenSplitCount) * (size.y / uUBO.ScreenSplitCount);
+
     Payload payload;
-    payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uUBO.Seed);
+    payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uPushConstants.Seed);
 
     float3 prevColor = uImage[LaunchID.xy].rgb;
 
@@ -75,7 +81,7 @@ void Main()
 
             bool scatteredInVolume = ScatteredInVolume(payload);
 
-            // If ray didn't scatter inside volume trace to the geometry surface
+            // If ray didn't scatter inside volume, trace to the geometry surface
             if (!scatteredInVolume)
                 TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
@@ -103,9 +109,9 @@ void Main()
     accumulatedLight *= scale;
 
     float3 color;
-    if (uUBO.FrameCount > 1)
+    if (uPushConstants.FrameCount > 1)
     {
-        float a = 1.0f / float(uUBO.FrameCount);
+        float a = 1.0f / float(uPushConstants.FrameCount);
         color = lerp(prevColor, accumulatedLight, a);
     }
     else
@@ -113,7 +119,7 @@ void Main()
         color = accumulatedLight;
     }
 
-    // I'm not exactly sure where, but a NAN happens from time to time. It's somewhere in the SampleGlass function
+    // I'm not exactly sure where, but a NAN happens from time to time. It's somewhere in the glass equations
     // but I can't pinpoint it. So just get rid of nans if there are any.
     if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
     {
@@ -131,7 +137,7 @@ bool ScatteredInVolume(inout Payload payload)
         int scatteredVolumeIndex = -1;
         for (int i = 0; i < uUBO.VolumesCount; i++)
         {
-            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler);
+            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, uSampler);
 
             // Choose the closest scatter distance
             if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
@@ -143,9 +149,10 @@ bool ScatteredInVolume(inout Payload payload)
 
         if (scatterDistance >= 0.0f && (distanceToGeometry < 0.0f || scatterDistance < distanceToGeometry))
         {
-            payload.Depth++;
             payload.Origin += payload.Direction * scatterDistance;
-            const float3 newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, uVolumes[scatteredVolumeIndex].GetAnisotropy());
+            payload.Depth++;
+
+            const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler);
 
             // Importance sampling Env map
             #ifdef ENABLE_ENV_MAP_MIS
@@ -153,7 +160,7 @@ bool ScatteredInVolume(inout Payload payload)
                 float3 toLightEnv;
                 float4 envMapValue;
                 payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
-                float3 envMapColor = envMapValue.rgb;
+                float3 envMapColor = envMapValue.rgb * uUBO.EnvironmentIntensity;
                 float envMapPDF = envMapValue.a;
 
                 float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
@@ -162,31 +169,22 @@ bool ScatteredInVolume(inout Payload payload)
                 toLightEnv = Rotate(toLightEnv, float3(0.0f, 1.0f, 0.0f), azimuth);
 
                 bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
-                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(newDir, toLightEnv) * (float)!isObscuredByGeometry;
-                float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluateHenyeyGreenstein(payload.Direction, newDir);
+                float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightEnv) * (float)!isObscuredByGeometry;
+                float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir);
 
                 // Transmittance along the ray has to be accounted for
-                float transmittance = 1.0f;
-                for (uint i = 0; i < uUBO.VolumesCount; i++)
-                {
-                    VolumeIntersection intersection = uVolumes[i].IntersectWithRay(payload.Origin, toLightEnv);
-                    if (uVolumes[i].IsPointInside(payload.Origin))
-                    {
-                        intersection.HitPointNear = 0.0f;
-                    }
-
-                    float pathThroughVolumeLength = intersection.HitPointFar - intersection.HitPointNear;
-
-                    transmittance *= exp(-uVolumes[i].GetDensity() * pathThroughVolumeLength);
-                }
+                float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, uVolumes, uUBO.VolumesCount, uSampler);
 
                 float3 colorSample = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
                 float3 colorLight = uVolumes[scatteredVolumeIndex].GetColor() * phaseLightDir;
 
+                payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler);
+
                 if (!isObscuredByGeometry && phaseLightDir > 0.0f)
                 {
-                   payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
+                   payload.Emitted += transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
                 }
+
                 payload.Direction = newDir;
                 payload.BxDF = colorSample;
                 payload.PDF = phaseSampledDir;
@@ -194,6 +192,7 @@ bool ScatteredInVolume(inout Payload payload)
             #else
             {
                 payload.Direction = newDir;
+                payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler));
                 payload.BxDF = uVolumes[scatteredVolumeIndex].GetColor();
                 payload.PDF = 1.0f;
             }

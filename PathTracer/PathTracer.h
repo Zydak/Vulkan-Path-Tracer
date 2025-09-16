@@ -2,6 +2,8 @@
 
 #include "VulkanHelper.h"
 
+#include <unordered_map>
+
 class PathTracer
 {
 public:
@@ -28,11 +30,40 @@ public:
         // AABB
         glm::vec3 CornerMin = glm::vec3(-1.0f);
         glm::vec3 CornerMax = glm::vec3(1.0f);
+        glm::vec3 Position = glm::vec3(0.0f);
+        glm::vec3 Scale = glm::vec3(1.0f);
 
         glm::vec3 Color = glm::vec3(0.8f);
         glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 TemperatureColor = glm::vec3(1.0f, 0.5f, 0.0f); // If blackbody is disabled
         float Density = 1.0f;
         float Anisotropy = 0.0f;
+        float Alpha = 1.0f;
+        float DropletSize = 20.0f;
+
+        int DensityDataIndex = -1; // -1 if homogeneous
+
+        int UseBlackbody = 1;
+        int HasTemperatureData = 0;
+        float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
+        float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        float EmissiveColorGamma = 1.0f; // Exponent for emissive color
+        int KelvinMin = 500;
+        int KelvinMax = 8000;
+
+        std::string DensityDataFilepath;
+        VulkanHelper::ImageView DensityTextureView;
+        VulkanHelper::ImageView TemperatureTextureView;
+        
+        // Heterogeneous volumes are split into 32x32x32 regions for skipping empty space
+        VulkanHelper::Buffer MaxDensitiesBuffer;
+    };
+
+    enum class PhaseFunction
+    {
+        HENYEY_GREENSTEIN = 0,
+        DRAINE = 1,
+        HENYEY_GREENSTEIN_PLUS_DRAINE = 2
     };
 
     [[nodiscard]] static PathTracer New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool);
@@ -42,7 +73,7 @@ public:
     // True when all samples were accumulated
     bool PathTrace(VulkanHelper::CommandBuffer& commandBuffer);
 
-    void ResizeImage(uint32_t width, uint32_t height, VulkanHelper::CommandBuffer commandBuffer);
+    void ResizeImage(uint32_t width, uint32_t height);
 
     void ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer);
 
@@ -67,6 +98,9 @@ public:
     void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
+    void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
+    void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
+    void SetPhaseFunction(PhaseFunction phaseFunction, VulkanHelper::CommandBuffer commandBuffer);
 
     [[nodiscard]] inline uint32_t GetSamplesAccumulated() const { return m_SamplesAccumulated; }
     [[nodiscard]] inline uint32_t GetSamplesPerFrame() const { return m_SamplesPerFrame; }
@@ -89,6 +123,10 @@ public:
     [[nodiscard]] inline bool IsInFurnaceTestMode() const { return m_FurnaceTestMode; }
     [[nodiscard]] inline float GetEnvironmentIntensity() const { return m_EnvironmentIntensity; }
     [[nodiscard]] inline bool UseRayQueries() const { return m_UseRayQueries; }
+    [[nodiscard]] inline const glm::mat4& GetCameraViewInverse() const { return m_CameraViewInverse; }
+    [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
+    [[nodiscard]] inline PhaseFunction GetPhaseFunction() const { return m_PhaseFunction; }
+    [[nodiscard]] inline uint32_t GetSplitScreenCount() const { return m_ScreenChunkCount; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -107,8 +145,11 @@ public:
     void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
+    void AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
+    void RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer commandBuffer);
 
-    void ResetPathTracing() { m_FrameCount = 0; m_SamplesAccumulated = 0; }
+    void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
 private:
     void CreateOutputImageView();
@@ -118,6 +159,11 @@ private:
     VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
 
     constexpr static uint32_t MAX_ENTITIES = 2048;
+    constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 100;
+
+    glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
+    glm::mat4 m_CameraProjectionInverse = glm::mat4(1.0f);
+    uint64_t m_DispatchCount = 0;
     uint32_t m_FrameCount = 0;
     uint32_t m_SamplesAccumulated = 0;
     uint32_t m_SamplesPerFrame = 1;
@@ -136,6 +182,8 @@ private:
     bool m_FurnaceTestMode = false;
     float m_EnvironmentIntensity = 1.0f;
     bool m_UseRayQueries = true;
+    PhaseFunction m_PhaseFunction = PhaseFunction::HENYEY_GREENSTEIN;
+    uint32_t m_ScreenChunkCount = 1;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -145,7 +193,6 @@ private:
     VulkanHelper::ImageView m_OutputImageView;
     uint32_t m_Width;
     uint32_t m_Height;
-    float m_FOV = 45.0f;
 
     VulkanHelper::ImageView m_EnvMapTexture;
     VulkanHelper::Buffer m_EnvAliasMap;
@@ -179,8 +226,6 @@ private:
     {
         glm::mat4 CameraViewInverse;
         glm::mat4 CameraProjectionInverse;
-        uint32_t FrameCount;
-        uint32_t Seed;
         uint32_t SampleCount;
         uint32_t MaxDepth;
         float MaxLuminance;
@@ -190,8 +235,20 @@ private:
         float EnvMapRotationAltitude;
         uint32_t VolumesCount;
         float EnvironmentIntensity;
+        uint32_t ScreenChunkCount;
+    };
+
+    struct PushConstantData
+    {
+        uint32_t FrameCount;
+        uint32_t Seed;
+        uint32_t ChunkIndex;
     };
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
+    VulkanHelper::PushConstant m_PathTracerPushConstant;
+
+    void UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
+    void DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
 
     std::vector<Material> m_Materials;
     std::vector<std::string> m_MaterialNames;
@@ -201,6 +258,57 @@ private:
     VulkanHelper::Sampler m_LookupTableSampler;
 
     VulkanHelper::ThreadPool* m_ThreadPool;
+
+    // Data that gets sent to the GPU
+    struct VolumeGPU
+    {
+        // AABB
+        glm::vec3 CornerMin = glm::vec3(-1.0f);
+        glm::vec3 CornerMax = glm::vec3(1.0f);
+
+        glm::vec3 Color = glm::vec3(0.8f);
+        glm::vec3 EmissiveColor = glm::vec3(0.0f);
+        glm::vec3 TemperatureColor = glm::vec3(1.0f, 0.5f, 0.0f); // If blackbody is disabled
+        float Density = 1.0f;
+        float Anisotropy = 0.0f;
+        float Alpha = 1.0f;
+        float DropletSize = 20.0f;
+
+        int DensityDataIndex = -1; // -1 if homogeneous
+
+        int UseBlackbody = 1;
+        int HasTemperatureData = 0;
+        float TemperatureGamma = 1.0f; // Exponent for temperature to compute blackbody radiation
+        float TemperatureScale = 1.0f; // Scales the temperature value read from the grid before using it to compute emission
+        float EmissiveColorGamma = 1.0f; // Exponent for emissive color
+        int KelvinMin = 500;
+        int KelvinMax = 8000;
+
+        VolumeGPU() = default;
+
+        VolumeGPU(const Volume& volume)
+            : CornerMin(volume.CornerMin)
+            , CornerMax(volume.CornerMax)
+            , Color(volume.Color)
+            , EmissiveColor(volume.EmissiveColor)
+            , TemperatureColor(volume.TemperatureColor)
+            , Density(volume.Density)
+            , Anisotropy(volume.Anisotropy)
+            , Alpha(volume.Alpha)
+            , DropletSize(volume.DropletSize)
+            , DensityDataIndex(volume.DensityDataIndex)
+            , UseBlackbody(volume.UseBlackbody)
+            , TemperatureGamma(volume.TemperatureGamma)
+            , TemperatureScale(volume.TemperatureScale)
+            , EmissiveColorGamma(volume.EmissiveColorGamma) // Default value
+            , KelvinMin(volume.KelvinMin)
+            , KelvinMax(volume.KelvinMax)
+        {
+            CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
+            CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
+            HasTemperatureData = volume.TemperatureTextureView != nullptr;
+        }
+    };
 
     std::vector<Volume> m_Volumes;
     VulkanHelper::Buffer m_VolumesBuffer;
