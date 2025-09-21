@@ -22,7 +22,14 @@ if (WIN32)
     )
 endif()
 
+# Copy layer settings
 add_custom_command(TARGET VulkanPathTracer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/../vk_layer_settings.txt" "$<TARGET_FILE_DIR:VulkanPathTracer>"
-    )
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/../vk_layer_settings.txt" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+)
+
+# Copy imgui init file
+add_custom_command(TARGET VulkanPathTracer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/../imgui.ini" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+)
