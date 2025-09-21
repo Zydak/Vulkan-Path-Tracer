@@ -8,13 +8,13 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
     postProcessor.m_Device = device;
 
     std::array<VulkanHelper::DescriptorPool::PoolSize, 2> poolSizes = {
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10}
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10000}
     };
 
     VulkanHelper::DescriptorPool::Config descriptorPoolConfig{};
     descriptorPoolConfig.Device = device;
-    descriptorPoolConfig.MaxSets = 100;
+    descriptorPoolConfig.MaxSets = 10000;
     descriptorPoolConfig.PoolSizes = poolSizes.data();
     descriptorPoolConfig.PoolSizeCount = static_cast<uint32_t>(poolSizes.size());
 

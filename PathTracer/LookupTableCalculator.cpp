@@ -10,7 +10,7 @@ LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device, co
     calculator.m_Device = device;
 
     std::array<VulkanHelper::DescriptorPool::PoolSize, 1> poolSizes = {{
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 1},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 10000},
     }};
 
     VulkanHelper::DescriptorPool pool = VulkanHelper::DescriptorPool::New({device, 1, poolSizes.data(), poolSizes.size()}).Value();
@@ -18,7 +18,7 @@ LookupTableCalculator LookupTableCalculator::New(VulkanHelper::Device device, co
     VulkanHelper::DescriptorSet::BindingDescription bindingDescription = {};
     bindingDescription.Binding = 0;
     bindingDescription.Type = VulkanHelper::DescriptorType::STORAGE_BUFFER;
-    bindingDescription.DescriptorsCount = 1;
+    bindingDescription.DescriptorsCount = 10000;
     bindingDescription.StageFlags = VulkanHelper::ShaderStages::COMPUTE_BIT;
 
     calculator.m_DescriptorSet = pool.AllocateDescriptorSet({&bindingDescription, 1}).Value();
