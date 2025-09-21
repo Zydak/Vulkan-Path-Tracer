@@ -24,20 +24,20 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
 
     // Descriptor pool
 
-    // Just add 10k of each type for now. TODO, switch the pool when it runs out
+    // Just add 100k of each type for now. TODO, switch the pool when it runs out
     std::array<VulkanHelper::DescriptorPool::PoolSize, 7> poolSizes = {
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLER, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLED_IMAGE, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLED_IMAGE, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 100000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR, 10000}
     };
 
     VulkanHelper::DescriptorPool::Config descriptorPoolConfig{};
     descriptorPoolConfig.Device = device;
-    descriptorPoolConfig.MaxSets = 100;
+    descriptorPoolConfig.MaxSets = 10000;
     descriptorPoolConfig.PoolSizes = poolSizes.data();
     descriptorPoolConfig.PoolSizeCount = static_cast<uint32_t>(poolSizes.size());
     pathTracer.m_DescriptorPool = VulkanHelper::DescriptorPool::New(descriptorPoolConfig).Value();
