@@ -7,3 +7,17 @@ if (NOT MSVC)
 endif()
 
 target_link_libraries(VulkanPathTracer PRIVATE VulkanHelper)
+
+if (WIN32)
+    # Copy the DLL to the executable directory
+    add_custom_command(TARGET VulkanPathTracer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../VulkanHelper/Libraries/slang/bin/slang.dll" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../VulkanHelper/Libraries/slang/bin/slang-glslang.dll" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../VulkanHelper/Libraries/slang/bin/slang-rt.dll" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../VulkanHelper/Libraries/slang/bin/slang-llvm.dll" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+    )
+endif()

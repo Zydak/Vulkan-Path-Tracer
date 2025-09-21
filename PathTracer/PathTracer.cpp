@@ -23,10 +23,15 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     }).Value();
 
     // Descriptor pool
-    std::array<VulkanHelper::DescriptorPool::PoolSize, 3> poolSizes = {
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 10},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10}
+
+    // Just add 10k of each type for now. TODO, switch the pool when it runs out
+    std::array<VulkanHelper::DescriptorPool::PoolSize, 6> poolSizes = {
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLED_IMAGE, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR, 10000}
     };
 
     VulkanHelper::DescriptorPool::Config descriptorPoolConfig{};
@@ -1060,7 +1065,7 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 
     VulkanHelper::Image textureImage = VulkanHelper::Image::New(imageConfig).Value();
 
-    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer);
 
     VulkanHelper::ImageView::Config imageViewConfig{};
     imageViewConfig.image = textureImage;
@@ -1223,6 +1228,8 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
         commandBuffer,
         textureImage
     ) == VulkanHelper::VHResult::OK, "Failed to copy staging buffer to image");
+
+    textureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
     // Finally send the alias map to the GPU
     VulkanHelper::Buffer::Config bufferConfig{};

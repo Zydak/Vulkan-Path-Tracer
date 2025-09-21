@@ -37,7 +37,7 @@ public struct Surface
 
         #ifdef USE_ONLY_GEOMETRY_NORMALS
         {
-            m_Normal = normalize(cross(v2.Position - v1.Position, v3.Position - v1.Position));
+            m_Normal = normalize(cross(v3.Position - v1.Position, v2.Position - v1.Position));
         }
         #else
         {
