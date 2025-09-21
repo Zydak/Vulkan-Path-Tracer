@@ -36,7 +36,7 @@ cd build
 cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 make
 ```
-Executable will be in `build/PathTracer/VulkanPathTracer`.
+Executable will be in `build/Debug/VulkanPathTracer`.
 
 # Features Overview
 
