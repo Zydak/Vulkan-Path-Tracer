@@ -25,12 +25,13 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     // Descriptor pool
 
     // Just add 10k of each type for now. TODO, switch the pool when it runs out
-    std::array<VulkanHelper::DescriptorPool::PoolSize, 6> poolSizes = {
+    std::array<VulkanHelper::DescriptorPool::PoolSize, 7> poolSizes = {
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLER, 10000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 10000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLED_IMAGE, 10000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 10000},
         VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR, 10000}
     };
 
