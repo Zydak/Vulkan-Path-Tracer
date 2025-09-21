@@ -21,3 +21,8 @@ if (WIN32)
         "${CMAKE_CURRENT_SOURCE_DIR}/../VulkanHelper/Libraries/slang/bin/slang-llvm.dll" "$<TARGET_FILE_DIR:VulkanPathTracer>"
     )
 endif()
+
+add_custom_command(TARGET VulkanPathTracer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../vk_layer_settings.txt" "$<TARGET_FILE_DIR:VulkanPathTracer>"
+    )
