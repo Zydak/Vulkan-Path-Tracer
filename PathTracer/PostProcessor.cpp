@@ -7,9 +7,14 @@ PostProcessor PostProcessor::New(VulkanHelper::Device device)
     PostProcessor postProcessor;
     postProcessor.m_Device = device;
 
-    std::array<VulkanHelper::DescriptorPool::PoolSize, 2> poolSizes = {
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 10000},
-        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 10000}
+    std::array<VulkanHelper::DescriptorPool::PoolSize, 7> poolSizes = {
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::COMBINED_IMAGE_SAMPLER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::SAMPLED_IMAGE, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_IMAGE, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::UNIFORM_BUFFER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::STORAGE_BUFFER, 100000},
+        VulkanHelper::DescriptorPool::PoolSize{VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR, 10000}
     };
 
     VulkanHelper::DescriptorPool::Config descriptorPoolConfig{};
