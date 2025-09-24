@@ -176,6 +176,28 @@ public struct Sampler
     }
 
     [mutating]
+    public float3 SampleRayleigh(float3 incidentDir)
+    {
+        float2 rand = UniformFloat2();
+        
+        float u = -pow(2 * (2 * rand.x - 1) + sqrt(4 * pow(2 * rand.x - 1, 2) + 1), 1.0f / 3.0f);
+        float cosTheta = u - (1.0f / u);
+        float phi = 2.0 * M_PI * rand.y;
+
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+        // new dir is created in tangent space, so rotate it by incidentDir
+        float3 up = abs(incidentDir.y) < 0.9999999 ? float3(0, 1, 0) : float3(0, 0, 1);
+        float3 tangent = normalize(cross(up, incidentDir));
+        float3 bitangent = cross(incidentDir, tangent);
+        float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
+
+        return scatteredDir;
+    }
+
+    [mutating]
     public float3 SampleDraine(float3 incidentDir, float g, float a)
     {        
         float2 rand = UniformFloat2();

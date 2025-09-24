@@ -297,17 +297,12 @@ public struct Volume
 
     public float EvaluateHenyeyGreenstein(float3 V, float3 L, in float g)
     {
-        if (g == 0.0f)
-            return 1.0f / (4.0f * M_PI);
-
-        return (1.0f / (4.0f * M_PI)) * ((1.0f - g * g) / pow(1.0f + g * g - 2.0f * g * dot(V, L), 1.5f));
+        return PhaseHenyeyGreenstein(V, L, g);
     }
 
     public float EvaluateDraine(float3 V, float3 L, in float g, in float a)
     {
-        float u = dot(V, L);
-        
-        return ((1 - g*g)*(1 + a*u*u))/(4.*(1 + (a*(1 + 2*g*g))/3.) * M_PI * pow(1 + g*g - 2*g*u,1.5));
+        return PhaseDraine(V, L, g, a);
     }
 
     static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in StructuredBuffer<Volume, ScalarDataLayout> uVolumes, in uint volumesCount, in SamplerState uTextureSampler)

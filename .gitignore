@@ -15,3 +15,4 @@ BinInt/
 Libraries/*
 !Libraries/CMakeLists.txt
 Assets/DragonHead.*
+RenderedImages/*

@@ -131,7 +131,16 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
 
-    VH_ASSERT(scene.Value().Cameras.Size() > 0, "No cameras found in scene! Please load a scene that contains a camera!");
+    // Add a default camera if the scene doesn't have any cameras
+    if (scene.Value().Cameras.Size() <= 0)
+    {
+        VulkanHelper::CameraAsset camera;
+        camera.AspectRatio = 16.0f / 9.0f;
+        camera.FOV = 45.0f;
+        camera.ViewMatrix = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        scene.Value().Cameras.PushBack(camera);
+    }
+
     VH_ASSERT(scene.Value().Meshes.Size() > 0, "No meshes found in scene! Please load a scene that contains meshes!");
 
     // Load Camera values

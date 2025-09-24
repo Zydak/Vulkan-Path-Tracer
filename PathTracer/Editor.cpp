@@ -47,6 +47,34 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
     UpdateCamera();
 
     m_CurrentImGuiDescriptorIndex = VulkanHelper::Renderer::CreateImGuiDescriptorSet(m_PostProcessor.GetOutputImageView(), m_ImGuiSampler, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL);
+
+    /// Hack the animation together
+
+
+    // Set initial state
+    PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+        m_PathTracer.SetEnvMapAltitude(100, commandBuffer);
+
+        glm::mat4 viewMatrix = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::normalize(glm::vec3(0.0f, -0.2f, -1.0f)),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
+
+        m_PathTracer.SetSamplesPerFrame(1000, commandBuffer);
+        m_PathTracer.SetMaxSamplesAccumulated(10000);
+
+        ResizeImage(300, 600);
+        m_Camera.SetAspectRatio((float)300 / (float)600);
+        glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
+        m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), commandBuffer);
+    });
+
+
+    ///
 }
 
 void Editor::Draw(VulkanHelper::CommandBuffer commandBuffer)
@@ -58,6 +86,31 @@ void Editor::Draw(VulkanHelper::CommandBuffer commandBuffer)
         task.second(commandBuffer, task.first);
     }
     m_DeferredTasks.clear();
+
+
+    /// Hack the animation together
+
+
+    uint32_t accumulatedSamples = m_PathTracer.GetSamplesAccumulated();
+    if (accumulatedSamples >= 1000)
+    {
+        // Save to file
+        static int loopIndex = 0;
+        std::string filepath = "../../RenderedImages/output_frame_" + std::to_string(loopIndex) + ".png";
+        SaveToFile(filepath, commandBuffer);
+        loopIndex++;
+
+        // Move the sun a bit
+        m_PathTracer.SetEnvMapAltitude(10 - 0.05f * loopIndex, commandBuffer);
+
+        if (loopIndex >= 800)
+        {
+            VH_ASSERT(false, "Done rendering animation");
+        }
+    }
+
+
+    ///
 
     bool allSamplesAccumulated = m_PathTracer.PathTrace(commandBuffer);
     if (!allSamplesAccumulated)
@@ -556,7 +609,7 @@ void Editor::RenderPathTracingSettings()
     }
 
     static int samplesPerFrame = (int)m_PathTracer.GetSamplesPerFrame();
-    if (ImGui::SliderInt("Samples Per Frame", &samplesPerFrame, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp))
+    if (ImGui::SliderInt("Samples Per Frame", &samplesPerFrame, 1, 100, "%d"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetSamplesPerFrame((uint32_t)samplesPerFrame, commandBuffer);
@@ -683,7 +736,7 @@ void Editor::RenderEnvMapSettings()
     }
 
     static float altitude = m_PathTracer.GetEnvMapRotationAltitude();
-    if (ImGui::SliderFloat("Altitude", &altitude, -90.0f, 90.0f, "%.1f"))
+    if (ImGui::SliderFloat("Altitude", &altitude, -180.0f, 180.0f, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.SetEnvMapAltitude(altitude, commandBuffer);

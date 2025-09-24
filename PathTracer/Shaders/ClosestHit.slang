@@ -236,7 +236,7 @@ void Main(inout Payload payload, in float2 attrib)
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
-    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-5 * (float)wasRefracted + 1e-5 * (float)(!wasRefracted));
+    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-3 * (float)wasRefracted + 1e-3 * (float)(!wasRefracted));
     payload.Direction = newDir;
 
     payload.BxDF *= scatterSample.BxDF;

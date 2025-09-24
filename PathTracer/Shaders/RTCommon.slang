@@ -178,6 +178,60 @@ public float3 Blackbody(float temperature)
     return clamp(float3(r, g, b) / 255.0f, 0.0f, 1.0f);
 }
 
+public float2 IntersectSphere(in float3 rayOrigin, in float3 rayDirection, in float3 sphereCenter, in float sphereRadius)
+{
+    rayOrigin -= sphereCenter; // Translate ray origin to sphere-centered coordinates
+
+    // Calculate the intersection of the ray with the sphere
+    float a = dot(rayDirection, rayDirection);
+    float b = 2.0 * dot(rayOrigin, rayDirection);
+    float c = dot(rayOrigin, rayOrigin) - sphereRadius * sphereRadius;
+
+    float discriminant = b * b - 4.0 * a * c;
+    if (discriminant < 0.0)
+    {
+        return float2(-1.0, -1.0); // No intersection
+    }
+
+    float t0 = (-b - sqrt(discriminant)) / (2.0 * a);
+    float t1 = (-b + sqrt(discriminant)) / (2.0 * a);
+    return float2(t0, t1);
+}
+
+// Phase Functions
+//
+
+public float RayleighPhase(float3 V, float3 L)
+{
+    float cosTheta = dot(V, L);
+    return (3.0f / (16.0f * M_PI)) * (1.0f + cosTheta * cosTheta);
+}
+
+public float PhaseMie(float3 V, float3 L, float g = 0.85f)
+{
+    float cosTheta = dot(V, L);
+	g = min(g, 0.9381);
+	float k = 1.55*g - 0.55*g*g*g;
+	float kcosth = k*cosTheta;
+	return (1 - k*k) / ((4 * M_PI) * (1-kcosth) * (1-kcosth));
+}
+
+public float PhaseHenyeyGreenstein(float3 V, float3 L, in float g = 0.85f)
+{
+    if (g == 0.0f)
+        return 1.0f / (4.0f * M_PI);
+    
+    float cosTheta = dot(V, L);
+    return (1.0f / (4.0f * M_PI)) * ((1.0f - g * g) / pow(1.0f + g * g - 2.0f * g * cosTheta, 1.5f));
+}
+
+public float PhaseDraine(float3 V, float3 L, in float g, in float a)
+{
+    float costTheta = dot(V, L);
+
+    return ((1 - g*g)*(1 + a*costTheta*costTheta))/(4.*(1 + (a*(1 + 2*g*g))/3.) * M_PI * pow(1 + g*g - 2*g*costTheta,1.5));
+}
+
 // Perlin Noise
 // source: https://github.com/stegu/webgl-noise
 
