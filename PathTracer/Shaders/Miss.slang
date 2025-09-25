@@ -10,8 +10,6 @@ import Atmosphere;
 [[vk::image_format("rgba32f")]]
 [[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
 
-#define ENABLE_ATMOSPHERE
-
 void ScatterInAtmosphere(inout Payload payload)
 {
     // Choose one of the color, R G or B
@@ -33,96 +31,50 @@ void ScatterInAtmosphere(inout Payload payload)
 
     float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
     float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-    float3 SUN_DIRECTION = Rotate(float3(0.0f, 0.0f, -1.0f), float3(0.0f, 1.0f, 0.0f), azimuth); // Start from -Z (front)
-    SUN_DIRECTION = Rotate(SUN_DIRECTION, float3(1.0f, 0.0f, 0.0f), altitude);
-
-    float R_COEF;
-    float M_COEF;
-    float O_COEF;
-    if (colorChannel == 0)
-    {
-        R_COEF = C_RAYLEIGH.r;
-        M_COEF = C_MIE.r;
-        O_COEF = C_OZONE.r;
-    }
-    else if (colorChannel == 1)
-    {
-        R_COEF = C_RAYLEIGH.g;
-        M_COEF = C_MIE.g;
-        O_COEF = C_OZONE.g;
-    }
-    else
-    {
-        R_COEF = C_RAYLEIGH.b;
-        M_COEF = C_MIE.b;
-        O_COEF = C_OZONE.b;
-    }
+    float3 SUN_DIRECTION = Rotate(float3(0.0f, 0.0f, -1.0f), float3(1.0f, 0.0f, 0.0f), altitude); // Start from -Z (front)
+    SUN_DIRECTION = Rotate(SUN_DIRECTION, float3(0.0f, 1.0f, 0.0f), azimuth);
 
     float sum = 0.0f;
     float throughput = 1.0f;
     for (int i = 0; i < 100; i++)
     {
-        float deltaT = SampleAtmosphereScatterDistance(payload.Sampler, payload.Origin, payload.Direction, R_COEF, M_COEF);
+        int componentHit;
+        float deltaT = SampleAtmosphereScatterDistance(payload.Sampler, payload.Origin, payload.Direction, colorChannel, componentHit);
         if (deltaT <= 0.0f)
             break; // Exited the atmosphere
 
         payload.Origin += deltaT * payload.Direction;
 
         float3 sunDirSampled;
-        float sunPdf;
-        sunDirSampled = SampleSunDisk(SUN_DIRECTION, 0.004675f, payload.Sampler.UniformFloat2(), sunPdf);
-
-        float sunRadiance = 2e5;
+        float4 colorPdf;
+        payload.Sampler.SampleSunDisk(SUN_DIRECTION, 0.004675f, sunDirSampled, colorPdf);
+        colorPdf.rgb *= uUBO.EnvironmentIntensity;
 
         // Compute transmittance to the sun
-        float transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, sunDirSampled, R_COEF, M_COEF, O_COEF);
+        float3 transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, sunDirSampled, colorChannel);
 
         // Stochastically choose between Rayleigh and Mie
         float3 newDir;
-
-        float rayleighDensity = GetRayleighDensity(GetAtmosphereHeight(payload.Origin)) * R_COEF;
-        float mieDensity = GetMIEDensity(GetAtmosphereHeight(payload.Origin)) * M_COEF;
-        float densitySum = rayleighDensity + mieDensity;
-
-        float rayleighProb = rayleighDensity / densitySum;
-        float mieProb = mieDensity / densitySum;
-
-        if (payload.Sampler.UniformFloat() <= rayleighProb)
+        if (componentHit == 0)
         {
             // Rayleigh
             newDir = payload.Sampler.SampleRayleigh(payload.Direction);
-            sum += throughput * RayleighPhase(payload.Direction, sunDirSampled) * transmittanceToSun * (sunRadiance / sunPdf);
+            payload.Emitted += throughput * RayleighPhase(payload.Direction, sunDirSampled) * transmittanceToSun * (colorPdf.r / colorPdf.a);
 
             // Rayleigh is perfectly importance sampled and has no absorption so throughput is not changed
             // throughput *= RayleighPhase(dot(payload.Direction, newDir)) / RayleighPhase(dot(payload.Direction, newDir));
         }
-        else if (payload.Sampler.UniformFloat() <= rayleighProb + mieProb)
+        else
         {
             // Mie
-            float color = 1.0f - (M_COEF * 1.1);
             newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, 0.85f); // Sample henyey since it's a pretty close match
-            sum += throughput * color * PhaseMie(payload.Direction, sunDirSampled) * transmittanceToSun * (sunRadiance / sunPdf);
+            payload.Emitted += throughput * PhaseMie(payload.Direction, sunDirSampled) * transmittanceToSun * (colorPdf.r / colorPdf.a);
 
             // Mie is no longer perfectly importance sampled, MIE phase function was used but the sampling was done with Henyey-Greenstein
-            // MIE also has absorption
-            throughput *= color * PhaseMie(payload.Direction, newDir) / PhaseHenyeyGreenstein(payload.Direction, newDir);
+            throughput *= PhaseMie(payload.Direction, newDir) / PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f);
         }
 
         payload.Direction = newDir;
-    }
-
-    // Very professional
-    if (colorChannel == 0)
-    {
-        payload.Emitted.r += sum;
-    }
-    else if (colorChannel == 1)
-    {
-        payload.Emitted.g += sum;
-    }
-    else
-    {
-        payload.Emitted.b += sum;
     }
 }
 
@@ -131,7 +83,7 @@ void Main(inout Payload payload)
 {
     #ifdef ENABLE_ATMOSPHERE
     {
-        ScatterInAtmosphere(payload);
+        
     }
     #else
     {
@@ -147,8 +99,8 @@ void Main(inout Payload payload)
             // Rotate the direction with altitude and azimuth
             float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
             float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-            float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
-            rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
+            float3 rotatedDirection = Rotate(direction, float3(1.0f, 0.0f, 0.0f), -altitude);
+            rotatedDirection = Rotate(rotatedDirection, float3(0.0f, 1.0f, 0.0f), -azimuth);
 
             colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
         }
@@ -165,8 +117,8 @@ void Main(inout Payload payload)
                 // Rotate the direction with altitude and azimuth
                 float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
                 float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-                float3 rotatedDirection = Rotate(direction, float3(0.0f, 1.0f, 0.0f), -azimuth);
-                rotatedDirection = Rotate(rotatedDirection, float3(1.0f, 0.0f, 0.0f), -altitude);
+                float3 rotatedDirection = Rotate(direction, float3(1.0f, 0.0f, 0.0f), -altitude);
+                rotatedDirection = Rotate(rotatedDirection, float3(0.0f, 1.0f, 0.0f), -azimuth);
 
                 colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
             }

@@ -4,6 +4,7 @@ import Surface;
 import Defines;
 import Sampler;
 import Volume;
+import Atmosphere;
 
 [[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
 
@@ -164,13 +165,9 @@ void Main(inout Payload payload, in float2 attrib)
     bool canHitEnvMap = false;
     #ifdef ENABLE_ENV_MAP_MIS
     {
-        payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
-        envMapValue.rgb *= uUBO.EnvironmentIntensity;
+        payload.Sampler.ImportanceSampleSky(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
 
-        float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
-        float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(1.0f, 0.0f, 0.0f), altitude);
-        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(0.0f, 1.0f, 0.0f), azimuth);
+        envMapValue.rgb *= uUBO.EnvironmentIntensity;
 
         toEnvMapDirectionTangent = surface.WorldToTangent(toEnvMapDirectionWorld);
         canHitEnvMap = toEnvMapDirectionTangent.z > 0.0f;
@@ -249,7 +246,24 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitEnvMap)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
+
+            #ifdef ENABLE_ATMOSPHERE
+            {
+                if (payload.ColorChannel == -1)
+                {
+                    // Ray hasn't been split yet, so just sum all color channels
+                    transmittance.r *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, 0).r;
+                    transmittance.g *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, 1).g;
+                    transmittance.b *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, 2).b;
+                }
+                else
+                {
+                    // Ray has been split, so only calculate the transmittance for the relevant color channel
+                    transmittance *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, payload.ColorChannel);
+                }
+            }
+            #endif
 
             if (envMapValue.a > 0.0f && envMapDirectionEval.PDF > 0.0f)
             {

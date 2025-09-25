@@ -155,9 +155,11 @@ public struct Volume
 
             float3 blockSize = (m_CornerMax - m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
             float t = 0.0f;
-            
-            // Max 100K steps
-            for (int i = 0; i < 100000; i++)
+
+            float epsilon = 0.0001f * max(m_CornerMax.x - m_CornerMin.x, max(m_CornerMax.y - m_CornerMin.y, m_CornerMax.z - m_CornerMin.z)); // Small epsilon based on scene scale
+
+            // Max 100 steps
+            for (int i = 0; i < 1000; i++)
             {
                 float3 currentPosition = rayOrigin + rayDirection * (tEnter + t);
 
@@ -173,11 +175,10 @@ public struct Volume
                 float3 blockMin = m_CornerMin + blockSize * float3(block3DIndex);
                 float3 blockMax = blockMin + blockSize;
 
-                VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, rayDirection, blockMin, blockMax);  
+                VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, rayDirection, blockMin, blockMax);
 
                 // Use the precomputed max density for this block
                 float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
-                maxDensity = max(maxDensity, 0.0001f); // Avoid zero max density
 
                 // Sample a distance based on the max density of the block
                 float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
@@ -186,7 +187,7 @@ public struct Volume
                 if (blockIntersection.HitPointFar <= 0.0f)
                 {
                     // Ray doesn't intersect block properly, sometimes caused by precision issues I guess, advance by small amount
-                    t += 0.00001f;
+                    t += epsilon;
                     if (tEnter + t > tExit)
                         return -1.0f;
                     continue;
@@ -197,7 +198,7 @@ public struct Volume
                 if (sampledDistance > distanceToBlockExit)
                 {
                     // Move to the next block
-                    t += distanceToBlockExit + 0.00001f; // Add small epsilon to ensure the ray moves to the next block
+                    t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
                     if (tEnter + t > tExit)
                         return -1.0f; // Exited the volume, no scattering occurred
                     continue;
@@ -325,9 +326,11 @@ public struct Volume
                 float t = 0.0f;
                 float tEnter = intersection.HitPointNear;
                 float tExit = intersection.HitPointFar;
-                
+
+                float epsilon = 0.001f * max(uVolumes[i].m_CornerMax.x - uVolumes[i].m_CornerMin.x, max(uVolumes[i].m_CornerMax.y - uVolumes[i].m_CornerMin.y, uVolumes[i].m_CornerMax.z - uVolumes[i].m_CornerMin.z)); // Small epsilon based on scene scale
+
                 // Max 100K steps
-                for (int j = 0; j < 100000; j++)
+                for (int j = 0; j < 1000; j++)
                 {
                     float3 currentPosition = origin + direction * (tEnter + t);
 
@@ -347,7 +350,6 @@ public struct Volume
 
                     // Use the precomputed max density for this block
                     float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
-                    maxDensity = max(maxDensity, 0.0001f); // Avoid zero max density
 
                     // Sample a distance based on the max density of the block
                     float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
@@ -356,7 +358,7 @@ public struct Volume
                     if (blockIntersection.HitPointFar <= 0.0f)
                     {
                         // Ray doesn't intersect block properly, sometime caused by precision issues I guess, advance by small amount
-                        t += 0.001f;
+                        t += epsilon;
                         if (tEnter + t > tExit)
                             break; // Exited the volume
                         continue;
@@ -367,7 +369,7 @@ public struct Volume
                     if (sampledDistance > distanceToBlockExit)
                     {
                         // Move to the next block
-                        t += distanceToBlockExit + 0.0001f; // Add small epsilon to ensure the ray moves to the next block
+                        t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
                         if (tEnter + t > tExit)
                             break; // Exited the volume
                         continue;

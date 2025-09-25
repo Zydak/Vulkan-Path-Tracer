@@ -21,6 +21,11 @@ public struct Payload
 
     public bool QueryDistance; // If this flag is set the closest hit shader will return immediately with distance to surface
     public float DistanceToSurface;
+
+    // This is an RGB renderer, but to simulate the atmosphere only a single channel has to be used - the ray has to be split.
+    // This variable indicates which channel that is. -1 means all channels are being currently tracked so the ray hasn't been split
+    // 0 = R, 1 = G, 2 = B.
+    public int ColorChannel;
 };
 
 public struct Vertex
@@ -216,7 +221,7 @@ public float PhaseMie(float3 V, float3 L, float g = 0.85f)
 	return (1 - k*k) / ((4 * M_PI) * (1-kcosth) * (1-kcosth));
 }
 
-public float PhaseHenyeyGreenstein(float3 V, float3 L, in float g = 0.85f)
+public float PhaseHenyeyGreenstein(float3 V, float3 L, in float g)
 {
     if (g == 0.0f)
         return 1.0f / (4.0f * M_PI);

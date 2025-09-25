@@ -127,6 +127,7 @@ public:
     [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
     [[nodiscard]] inline PhaseFunction GetPhaseFunction() const { return m_PhaseFunction; }
     [[nodiscard]] inline uint32_t GetSplitScreenCount() const { return m_ScreenChunkCount; }
+    [[nodiscard]] inline bool IsAtmosphereEnabled() const { return m_EnableAtmosphere; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -148,6 +149,7 @@ public:
     void AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
     void RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer);
     void SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnableAtmosphere(bool enable, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
@@ -184,6 +186,7 @@ private:
     bool m_UseRayQueries = true;
     PhaseFunction m_PhaseFunction = PhaseFunction::HENYEY_GREENSTEIN;
     uint32_t m_ScreenChunkCount = 1;
+    bool m_EnableAtmosphere = false;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;

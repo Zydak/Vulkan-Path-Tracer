@@ -602,6 +602,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
+    if (m_EnableAtmosphere)
+        defines.push_back({"ENABLE_ATMOSPHERE", "1"});
 
     switch (m_PhaseFunction)
     {
@@ -1012,6 +1014,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
+    if (m_EnableAtmosphere)
+        defines.push_back({"ENABLE_ATMOSPHERE", "1"});
 
     switch (m_PhaseFunction)
     {
@@ -1690,4 +1694,11 @@ void PathTracer::SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer
     m_ScreenChunkCount = count;
     UploadDataToBuffer(m_PathTracerUniformBuffer, &count, sizeof(uint32_t), offsetof(PathTracerUniform, ScreenChunkCount), commandBuffer);
     ResetPathTracing();
+}
+
+void PathTracer::SetEnableAtmosphere(bool enabled, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_EnableAtmosphere = enabled;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
 }

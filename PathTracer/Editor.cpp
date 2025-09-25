@@ -52,26 +52,26 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
 
 
     // Set initial state
-    PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-        m_PathTracer.SetEnvMapAltitude(100, commandBuffer);
+    // PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+    //     m_PathTracer.SetEnvMapAltitude(100, commandBuffer);
 
-        glm::mat4 viewMatrix = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::normalize(glm::vec3(0.0f, -0.2f, -1.0f)),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
+    //     glm::mat4 viewMatrix = glm::lookAt(
+    //         glm::vec3(0.0f, 0.0f, 0.0f),
+    //         glm::normalize(glm::vec3(0.0f, -0.2f, -1.0f)),
+    //         glm::vec3(0.0f, 1.0f, 0.0f)
+    //     );
 
-        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
+    //     m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
 
-        m_PathTracer.SetSamplesPerFrame(1000, commandBuffer);
-        m_PathTracer.SetMaxSamplesAccumulated(10000);
+    //     m_PathTracer.SetSamplesPerFrame(1000, commandBuffer);
+    //     m_PathTracer.SetMaxSamplesAccumulated(10000);
 
-        ResizeImage(300, 600);
-        m_Camera.SetAspectRatio((float)300 / (float)600);
-        glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
-        m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
-        m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), commandBuffer);
-    });
+    //     ResizeImage(300, 600);
+    //     m_Camera.SetAspectRatio((float)300 / (float)600);
+    //     glm::mat4 projMatrix = m_Camera.GetProjectionMatrix();
+    //     m_PathTracer.SetCameraViewInverse(glm::inverse(viewMatrix), commandBuffer);
+    //     m_PathTracer.SetCameraProjectionInverse(glm::inverse(projMatrix), commandBuffer);
+    // });
 
 
     ///
@@ -91,23 +91,23 @@ void Editor::Draw(VulkanHelper::CommandBuffer commandBuffer)
     /// Hack the animation together
 
 
-    uint32_t accumulatedSamples = m_PathTracer.GetSamplesAccumulated();
-    if (accumulatedSamples >= 1000)
-    {
-        // Save to file
-        static int loopIndex = 0;
-        std::string filepath = "../../RenderedImages/output_frame_" + std::to_string(loopIndex) + ".png";
-        SaveToFile(filepath, commandBuffer);
-        loopIndex++;
+    // uint32_t accumulatedSamples = m_PathTracer.GetSamplesAccumulated();
+    // if (accumulatedSamples >= 1000)
+    // {
+    //     // Save to file
+    //     static int loopIndex = 0;
+    //     std::string filepath = "../../RenderedImages/output_frame_" + std::to_string(loopIndex) + ".png";
+    //     SaveToFile(filepath, commandBuffer);
+    //     loopIndex++;
 
-        // Move the sun a bit
-        m_PathTracer.SetEnvMapAltitude(10 - 0.05f * loopIndex, commandBuffer);
+    //     // Move the sun a bit
+    //     m_PathTracer.SetEnvMapAltitude(10 - 0.05f * loopIndex, commandBuffer);
 
-        if (loopIndex >= 800)
-        {
-            VH_ASSERT(false, "Done rendering animation");
-        }
-    }
+    //     if (loopIndex >= 800)
+    //     {
+    //         VH_ASSERT(false, "Done rendering animation");
+    //     }
+    // }
 
 
     ///
@@ -723,7 +723,7 @@ void Editor::RenderPathTracingSettings()
 
 void Editor::RenderEnvMapSettings()
 {
-    if (!ImGui::CollapsingHeader("Environment Map Settings"))
+    if (!ImGui::CollapsingHeader("Sky Settings"))
         return;
 
     static float azimuth = m_PathTracer.GetEnvMapRotationAzimuth();
@@ -766,6 +766,15 @@ void Editor::RenderEnvMapSettings()
                 m_RenderTime = 0.0f;
             });
         }
+    }
+
+    static bool isAtmosphereEnabled = m_PathTracer.IsAtmosphereEnabled();
+    if (ImGui::Checkbox("Enable Atmosphere", &isAtmosphereEnabled))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnableAtmosphere(isAtmosphereEnabled, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
     }
 }
 

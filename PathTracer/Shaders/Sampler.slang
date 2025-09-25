@@ -13,6 +13,16 @@ public uint PCG_HASH(uint seed)
     return (word >> 22u) ^ word;
 }
 
+float3 Rotate(float3 v, float3 axis, float theta)
+{
+    float cosTheta = cos(theta);
+    float sinTheta = sin(theta);
+
+    float3 normalizedAxis = normalize(axis);
+
+    return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
+}
+
 public struct Sampler
 {
     uint m_Seed;
@@ -315,6 +325,11 @@ public struct Sampler
 
         toLight = float3(sinPhi * sinTheta, -cosTheta, -cosPhi * sinTheta);
 
+        azimuth = azimuth / 180.0f * M_PI; // Convert degrees to radians
+        altitude = altitude / 180.0f * M_PI; // Convert degrees to radians
+        toLight = Rotate(toLight, float3(0.0f, 1.0f, 0.0f), azimuth);
+        toLight = Rotate(toLight, float3(1.0f, 0.0f, 0.0f), altitude);
+
         // Lookup the environment value using computed uvs
         outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
     }
@@ -323,5 +338,53 @@ public struct Sampler
     public float SampleScatteringDistance(float density)
     {
         return -log(UniformFloat()) / density;
+    }
+
+    [mutating]
+    public void SampleSunDisk(float3 sunDir, float sunTheta, out float3 toLight, out float4 colorPDF)
+    {
+        float cosThetaMax = cos(sunTheta);
+
+        float phi = 2.0 * M_PI * UniformFloat();
+        float cosTheta = lerp(cosThetaMax, 1.0, UniformFloat());
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        // Local direction in cone coordinates (z = cone axis)
+        float3 localDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+        // Build an orthonormal basis around sunDir
+        float3 w = normalize(sunDir);
+        float3 up = abs(w.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+        float3 u = normalize(cross(up, w));
+        float3 v = cross(w, u);
+
+        // Transform local direction to world space
+        float3 dir = u * localDir.x + v * localDir.y + w * localDir.z;
+
+        float solidAngle = 2.0f * M_PI * (1.0 - cosThetaMax);
+        colorPDF.a = 1.0 / solidAngle;
+
+        colorPDF.rgb = 2e6; // TODO Move this
+
+        toLight = dir;
+    }
+
+    [mutating]
+    public void ImportanceSampleSky(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    {
+        #ifdef ENABLE_ATMOSPHERE
+        {
+            azimuth = azimuth / 180.0f * M_PI; // Convert degrees to radians
+            altitude = altitude / 180.0f * M_PI; // Convert degrees to radians
+            float3 SUN_DIRECTION = Rotate(float3(0.0f, 0.0f, -1.0f), float3(1.0f, 0.0f, 0.0f), altitude); // Start from -Z (front)
+            SUN_DIRECTION = Rotate(SUN_DIRECTION, float3(0.0f, 1.0f, 0.0f), azimuth);
+
+            SampleSunDisk(SUN_DIRECTION, 0.004675f, toLight, outValue);
+        }
+        #else
+        {
+            ImportanceSampleEnvMap(hdrTexture, sampler, aliasMap, azimuth, altitude, toLight, outValue);
+        }
+        #endif
     }
 }

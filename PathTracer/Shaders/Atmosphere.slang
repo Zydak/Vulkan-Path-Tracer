@@ -36,7 +36,7 @@ public float GetOzoneDensity(float height)
     return exp(-0.5 * x * x);
 }
 
-public float CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, float scatteringCoefficientRayleigh, float scatteringCoefficientMie, float scatteringCoefficientOzone)
+public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel)
 {
     // Check if occluded by the planet
     float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS);
@@ -55,8 +55,13 @@ public float CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, floa
         return 1.0f;
     }
 
+    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel];
+    float scatteringCoefficientMie = C_MIE[colorChannel];
+    float scatteringCoefficientOzone = C_OZONE[colorChannel];
+
     float t = 0.0f;
-    float transmittance = 1.0f;
+    float3 transmittance = float3(0.0f);
+    transmittance[colorChannel] = 1.0f;
     for (int i = 0; i < 100; i++)
     {
         float rayleighDensitySea = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh; // Density at sea level
@@ -84,18 +89,21 @@ public float CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, floa
         float mieDensity = GetMIEDensity(height) * scatteringCoefficientMie;
         float ozoneDensity = GetOzoneDensity(height) * scatteringCoefficientOzone;
 
-        transmittance *= 1.0f - (rayleighDensity + mieDensity + ozoneDensity) / majorant;
+        transmittance[colorChannel] *= 1.0f - (rayleighDensity + mieDensity + ozoneDensity) / majorant;
     }
 
     return transmittance;
 }
 
-public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, float scatteringCoefficientRayleigh, float scatteringCoefficientMie)
+// atmosphereComponentHit: 0 = Rayleigh, 1 = Mie, -1 = no hit
+public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel, out int atmosphereComponentHit)
 {
     float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS + ATMOSPHERE_HEIGHT);
 
     float tMinAtmosphere = max(atmosphereIntersection.x, 0.0f);
     float tMaxAtmosphere = atmosphereIntersection.y;
+
+    atmosphereComponentHit = -1; // Default to no hit
 
     float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS);
 
@@ -107,6 +115,13 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
         // No intersection with atmosphere
         return -1.0f;
     }
+
+    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel];
+    float scatteringCoefficientMie = C_MIE[colorChannel];
+
+    // Ozone doesn't scatter light, it only absorbs it, so it's only included in transmittance calculations
+    // No point in wasting time on an empty collision
+    // float scatteringCoefficientOzone = C_OZONE[colorChannel];
 
     float majorant = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh + GetMIEDensity(0.0f) * scatteringCoefficientMie; // Density at sea level
 
@@ -140,34 +155,21 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
             continue; // Null collision
         }
 
+        float rayleighProb = densityRayleigh / density;
+        float mieProb = densityMie / density;
+
+        // Stochastically pick which component was hit
+        if (sampler.UniformFloat() <= rayleighProb)
+        {
+            atmosphereComponentHit = 0; // Rayleigh
+        }
+        else if (sampler.UniformFloat() <= rayleighProb + mieProb)
+        {
+            atmosphereComponentHit = 1; // Mie
+        }
+
         return t; // Real collision, t found
     }
 
     return -1.0f; // no t found
-}
-
-public float3 SampleSunDisk(float3 sunDir, float sunTheta, float2 xi, out float pdf)
-{
-    float cosThetaMax = cos(sunTheta);
-
-    float phi = 2.0 * M_PI * xi.x;
-    float cosTheta = lerp(cosThetaMax, 1.0, xi.y);
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-    // Local direction in cone coordinates (z = cone axis)
-    float3 localDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-    // Build an orthonormal basis around sunDir
-    float3 w = normalize(sunDir);
-    float3 up = abs(w.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
-    float3 u = normalize(cross(up, w));
-    float3 v = cross(w, u);
-
-    // Transform local direction to world space
-    float3 dir = u * localDir.x + v * localDir.y + w * localDir.z;
-
-    float solidAngle = 2.0f * M_PI * (1.0 - cosThetaMax);
-    pdf = 1.0 / solidAngle;
-
-    return dir;
 }
