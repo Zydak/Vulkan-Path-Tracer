@@ -79,7 +79,7 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CornellBox.png"/>
-<img src="./Gallery/CloudSunset.png">
+<img src="./Gallery/CloudAtmosphere.png">
 <img src="./Gallery/Mustang0.png"/>
 <img src="./Gallery/FogCarUndenoised.png"/>
 <img src="./Gallery/TeapotMarble.png" width="49%"/>
