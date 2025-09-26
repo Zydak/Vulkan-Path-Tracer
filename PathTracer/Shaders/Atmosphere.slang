@@ -1,51 +1,43 @@
 import Sampler;
 import RTCommon;
 import Defines;
+import Bindings;
 
-// Everything is in meters
-public static const float PLANET_RADIUS = 6371000;
-public static const float3 PLANET_CENTER = float3(0, PLANET_RADIUS + 1000, 0); // Offset by 1km down, +Y is down in vulkan
-public static const float ATMOSPHERE_HEIGHT = 100000;
-
+// Default Scattering coefficients at sea level for red, green and blue wavelengths on earth in meters
 public static const float3 C_RAYLEIGH = float3(5.802, 13.558, 33.100) * 1e-6;
 public static const float3 C_MIE = float3(3.996,  3.996,  3.996) * 1e-6;
 public static const float3 C_OZONE = float3(0.650,  1.881,  0.085) * 1e-6;
 
 public float GetAtmosphereHeight(float3 position)
 {
-    return length(position - PLANET_CENTER) - PLANET_RADIUS;
+    return length(position - uUBO.PlanetPosition.xyz) - uUBO.PlanetRadius;
 }
 
 public float GetRayleighDensity(float height)
 {
-    const float RAYLEIGH_SCALE_HEIGHT = 8000.0f; // 8km
-    return exp(-height / RAYLEIGH_SCALE_HEIGHT);
+    return exp(-height / uUBO.RayleighDensityFalloff);
 }
 
 public float GetMIEDensity(float height)
 {
-    const float MIE_SCALE_HEIGHT = 1200.0f; // 1.2km
-    return exp(-height / MIE_SCALE_HEIGHT);
+    return exp(-height / uUBO.MieDensityFalloff);
 }
 
 public float GetOzoneDensity(float height)
 {
-    float heightPeak = 22000.0; // Peak density at 22km
-    float sigma = 8000.0;       // Thickness control
-    float x = (height - heightPeak) / sigma;
-    return exp(-0.5 * x * x);
+    return exp(-(abs(height - uUBO.OzonePeak) / uUBO.OzoneDensityFalloff));
 }
 
 public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel)
 {
     // Check if occluded by the planet
-    float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS);
+    float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius);
     if (planetIntersection.y > 0.0f)
     {
         return 0.0f; // Occluded by the planet
     }
 
-    float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS + ATMOSPHERE_HEIGHT);
+    float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius + uUBO.AtmosphereHeight);
     float tMin = max(atmosphereIntersection.x, 0.0f);
     float tMax = atmosphereIntersection.y;
 
@@ -55,20 +47,27 @@ public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, flo
         return 1.0f;
     }
 
-    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel];
-    float scatteringCoefficientMie = C_MIE[colorChannel];
-    float scatteringCoefficientOzone = C_OZONE[colorChannel];
+    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel] * uUBO.RayleighScatteringCoefficientMultiplier[colorChannel];
+    float scatteringCoefficientMie = C_MIE[colorChannel] * uUBO.MieScatteringCoefficientMultiplier[colorChannel];
+    float scatteringCoefficientOzone = C_OZONE[colorChannel] * uUBO.OzoneAbsorptionCoefficientMultiplier[colorChannel];
+
+    float rayleighDensitySea = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh; // Density at sea level
+    float mieDensitySea = GetMIEDensity(0.0f) * scatteringCoefficientMie; // Density at sea level
+    float ozoneDensitySea = GetOzoneDensity(uUBO.OzonePeak) * scatteringCoefficientOzone; // Density at peak altitude
+
+    float majorant = rayleighDensitySea + mieDensitySea + ozoneDensitySea;
+
+    if (majorant <= 0.0f)
+    {
+        // No atmosphere
+        return 1.0f;
+    }
 
     float t = 0.0f;
     float3 transmittance = float3(0.0f);
     transmittance[colorChannel] = 1.0f;
     for (int i = 0; i < 100; i++)
     {
-        float rayleighDensitySea = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh; // Density at sea level
-        float mieDensitySea = GetMIEDensity(0.0f) * scatteringCoefficientMie; // Density at sea level
-        float ozoneDensitySea = GetOzoneDensity(0.0f) * scatteringCoefficientOzone; // Density at sea level
-
-        float majorant = rayleighDensitySea + mieDensitySea + ozoneDensitySea;
         float deltaT = -log(1.0f - sampler.UniformFloat()) / majorant;
 
         t += deltaT;
@@ -98,14 +97,14 @@ public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, flo
 // atmosphereComponentHit: 0 = Rayleigh, 1 = Mie, -1 = no hit
 public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel, out int atmosphereComponentHit)
 {
-    float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS + ATMOSPHERE_HEIGHT);
+    float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius + uUBO.AtmosphereHeight);
 
     float tMinAtmosphere = max(atmosphereIntersection.x, 0.0f);
     float tMaxAtmosphere = atmosphereIntersection.y;
 
     atmosphereComponentHit = -1; // Default to no hit
 
-    float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, PLANET_CENTER, PLANET_RADIUS);
+    float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius);
 
     float tMinPlanet = planetIntersection.x;
     float tMaxPlanet = planetIntersection.y;
@@ -116,14 +115,20 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
         return -1.0f;
     }
 
-    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel];
-    float scatteringCoefficientMie = C_MIE[colorChannel];
+    float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel] * uUBO.RayleighScatteringCoefficientMultiplier[colorChannel];
+    float scatteringCoefficientMie = C_MIE[colorChannel] * uUBO.MieScatteringCoefficientMultiplier[colorChannel];
 
     // Ozone doesn't scatter light, it only absorbs it, so it's only included in transmittance calculations
     // No point in wasting time on an empty collision
-    // float scatteringCoefficientOzone = C_OZONE[colorChannel];
+    // float scatteringCoefficientOzone = C_OZONE[colorChannel] * uUBO.OzoneAbsorptionCoefficientMultiplier[colorChannel];
 
     float majorant = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh + GetMIEDensity(0.0f) * scatteringCoefficientMie; // Density at sea level
+
+    if (majorant <= 0.0f)
+    {
+        // No atmosphere
+        return -1.0f;
+    }
 
     float t = tMinAtmosphere;
     for (int i = 0; i < 100; i++)

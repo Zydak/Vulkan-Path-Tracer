@@ -4,24 +4,7 @@ import Volume;
 import Defines;
 import Atmosphere;
 
-[[vk::image_format("rgba32f")]]
-[[vk::binding(0, 0)]] RWTexture2D<float4> uImage;
-
-[[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
-
-[[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
-
-[[vk::binding(10, 0)]] SamplerState uSampler;
-
-[[vk::image_format("rgba32f")]]
-[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
-
-// Alias map is used to efficiently select texels from env map based on importance.
-[[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
-
-[[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
-
-[[vk::push_constant]] PushConstantData uPushConstants;
+import Bindings;
 
 [shader("raygeneration")]
 void Main()
@@ -41,7 +24,7 @@ void Main()
     float3 accumulatedLight = 0.0f;
     for (uint i = 0; i < uUBO.SampleCount; i++)
     {
-        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.75f, 0.75f); // Add small jitter for anti aliasing
+        const float2 pixelCenter = float2(LaunchID.xy) + float2(0.5f) + payload.Sampler.UniformFloat2(-0.5f, 0.5f); // Add small jitter for anti aliasing
         const float2 pixelUV = pixelCenter / float2(size.xy);
         float2 d = pixelUV * 2.0f - 1.0f;
 
@@ -151,78 +134,79 @@ void Main()
 
 bool ScatteredInVolume(inout Payload payload)
 {
-    //#ifdef ENABLE_VOLUMES
+    float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
+
+    float scatterDistance = -1.0f;
+    int scatteredVolumeIndex = -1;
+    int tempNullCollisions = 0;
+    for (int i = 0; i < uUBO.VolumesCount; i++)
     {
-        float distanceToGeometry = GetDistanceToGeometry(uTopLevelAS, payload.Origin, payload.Direction);
+        float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, tempNullCollisions, payload.Depth);
 
-        float scatterDistance = -1.0f;
-        int scatteredVolumeIndex = -1;
-        for (int i = 0; i < uUBO.VolumesCount; i++)
+        // Choose the closest scatter distance
+        if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
         {
-            float scatterDistanceTemp = uVolumes[i].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, uSampler);
+            scatterDistance = scatterDistanceTemp;
+            scatteredVolumeIndex = i;
+        }
+    }
 
-            // Choose the closest scatter distance
-            if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
-            {
-                scatterDistance = scatterDistanceTemp;
-                scatteredVolumeIndex = i;
-            }
+    // payload.Emitted = float(tempNullCollisions) / 1000.0f;
+    // payload.Depth = MAX_DEPTH;
+    // return true;
+
+    float atmosphereScatterDistance = -1.0f;
+    int atmosphereComponentHit = -1;
+    int colorChannel = payload.ColorChannel;
+    #ifdef ENABLE_ATMOSPHERE
+    {
+        // stochastically choose a color channel to track if the ray hasn't been split yet
+        if (colorChannel == -1)
+        {
+            float channelPick = payload.Sampler.UniformFloat();
+            if (channelPick < 0.33333f)
+                colorChannel = 0;
+            else if (channelPick < 0.66666f)
+                colorChannel = 1;
+            else
+                colorChannel = 2;
         }
 
-        float atmosphereScatterDistance = -1.0f;
-        int atmosphereComponentHit = -1;
-        int colorChannel = payload.ColorChannel;
+        atmosphereScatterDistance = SampleAtmosphereScatterDistance(payload.Sampler, payload.Origin, payload.Direction, colorChannel, atmosphereComponentHit);
+        if (atmosphereScatterDistance >= 0.0f && (atmosphereScatterDistance < scatterDistance || scatterDistance < 0.0f))
+        {
+            // Closest scatter is in atmosphere
+            scatterDistance = atmosphereScatterDistance;
+            scatteredVolumeIndex = -2; // Mark that atmosphere was hit
+        }
+    }
+    #endif
+
+    if (scatterDistance >= 0.0f && (distanceToGeometry < 0.0f || scatterDistance < distanceToGeometry))
+    {
+        // Scatter in the volume
         #ifdef ENABLE_ATMOSPHERE
         {
-            // stochastically choose a color channel to track if the ray hasn't been split yet
-            if (colorChannel == -1)
+            if (scatteredVolumeIndex == -2)
             {
-                float channelPick = payload.Sampler.UniformFloat();
-                if (channelPick < 0.33333f)
-                    colorChannel = 0;
-                else if (channelPick < 0.66666f)
-                    colorChannel = 1;
-                else
-                    colorChannel = 2;
+                // Scattering in atmosphere
+                payload.ColorChannel = colorChannel; // Split the ray to only track this color channel from now on
+                EvaluateAtmosphereScatteringEvent(payload, scatterDistance, atmosphereComponentHit);
             }
-
-            atmosphereScatterDistance = SampleAtmosphereScatterDistance(payload.Sampler, payload.Origin, payload.Direction, colorChannel, atmosphereComponentHit);
-            if (atmosphereScatterDistance >= 0.0f && (atmosphereScatterDistance < scatterDistance || scatterDistance < 0.0f))
+            else
             {
-                // Closest scatter is in atmosphere
-                scatterDistance = atmosphereScatterDistance;
-                scatteredVolumeIndex = -2; // Mark that atmosphere was hit
+                // Scattering in regular volume
+                EvaluateVolumeScatteringEvent(payload, scatterDistance, scatteredVolumeIndex);
             }
+        }
+        #else
+        {
+            EvaluateVolumeScatteringEvent(payload, scatterDistance, scatteredVolumeIndex);
         }
         #endif
 
-        if (scatterDistance >= 0.0f && (distanceToGeometry < 0.0f || scatterDistance < distanceToGeometry))
-        {
-            // Scatter in the volume
-            #ifdef ENABLE_ATMOSPHERE
-            {
-                if (scatteredVolumeIndex == -2)
-                {
-                    // Scattering in atmosphere
-                    payload.ColorChannel = colorChannel; // Split the ray to only track this color channel from now on
-                    EvaluateAtmosphereScatteringEvent(payload, scatterDistance, atmosphereComponentHit);
-                }
-                else
-                {
-                    // Scattering in regular volume
-                    EvaluateVolumeScatteringEvent(payload, scatterDistance, scatteredVolumeIndex);
-                }
-            }
-            #else
-            {
-                EvaluateVolumeScatteringEvent(payload, scatterDistance, scatteredVolumeIndex);
-            }
-            #endif
-
-            return true;
-        }
+        return true;
     }
-    //#endif
     
     return false;
 }
@@ -230,27 +214,26 @@ bool ScatteredInVolume(inout Payload payload)
 void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance, int scatteredVolumeIndex)
 {
     payload.Origin += payload.Direction * scatterDistance;
-    payload.Depth++;
-    const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler);
+    const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler, payload.Depth);
 
     // Importance sampling Env map
     #ifdef ENABLE_ENV_MAP_MIS
     {
         float3 toLightEnv;
         float4 envMapValue;
-        payload.Sampler.ImportanceSampleSky(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
+        payload.Sampler.ImportanceSampleSky(uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
         float3 envMapColor = envMapValue.rgb * uUBO.EnvironmentIntensity;
         float envMapPDF = envMapValue.a;
         bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
 
-        float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightEnv) * (float)!isObscuredByGeometry;
-        float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir);
-        
+        float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightEnv, payload.Depth) * (float)!isObscuredByGeometry;
+        float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir, payload.Depth);
+
         // Transmittance along the ray has to be accounted for
         float3 transmittance;
         if (!isObscuredByGeometry)
         {
-            transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, uVolumes, uUBO.VolumesCount, uSampler);
+            transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, payload.Depth);
 
             #ifdef ENABLE_ATMOSPHERE
             {
@@ -276,7 +259,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
 
         float3 colorSample = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
         float3 colorLight = uVolumes[scatteredVolumeIndex].GetColor() * phaseLightDir;
-        payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler);
+        payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin);
 
         if (!isObscuredByGeometry && phaseLightDir > 0.0f)
         {
@@ -290,17 +273,18 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     #else
     {
         payload.Direction = newDir;
-        payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin, uSampler));
+        payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin));
         payload.BxDF = uVolumes[scatteredVolumeIndex].GetColor();
         payload.PDF = 1.0f;
     }
     #endif
+
+    payload.Depth++;
 }
 
 void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDistance, int componentHit)
 {
     payload.Origin += scatterDistance * payload.Direction;
-    payload.Depth++;
 
     // Stochastically choose between Rayleigh and Mie
     float3 newDir;
@@ -319,7 +303,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
     {
         float3 skyDirSampled;
         float4 colorPdf;
-        payload.Sampler.ImportanceSampleSky(uEnvMapTexture, uSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, skyDirSampled, colorPdf);
+        payload.Sampler.ImportanceSampleSky(uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, skyDirSampled, colorPdf);
         colorPdf.rgb *= uUBO.EnvironmentIntensity;
 
         bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, skyDirSampled);
@@ -330,7 +314,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             // Compute transmittance to the sun
             transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, skyDirSampled, payload.ColorChannel);
 
-            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, uVolumes, uUBO.VolumesCount, uSampler);
+            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.Depth);
         }
         else
         {
@@ -371,4 +355,5 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
     #endif
 
     payload.Direction = newDir;
+    payload.Depth++;
 }

@@ -3,12 +3,7 @@ import Defines;
 import Sampler;
 import Atmosphere;
 
-[[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
-
-[[vk::binding(10, 0)]] SamplerState uSampler;
-
-[[vk::image_format("rgba32f")]]
-[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
+import Bindings;
 
 void ScatterInAtmosphere(inout Payload payload)
 {
@@ -102,7 +97,7 @@ void Main(inout Payload payload)
             float3 rotatedDirection = Rotate(direction, float3(1.0f, 0.0f, 0.0f), -altitude);
             rotatedDirection = Rotate(rotatedDirection, float3(0.0f, 1.0f, 0.0f), -azimuth);
 
-            colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
+            colorPdf = uEnvMapTexture.SampleLevel(uTextureSampler, DirectionToUV(rotatedDirection), 0);
         }
         #else // Show env map only indirectly (bounced from object)
         {
@@ -120,7 +115,7 @@ void Main(inout Payload payload)
                 float3 rotatedDirection = Rotate(direction, float3(1.0f, 0.0f, 0.0f), -altitude);
                 rotatedDirection = Rotate(rotatedDirection, float3(0.0f, 1.0f, 0.0f), -azimuth);
 
-                colorPdf = uEnvMapTexture.SampleLevel(uSampler, DirectionToUV(rotatedDirection), 0);
+                colorPdf = uEnvMapTexture.SampleLevel(uTextureSampler, DirectionToUV(rotatedDirection), 0);
             }
             else
             {

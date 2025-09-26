@@ -6,42 +6,7 @@ import Sampler;
 import Volume;
 import Atmosphere;
 
-[[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
-
-[[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
-
-[[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
-[[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
-
-[[vk::image_format("rgba8")]]
-[[vk::binding(5, 0)]] Texture2D uBaseColorTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(6, 0)]] Texture2D uNormalTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(7, 0)]] Texture2D uRoughnessTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(8, 0)]] Texture2D uMetallicTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
-[[vk::binding(10, 0)]] SamplerState uTextureSampler;
-[[vk::binding(11, 0)]] StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
-
-[[vk::image_format("r32f")]]
-[[vk::binding(12, 0)]] Texture2DArray uReflectionLookupTable;
-[[vk::image_format("r32f")]]
-[[vk::binding(13, 0)]] Texture2DArray uRefractionLookupTableHitFromOutside;
-[[vk::image_format("r32f")]]
-[[vk::binding(14, 0)]] Texture2DArray uRefractionLookupTableHitFromInside;
-
-[[vk::image_format("rgba32f")]]
-[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
-
-// Alias map is used to efficiently select texels from env map based on importance.
-[[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
-
-[[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
-
-[[vk::binding(18, 0)]] SamplerState uLookupTableSampler;
+import Bindings;
 
 float2 getSphericalUv(float3 v)
 {
@@ -165,7 +130,7 @@ void Main(inout Payload payload, in float2 attrib)
     bool canHitEnvMap = false;
     #ifdef ENABLE_ENV_MAP_MIS
     {
-        payload.Sampler.ImportanceSampleSky(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
+        payload.Sampler.ImportanceSampleSky(uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
 
         envMapValue.rgb *= uUBO.EnvironmentIntensity;
 
@@ -246,7 +211,7 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitEnvMap)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, payload.Depth);
 
             #ifdef ENABLE_ATMOSPHERE
             {

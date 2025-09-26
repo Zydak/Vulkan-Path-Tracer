@@ -1,15 +1,10 @@
 import RTCommon;
 import Sampler;
 import Defines;
+import Bindings;
 
-[[vk::image_format("r32f")]]
-[[vk::binding(19, 0)]] Texture2DArray uVolumeDensityTexture[];
+[[vk::binding(17, 0)]] public StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
-[[vk::image_format("r32f")]]
-[[vk::binding(20, 0)]] Texture2DArray uVolumeTemperatureTexture[];
-
-// 32x32x32 grid of max densities for each heterogeneous volume texture to speed up ray tracing by skipping empty space
-[[vk::binding(21, 0)]] StructuredBuffer<float> uVolumeMaxDensities[];
 #define MAX_DENSITY_GRID_DIM 32
 
 public struct VolumeIntersection
@@ -103,7 +98,7 @@ public struct Volume
         return all(point >= m_CornerMin) && all(point <= m_CornerMax);
     }
 
-    public float3 GetEmissionFromTemperatureAtPoint(float3 x, in SamplerState uTextureSampler)
+    public float3 GetEmissionFromTemperatureAtPoint(float3 x)
     {
         if (!(bool)m_HasTemperatureData)
            return 0.0f;
@@ -133,8 +128,9 @@ public struct Volume
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
-    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, in SamplerState uTextureSampler)
+    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float tempDepth)
     {
+        tempNullCollisions = 0;
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);
 
         if (intersection.HitPointFar < 0.0f)
@@ -159,7 +155,7 @@ public struct Volume
             float epsilon = 0.0001f * max(m_CornerMax.x - m_CornerMin.x, max(m_CornerMax.y - m_CornerMin.y, m_CornerMax.z - m_CornerMin.z)); // Small epsilon based on scene scale
 
             // Max 100 steps
-            for (int i = 0; i < 1000; i++)
+            for (int i = 0; i < 10000; i++)
             {
                 float3 currentPosition = rayOrigin + rayDirection * (tEnter + t);
 
@@ -180,6 +176,8 @@ public struct Volume
                 // Use the precomputed max density for this block
                 float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
 
+                maxDensity *= pow(0.8f, tempDepth);
+
                 // Sample a distance based on the max density of the block
                 float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
                 
@@ -190,6 +188,7 @@ public struct Volume
                     t += epsilon;
                     if (tEnter + t > tExit)
                         return -1.0f;
+                    tempNullCollisions++;
                     continue;
                 }
                 
@@ -201,6 +200,7 @@ public struct Volume
                     t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
                     if (tEnter + t > tExit)
                         return -1.0f; // Exited the volume, no scattering occurred
+                    tempNullCollisions++;
                     continue;
                 }
 
@@ -216,9 +216,12 @@ public struct Volume
                 UV.z *= textureSize.z; // Scale Z to sample the texture array
                 float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * m_Density;
 
+                densityTextureValue *= pow(0.8f, tempDepth);
+
                 if (densityTextureValue / maxDensity < sampler.UniformFloat())
                 {
                     // Null Collision, continue sampling
+                    tempNullCollisions++;
                     continue;
                 }
                 else
@@ -246,12 +249,12 @@ public struct Volume
         }
     }
 
-    public float3 GetScatteringDirection(in float3 incidentDirection, inout Sampler sampler)
+    public float3 GetScatteringDirection(in float3 incidentDirection, inout Sampler sampler, in float tempDepth)
     {
         float3 newdir;
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, m_Anisotropy);
+            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, pow(m_Anisotropy, 1.0f + tempDepth));
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
@@ -266,11 +269,11 @@ public struct Volume
         return newdir;
     }
 
-    public float EvaluatePhaseFunction(in float3 V, in float3 L)
+    public float EvaluatePhaseFunction(in float3 V, in float3 L, in float tempDepth)
     {
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            return EvaluateHenyeyGreenstein(V, L, m_Anisotropy);
+            return EvaluateHenyeyGreenstein(V, L, pow(m_Anisotropy, 1.0f + tempDepth));
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
@@ -306,10 +309,10 @@ public struct Volume
         return PhaseDraine(V, L, g, a);
     }
 
-    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in StructuredBuffer<Volume, ScalarDataLayout> uVolumes, in uint volumesCount, in SamplerState uTextureSampler)
+    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float tempDepth)
     {
         float transmittance = 1.0f;
-        for (uint i = 0; i < volumesCount; i++)
+        for (uint i = 0; i < uUBO.VolumesCount; i++)
         {
             VolumeIntersection intersection = uVolumes[i].IntersectWithRay(origin, direction);
             intersection.HitPointNear = max(intersection.HitPointNear, 0.0f); // Clamp to 0, ray is inside AABB
@@ -327,10 +330,10 @@ public struct Volume
                 float tEnter = intersection.HitPointNear;
                 float tExit = intersection.HitPointFar;
 
-                float epsilon = 0.001f * max(uVolumes[i].m_CornerMax.x - uVolumes[i].m_CornerMin.x, max(uVolumes[i].m_CornerMax.y - uVolumes[i].m_CornerMin.y, uVolumes[i].m_CornerMax.z - uVolumes[i].m_CornerMin.z)); // Small epsilon based on scene scale
+                float epsilon = 0.0001f * max(uVolumes[i].m_CornerMax.x - uVolumes[i].m_CornerMin.x, max(uVolumes[i].m_CornerMax.y - uVolumes[i].m_CornerMin.y, uVolumes[i].m_CornerMax.z - uVolumes[i].m_CornerMin.z)); // Small epsilon based on scene scale
 
                 // Max 100K steps
-                for (int j = 0; j < 1000; j++)
+                for (int j = 0; j < 10000; j++)
                 {
                     float3 currentPosition = origin + direction * (tEnter + t);
 
@@ -350,6 +353,8 @@ public struct Volume
 
                     // Use the precomputed max density for this block
                     float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
+
+                    maxDensity *= pow(0.8f, tempDepth);
 
                     // Sample a distance based on the max density of the block
                     float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
@@ -386,6 +391,8 @@ public struct Volume
                     float3 UV = (interactionPosition - uVolumes[i].m_CornerMin) / (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin);
                     UV.z *= textureSize.z; // Scale Z to sample the texture array
                     float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * uVolumes[i].GetDensity();
+
+                    densityTextureValue *= pow(0.8f, tempDepth);
 
                     // Update transmittance based on actual density vs max density
                     transmittance *= 1.0f - (densityTextureValue / maxDensity);

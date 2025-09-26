@@ -77,7 +77,8 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <img src="./Gallery/OceanAjax.png"/>
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
-<img src="./Gallery/CloudSunset.png">
+<img src="./Gallery/WispyCloudSunset.png">
+<img src="./Gallery/WispyCloudNoon.png">
 <img src="./Gallery/CornellBox.png"/>
 <img src="./Gallery/CloudAtmosphere.png">
 <img src="./Gallery/Mustang0.png"/>
@@ -118,4 +119,5 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 - https://disneyanimation.com/resources/clouds/ - Disney Cloud
 - https://www.openvdb.org/download/ - Bunny Cloud
 - https://jangafx.com/software/embergen/download/free-vdb-animations - Smoke Plume
+- https://samk9632.gumroad.com/l/Freebie-Cloud - Wispy Cloud
 - https://www.blackboxcolour.com/assets - Other clouds

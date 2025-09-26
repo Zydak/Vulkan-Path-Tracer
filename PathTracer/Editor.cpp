@@ -53,7 +53,7 @@ void Editor::Initialize(VulkanHelper::Device device, VulkanHelper::Renderer rend
 
     // Set initial state
     // PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-    //     m_PathTracer.SetEnvMapAltitude(100, commandBuffer);
+    //     m_PathTracer.SetSkyAltitude(100, commandBuffer);
 
     //     glm::mat4 viewMatrix = glm::lookAt(
     //         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -101,7 +101,7 @@ void Editor::Draw(VulkanHelper::CommandBuffer commandBuffer)
     //     loopIndex++;
 
     //     // Move the sun a bit
-    //     m_PathTracer.SetEnvMapAltitude(10 - 0.05f * loopIndex, commandBuffer);
+    //     m_PathTracer.SetSkyAltitude(10 - 0.05f * loopIndex, commandBuffer);
 
     //     if (loopIndex >= 800)
     //     {
@@ -726,33 +726,44 @@ void Editor::RenderEnvMapSettings()
     if (!ImGui::CollapsingHeader("Sky Settings"))
         return;
 
-    static float azimuth = m_PathTracer.GetEnvMapRotationAzimuth();
+    static float azimuth = m_PathTracer.GetSkyRotationAzimuth();
     if (ImGui::SliderFloat("Azimuth", &azimuth, 0.0f, 360.0f, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.SetEnvMapAzimuth(azimuth, commandBuffer);
+            m_PathTracer.SetSkyAzimuth(azimuth, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }
 
-    static float altitude = m_PathTracer.GetEnvMapRotationAltitude();
+    static float altitude = m_PathTracer.GetSkyRotationAltitude();
     if (ImGui::SliderFloat("Altitude", &altitude, -180.0f, 180.0f, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.SetEnvMapAltitude(altitude, commandBuffer);
+            m_PathTracer.SetSkyAltitude(altitude, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }
 
-    static float envMapIntensity = m_PathTracer.GetEnvironmentIntensity();
-    if (ImGui::SliderFloat("Environment Map Intensity", &envMapIntensity, 0.0f, 10.0f, "%.1f"))
+    static float skyIntensity = m_PathTracer.GetSkyIntensity();
+    if (ImGui::SliderFloat("Sky Intensity", &skyIntensity, 0.0f, 10.0f, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.SetEnvironmentIntensity(envMapIntensity, commandBuffer);
+            m_PathTracer.SetSkyIntensity(skyIntensity, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }
 
+    static bool isAtmosphereEnabled = m_PathTracer.IsAtmosphereEnabled();
+    if (ImGui::Checkbox("Enable Atmosphere", &isAtmosphereEnabled))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEnableAtmosphere(isAtmosphereEnabled, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+
+    ImGui::BeginDisabled(isAtmosphereEnabled);
     static std::string envMapFilepath = m_PathTracer.GetEnvMapFilepath();
 
     if(ImGui::Button(("Env Map: " + envMapFilepath).c_str()))
@@ -767,15 +778,101 @@ void Editor::RenderEnvMapSettings()
             });
         }
     }
+    ImGui::EndDisabled();
 
-    static bool isAtmosphereEnabled = m_PathTracer.IsAtmosphereEnabled();
-    if (ImGui::Checkbox("Enable Atmosphere", &isAtmosphereEnabled))
+    ImGui::BeginDisabled(!isAtmosphereEnabled);
+
+    static glm::vec3 planetPosition = m_PathTracer.GetPlanetPosition() / 1000.0f;
+    if (ImGui::InputFloat3("Planet Position (km)", &planetPosition.x, "%.1f"))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.SetEnableAtmosphere(isAtmosphereEnabled, commandBuffer);
+            m_PathTracer.SetPlanetPosition(planetPosition * 1000.0f, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }
+
+    static float planetRadius = m_PathTracer.GetPlanetRadius() / 1000.0f;
+    if (ImGui::InputFloat("Planet Radius (km)", &planetRadius, 1.0f, 10.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetPlanetRadius(planetRadius * 1000.0f, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float atmosphereHeight = m_PathTracer.GetAtmosphereHeight() / 1000.0f;
+    if (ImGui::InputFloat("Atmosphere Height (km)", &atmosphereHeight, 1.0f, 10.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetAtmosphereHeight(atmosphereHeight * 1000.0f, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static glm::vec3 rayleighScatteringCoefficientMultiplier = m_PathTracer.GetRayleighScatteringCoefficientMultiplier();
+    if (ImGui::InputFloat3("Rayleigh Scattering Coefficient Multiplier", &rayleighScatteringCoefficientMultiplier.x, "%.3f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetRayleighScatteringCoefficientMultiplier(rayleighScatteringCoefficientMultiplier, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static glm::vec3 mieScatteringCoefficientMultiplier = m_PathTracer.GetMieScatteringCoefficientMultiplier();
+    if (ImGui::InputFloat3("Mie Scattering Coefficient Multiplier", &mieScatteringCoefficientMultiplier.x, "%.3f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetMieScatteringCoefficientMultiplier(mieScatteringCoefficientMultiplier, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static glm::vec3 ozoneAbsorptionCoefficientMultiplier = m_PathTracer.GetOzoneAbsorptionCoefficientMultiplier();
+    if (ImGui::InputFloat3("Ozone Absorption Coefficient Multiplier", &ozoneAbsorptionCoefficientMultiplier.x, "%.3f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std ::shared_ptr<void>) {
+            m_PathTracer.SetOzoneAbsorptionCoefficientMultiplier(ozoneAbsorptionCoefficientMultiplier, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float rayleighScaleHeight = m_PathTracer.GetRayleighDensityFalloff();
+    if (ImGui::InputFloat("Rayleigh Scale Height (m)", &rayleighScaleHeight, 100.0f, 1000.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetRayleighDensityFalloff(rayleighScaleHeight, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float mieScaleHeight = m_PathTracer.GetMieDensityFalloff();
+    if (ImGui::InputFloat("Mie Scale Height (m)", &mieScaleHeight, 100.0f, 1000.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetMieDensityFalloff(mieScaleHeight, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float ozoneScaleHeight = m_PathTracer.GetOzoneDensityFalloff();
+    if (ImGui::InputFloat("Ozone Scale Height (m)", &ozoneScaleHeight, 100.0f, 1000.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetOzoneDensityFalloff(ozoneScaleHeight, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    static float ozonePeakAltitude = m_PathTracer.GetOzonePeak() / 1000.0f;
+    if (ImGui::InputFloat("Ozone Peak Altitude (km)", &ozonePeakAltitude, 1.0f, 10.0f, "%.1f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetOzonePeak(ozonePeakAltitude * 1000.0f, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    ImGui::EndDisabled();
 }
 
 void Editor::SaveToFileSettings()

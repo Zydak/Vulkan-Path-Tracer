@@ -1,5 +1,6 @@
 import Sampler;
 import Defines;
+import Bindings;
 
 public struct Payload
 {
@@ -26,36 +27,6 @@ public struct Payload
     // This variable indicates which channel that is. -1 means all channels are being currently tracked so the ray hasn't been split
     // 0 = R, 1 = G, 2 = B.
     public int ColorChannel;
-};
-
-public struct Vertex
-{
-    public float3 Position;
-    public float3 Normal;
-    public float2 TexCoord;
-};
-
-public struct PushConstantData
-{
-    public uint FrameCount;
-    public uint Seed;
-    public uint ChunkIndex;
-};
-
-public struct UniformBuffer
-{
-    public float4x4 ViewInverse;
-    public float4x4 ProjectionInverse;
-    public uint SampleCount;
-    public uint MaxDepth;
-    public float MaxLuminance;
-    public float FocusDistance;
-    public float DepthOfFieldStrength;
-    public float EnvMapRotationAzimuth;
-    public float EnvMapRotationAltitude;
-    public uint VolumesCount;
-    public float EnvironmentIntensity;
-    public uint ScreenSplitCount;
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)

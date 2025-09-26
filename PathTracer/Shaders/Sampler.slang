@@ -1,10 +1,5 @@
 import Defines;
-
-public struct AliasMapEntry
-{
-    public uint Alias;
-    public float Importance;
-};
+import Bindings;
 
 public uint PCG_HASH(uint seed)
 {
@@ -274,20 +269,20 @@ public struct Sampler
     }
 
     [mutating]
-    public void ImportanceSampleEnvMap(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleEnvMap(in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
     {
         // Uniformly pick a texel index idx in the environment map
         float3 xi = UniformFloat3();
 
         uint width;
         uint height;
-        hdrTexture.GetDimensions(width, height);
+        uEnvMapTexture.GetDimensions(width, height);
 
         uint size = width * height;
         uint idx = min(uint(xi.x * float(size)), size - 1);
 
         // Fetch the entry for that texel, containing the importance and the texel alias
-        AliasMapEntry entry = aliasMap[idx];
+        AliasMapEntry entry = uEnvAliasMap[idx];
 
         uint envIdx;
 
@@ -331,7 +326,7 @@ public struct Sampler
         toLight = Rotate(toLight, float3(1.0f, 0.0f, 0.0f), altitude);
 
         // Lookup the environment value using computed uvs
-        outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
+        outValue = uEnvMapTexture.SampleLevel(uTextureSampler, {u, v}, 0);
     }
 
     [mutating]
@@ -370,7 +365,7 @@ public struct Sampler
     }
 
     [mutating]
-    public void ImportanceSampleSky(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleSky(in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
     {
         #ifdef ENABLE_ATMOSPHERE
         {
@@ -383,7 +378,7 @@ public struct Sampler
         }
         #else
         {
-            ImportanceSampleEnvMap(hdrTexture, sampler, aliasMap, azimuth, altitude, toLight, outValue);
+            ImportanceSampleEnvMap(azimuth, altitude, toLight, outValue);
         }
         #endif
     }
