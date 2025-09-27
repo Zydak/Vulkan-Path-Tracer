@@ -49,6 +49,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - Henyey-Greenstein, Draine, and approximated MIE phase functions implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Emissive Volumes with [temperature parametrization](https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
+- Multiple Atmospheric Scattering
 - Textures and Normal Maps
 - Editor
   - Changing material and path tracing properties at runtime
