@@ -570,6 +570,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.RayleighScatteringCoefficientMultiplier = glm::vec4(m_RayleighScatteringCoefficientMultiplier, 0.0f);
     pathTracerUniform.MieScatteringCoefficientMultiplier = glm::vec4(m_MieScatteringCoefficientMultiplier, 0.0f);
     pathTracerUniform.OzoneAbsorptionCoefficientMultiplier = glm::vec4(m_OzoneAbsorptionCoefficientMultiplier, 0.0f);
+    pathTracerUniform.SunColor = glm::vec4(m_SunColor, 0.0f);
     pathTracerUniform.RayleighDensityFalloff = m_RayleighDensityFalloff;
     pathTracerUniform.MieDensityFalloff = m_MieDensityFalloff;
     pathTracerUniform.OzoneDensityFalloff = m_OzoneDensityFalloff;
@@ -602,7 +603,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     std::vector<VulkanHelper::Shader::Define> defines;
     if (m_EnableEnvMapMIS)
-        defines.push_back({"ENABLE_ENV_MAP_MIS", "1"});
+        defines.push_back({"ENABLE_SKY_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_UseOnlyGeometryNormals)
@@ -919,6 +920,14 @@ void PathTracer::UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uin
 
     VH_ASSERT(stagingBuffer.UploadData(data, size, 0) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     VH_ASSERT(buffer.CopyFromBuffer(commandBuffer, stagingBuffer, 0, offset, size) == VulkanHelper::VHResult::OK, "Failed to copy path tracer uniform buffer");
+
+    buffer.Barrier(
+        commandBuffer,
+        VulkanHelper::AccessFlags::TRANSFER_WRITE_BIT,
+        VulkanHelper::AccessFlags::UNIFORM_READ_BIT,
+        VulkanHelper::PipelineStages::TRANSFER_BIT,
+        VulkanHelper::PipelineStages::RAY_TRACING_SHADER_BIT_KHR
+    );
 }
 
 void PathTracer::DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer)
@@ -1012,7 +1021,7 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
     std::vector<VulkanHelper::Shader::Define> defines;
 
     if (m_EnableEnvMapMIS)
-        defines.push_back({"ENABLE_ENV_MAP_MIS", "1"});
+        defines.push_back({"ENABLE_SKY_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_UseOnlyGeometryNormals)
@@ -1614,7 +1623,7 @@ VulkanHelper::ImageView PathTracer::LoadDefaultTexture(VulkanHelper::CommandBuff
     return VulkanHelper::ImageView::New(imageViewConfig).Value();
 }
 
-void PathTracer::SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_EnableEnvMapMIS = value;
     ResetPathTracing();
@@ -1769,5 +1778,12 @@ void PathTracer::SetOzonePeak(float altitude, VulkanHelper::CommandBuffer comman
 {
     m_OzonePeak = altitude;
     UploadDataToBuffer(m_PathTracerUniformBuffer, &altitude, sizeof(float), offsetof(PathTracerUniform, OzonePeak), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SunColor = color;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&color, sizeof(glm::vec3), offsetof(PathTracerUniform, SunColor), commandBuffer);
     ResetPathTracing();
 }

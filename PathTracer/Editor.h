@@ -29,7 +29,7 @@ private:
     void RenderMaterialSettings();
     void RenderPostProcessingSettings();
     void RenderPathTracingSettings();
-    void RenderEnvMapSettings();
+    void RenderSkySettings();
     void RenderVolumeSettings();
     void SaveToFileSettings();
 

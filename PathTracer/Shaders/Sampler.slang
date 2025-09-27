@@ -269,7 +269,7 @@ public struct Sampler
     }
 
     [mutating]
-    public void ImportanceSampleEnvMap(in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleEnvMap(out float3 toLight, out float4 outValue)
     {
         // Uniformly pick a texel index idx in the environment map
         float3 xi = UniformFloat3();
@@ -320,13 +320,14 @@ public struct Sampler
 
         toLight = float3(sinPhi * sinTheta, -cosTheta, -cosPhi * sinTheta);
 
-        azimuth = azimuth / 180.0f * M_PI; // Convert degrees to radians
-        altitude = altitude / 180.0f * M_PI; // Convert degrees to radians
+        float azimuth = uUBO.SkyRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+        float altitude = uUBO.SkyRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
         toLight = Rotate(toLight, float3(0.0f, 1.0f, 0.0f), azimuth);
         toLight = Rotate(toLight, float3(1.0f, 0.0f, 0.0f), altitude);
 
         // Lookup the environment value using computed uvs
         outValue = uEnvMapTexture.SampleLevel(uTextureSampler, {u, v}, 0);
+        outValue.rgb *= uUBO.EnvironmentIntensity;
     }
 
     [mutating]
@@ -336,8 +337,13 @@ public struct Sampler
     }
 
     [mutating]
-    public void SampleSunDisk(float3 sunDir, float sunTheta, out float3 toLight, out float4 colorPDF)
+    public void SampleSunDisk(float sunTheta, out float3 toLight, out float4 colorPDF)
     {
+        float azimuth = uUBO.SkyRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+        float altitude = uUBO.SkyRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+        float3 sunDir = Rotate(float3(0.0f, 0.0f, -1.0f), float3(1.0f, 0.0f, 0.0f), altitude); // Start from -Z (front)
+        sunDir = Rotate(sunDir, float3(0.0f, 1.0f, 0.0f), azimuth);
+
         float cosThetaMax = cos(sunTheta);
 
         float phi = 2.0 * M_PI * UniformFloat();
@@ -359,26 +365,21 @@ public struct Sampler
         float solidAngle = 2.0f * M_PI * (1.0 - cosThetaMax);
         colorPDF.a = 1.0 / solidAngle;
 
-        colorPDF.rgb = 2e6; // TODO Move this
+        colorPDF.rgb = 2e6 * uUBO.SunColor.rgb * uUBO.EnvironmentIntensity;
 
         toLight = dir;
     }
 
     [mutating]
-    public void ImportanceSampleSky(in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleSky(out float3 toLight, out float4 outValue)
     {
         #ifdef ENABLE_ATMOSPHERE
         {
-            azimuth = azimuth / 180.0f * M_PI; // Convert degrees to radians
-            altitude = altitude / 180.0f * M_PI; // Convert degrees to radians
-            float3 SUN_DIRECTION = Rotate(float3(0.0f, 0.0f, -1.0f), float3(1.0f, 0.0f, 0.0f), altitude); // Start from -Z (front)
-            SUN_DIRECTION = Rotate(SUN_DIRECTION, float3(0.0f, 1.0f, 0.0f), azimuth);
-
-            SampleSunDisk(SUN_DIRECTION, 0.004675f, toLight, outValue);
+            SampleSunDisk(0.004675f, toLight, outValue); // For now hardcoded to 0.004675 radians
         }
         #else
         {
-            ImportanceSampleEnvMap(azimuth, altitude, toLight, outValue);
+            ImportanceSampleEnvMap(toLight, outValue);
         }
         #endif
     }

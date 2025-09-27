@@ -169,7 +169,7 @@ void Editor::RenderSettingsTab()
     RenderMaterialSettings();
     RenderPostProcessingSettings();
     RenderPathTracingSettings();
-    RenderEnvMapSettings();
+    RenderSkySettings();
     RenderVolumeSettings();
     SaveToFileSettings();
 
@@ -653,11 +653,11 @@ void Editor::RenderPathTracingSettings()
         });
     }
 
-    static bool enableEnvMapMIS = m_PathTracer.IsEnvMapMISEnabled();
-    if (ImGui::Checkbox("Enable Environment Map MIS", &enableEnvMapMIS))
+    static bool enableSkyMIS = m_PathTracer.IsSkyMISEnabled();
+    if (ImGui::Checkbox("Enable Sky MIS", &enableSkyMIS))
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-            m_PathTracer.SetEnvMapMIS(enableEnvMapMIS, commandBuffer);
+            m_PathTracer.SetSkyMIS(enableSkyMIS, commandBuffer);
             m_RenderTime = 0.0f;
         });
     }
@@ -721,7 +721,7 @@ void Editor::RenderPathTracingSettings()
     }
 }
 
-void Editor::RenderEnvMapSettings()
+void Editor::RenderSkySettings()
 {
     if (!ImGui::CollapsingHeader("Sky Settings"))
         return;
@@ -781,6 +781,15 @@ void Editor::RenderEnvMapSettings()
     ImGui::EndDisabled();
 
     ImGui::BeginDisabled(!isAtmosphereEnabled);
+
+    static glm::vec3 sunColor = m_PathTracer.GetSunColor();
+    if (ImGui::ColorEdit3("Sun Color", &sunColor.x, ImGuiColorEditFlags_Float))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetSunColor(sunColor, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
 
     static glm::vec3 planetPosition = m_PathTracer.GetPlanetPosition() / 1000.0f;
     if (ImGui::InputFloat3("Planet Position (km)", &planetPosition.x, "%.1f"))
@@ -1045,6 +1054,13 @@ void Editor::RenderVolumeSettings()
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
 
+    bool useApproximatedScatteringForClouds = (bool)selectedVolume.ApproximatedScatteringForClouds;
+    if (ImGui::Checkbox("Use Approximated Scattering For Clouds", &useApproximatedScatteringForClouds))
+    {
+        selectedVolume.ApproximatedScatteringForClouds = (int)useApproximatedScatteringForClouds;
+        volumeModified = true;
+    }
+
     if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN || 
         selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)
     {
@@ -1105,7 +1121,7 @@ void Editor::RenderVolumeSettings()
             volumeModified = true;
     }
 
-    if (ImGui::SliderFloat("m_EmissiveColorGamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
+    if (ImGui::SliderFloat("Emissive Color Gamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
         volumeModified = true;
 
     ImGui::PopID();

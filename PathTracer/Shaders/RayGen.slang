@@ -216,14 +216,14 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     payload.Origin += payload.Direction * scatterDistance;
     const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler, payload.Depth);
 
-    // Importance sampling Env map
-    #ifdef ENABLE_ENV_MAP_MIS
+    // Importance sampling Sky
+    #ifdef ENABLE_SKY_MIS
     {
         float3 toLightEnv;
-        float4 envMapValue;
-        payload.Sampler.ImportanceSampleSky(uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toLightEnv, envMapValue);
-        float3 envMapColor = envMapValue.rgb * uUBO.EnvironmentIntensity;
-        float envMapPDF = envMapValue.a;
+        float4 skyValue;
+        payload.Sampler.ImportanceSampleSky(toLightEnv, skyValue);
+        float3 skyColor = skyValue.rgb;
+        float skyPDF = skyValue.a;
         bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightEnv);
 
         float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightEnv, payload.Depth) * (float)!isObscuredByGeometry;
@@ -263,7 +263,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
 
         if (!isObscuredByGeometry && phaseLightDir > 0.0f)
         {
-           payload.Emitted += transmittance * colorLight * (envMapColor / envMapPDF) * PowerHeuristics(envMapPDF, phaseLightDir);
+           payload.Emitted += transmittance * colorLight * (skyColor / skyPDF) * PowerHeuristics(skyPDF, phaseLightDir);
         }
 
         payload.Direction = newDir;
@@ -299,11 +299,11 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, 0.85f); // Sample henyey since it's a pretty close match
     }
 
-    #ifdef ENABLE_ENV_MAP_MIS
+    #ifdef ENABLE_SKY_MIS
     {
         float3 skyDirSampled;
         float4 colorPdf;
-        payload.Sampler.ImportanceSampleSky(uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, skyDirSampled, colorPdf);
+        payload.Sampler.ImportanceSampleSky(skyDirSampled, colorPdf);
         colorPdf.rgb *= uUBO.EnvironmentIntensity;
 
         bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, skyDirSampled);
@@ -325,7 +325,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         if (componentHit == 0)
         {
             // Rayleigh
-            payload.Emitted += RayleighPhase(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.r / colorPdf.a);
+            payload.Emitted += RayleighPhase(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
 
             payload.BxDF = RayleighPhase(payload.Direction, newDir);
             payload.PDF = RayleighPhase(payload.Direction, newDir);
@@ -333,7 +333,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         else
         {
             // Mie
-            payload.Emitted += PhaseMie(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.r / colorPdf.a);
+            payload.Emitted += PhaseMie(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
 
             payload.BxDF = PhaseMie(payload.Direction, newDir);
             payload.PDF = PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f);

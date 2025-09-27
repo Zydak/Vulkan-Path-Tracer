@@ -28,6 +28,7 @@ public struct UniformBuffer
     public float4 RayleighScatteringCoefficientMultiplier;
     public float4 MieScatteringCoefficientMultiplier;
     public float4 OzoneAbsorptionCoefficientMultiplier;
+    public float4 SunColor;
     public float PlanetRadius;
     public float AtmosphereHeight;
     public float RayleighDensityFalloff;
@@ -40,8 +41,8 @@ public struct UniformBuffer
     public float MaxLuminance;
     public float FocusDistance;
     public float DepthOfFieldStrength;
-    public float EnvMapRotationAzimuth;
-    public float EnvMapRotationAltitude;
+    public float SkyRotationAzimuth;
+    public float SkyRotationAltitude;
     public uint VolumesCount;
     public float EnvironmentIntensity;
     public uint ScreenSplitCount;

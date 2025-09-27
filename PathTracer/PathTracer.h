@@ -51,6 +51,9 @@ public:
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
+        // This enables faster but biased methods for rendering clouds
+        int ApproximatedScatteringForClouds = 0;
+
         std::string DensityDataFilepath;
         VulkanHelper::ImageView DensityTextureView;
         VulkanHelper::ImageView TemperatureTextureView;
@@ -96,7 +99,7 @@ public:
     void SetRoughnessTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetMetallicTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
     void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
@@ -114,7 +117,7 @@ public:
     [[nodiscard]] inline float GetSkyRotationAltitude() const { return m_SkyRotationAltitude; }
     [[nodiscard]] inline uint32_t GetVolumesCount() const { return (uint32_t)m_Volumes.size(); }
     [[nodiscard]] inline const std::vector<Volume>& GetVolumes() const { return m_Volumes; }
-    [[nodiscard]] inline bool IsEnvMapMISEnabled() const { return m_EnableEnvMapMIS; }
+    [[nodiscard]] inline bool IsSkyMISEnabled() const { return m_EnableEnvMapMIS; }
     [[nodiscard]] inline bool IsEnvMapShownDirectly() const { return m_ShowEnvMapDirectly; }
     [[nodiscard]] inline uint64_t GetTotalVertexCount() const { return m_TotalVertexCount; }
     [[nodiscard]] inline uint64_t GetTotalIndexCount() const { return m_TotalIndexCount; }
@@ -138,6 +141,7 @@ public:
     [[nodiscard]] inline float GetMieDensityFalloff() const { return m_MieDensityFalloff; }
     [[nodiscard]] inline float GetOzoneDensityFalloff() const { return m_OzoneDensityFalloff; }
     [[nodiscard]] inline float GetOzonePeak() const { return m_OzonePeak; }
+    [[nodiscard]] inline const glm::vec3& GetSunColor() const { return m_SunColor; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -170,6 +174,7 @@ public:
     void SetMieDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
     void SetOzoneDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
     void SetOzonePeak(float peak, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
@@ -213,6 +218,7 @@ private:
     glm::vec3 m_RayleighScatteringCoefficientMultiplier = glm::vec3(1.0f);
     glm::vec3 m_MieScatteringCoefficientMultiplier = glm::vec3(1.0f);
     glm::vec3 m_OzoneAbsorptionCoefficientMultiplier = glm::vec3(1.0f);
+    glm::vec3 m_SunColor = glm::vec3(1.0f, 0.956f, 0.88f);
     float m_RayleighDensityFalloff = 8000.0f; // In meters
     float m_MieDensityFalloff = 1200.0f; // In meters
     float m_OzoneDensityFalloff = 5000.0f; // In meters
@@ -265,6 +271,7 @@ private:
         glm::vec4 RayleighScatteringCoefficientMultiplier;
         glm::vec4 MieScatteringCoefficientMultiplier;
         glm::vec4 OzoneAbsorptionCoefficientMultiplier;
+        glm::vec4 SunColor;
         float PlanetRadius;
         float AtmosphereHeight;
         float RayleighDensityFalloff;
@@ -330,6 +337,9 @@ private:
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
+        // This enables faster but biased methods for rendering clouds
+        int ApproximatedScatteringForClouds = 0;
+
         VolumeGPU() = default;
 
         VolumeGPU(const Volume& volume)
@@ -349,6 +359,7 @@ private:
             , EmissiveColorGamma(volume.EmissiveColorGamma) // Default value
             , KelvinMin(volume.KelvinMin)
             , KelvinMax(volume.KelvinMax)
+            , ApproximatedScatteringForClouds(volume.ApproximatedScatteringForClouds)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);

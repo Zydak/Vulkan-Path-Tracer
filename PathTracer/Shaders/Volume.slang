@@ -35,8 +35,11 @@ public struct Volume
     float m_TemperatureGamma; // Exponent for temperature to compute blackbody radiation
     float m_TemperatureScale; // Scales the temperature value read from the grid before using it to compute emission
     float m_EmissiveColorGamma; // Exponent for emissive color
-    int m_KelvinMin = 500;
-    int m_KelvinMax = 8000;
+    int m_KelvinMin;
+    int m_KelvinMax;
+
+    // This enables faster but biased methods for rendering clouds
+    int m_ApproximatedScatteringForClouds;
 
     public float GetAnisotropy() { return m_Anisotropy; }
     public float GetDensity() { return m_Density; }
@@ -176,7 +179,8 @@ public struct Volume
                 // Use the precomputed max density for this block
                 float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
 
-                maxDensity *= pow(0.8f, tempDepth);
+                if (m_ApproximatedScatteringForClouds != 0)
+                    maxDensity *= pow(0.8f, tempDepth);
 
                 // Sample a distance based on the max density of the block
                 float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
@@ -216,7 +220,8 @@ public struct Volume
                 UV.z *= textureSize.z; // Scale Z to sample the texture array
                 float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * m_Density;
 
-                densityTextureValue *= pow(0.8f, tempDepth);
+                if (m_ApproximatedScatteringForClouds != 0)
+                    densityTextureValue *= pow(0.8f, tempDepth);
 
                 if (densityTextureValue / maxDensity < sampler.UniformFloat())
                 {
@@ -254,11 +259,23 @@ public struct Volume
         float3 newdir;
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, pow(m_Anisotropy, 1.0f + tempDepth));
+            float anisotropy;
+            if (m_ApproximatedScatteringForClouds != 0)
+                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
+            else
+                anisotropy = m_Anisotropy;
+
+            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, anisotropy);
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
-            newdir = sampler.SampleDraine(incidentDirection, m_Anisotropy, m_Alpha);
+            float anisotropy;
+            if (m_ApproximatedScatteringForClouds != 0)
+                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
+            else
+                anisotropy = m_Anisotropy;
+
+            newdir = sampler.SampleDraine(incidentDirection, anisotropy, m_Alpha);
         }
         #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
         {
@@ -273,11 +290,23 @@ public struct Volume
     {
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            return EvaluateHenyeyGreenstein(V, L, pow(m_Anisotropy, 1.0f + tempDepth));
+            float anisotropy;
+            if (m_ApproximatedScatteringForClouds != 0)
+                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
+            else
+                anisotropy = m_Anisotropy;
+
+            return EvaluateHenyeyGreenstein(V, L, anisotropy);
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
-            return EvaluateDraine(V, L, m_Anisotropy, m_Alpha);
+            float anisotropy;
+            if (m_ApproximatedScatteringForClouds != 0)
+                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
+            else
+                anisotropy = m_Anisotropy;
+
+            return EvaluateDraine(V, L, anisotropy, m_Alpha);
         }
         #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
         {
@@ -354,7 +383,8 @@ public struct Volume
                     // Use the precomputed max density for this block
                     float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
 
-                    maxDensity *= pow(0.8f, tempDepth);
+                    if (uVolumes[i].m_ApproximatedScatteringForClouds != 0)
+                        maxDensity *= pow(0.8f, tempDepth);
 
                     // Sample a distance based on the max density of the block
                     float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
@@ -392,7 +422,8 @@ public struct Volume
                     UV.z *= textureSize.z; // Scale Z to sample the texture array
                     float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * uVolumes[i].GetDensity();
 
-                    densityTextureValue *= pow(0.8f, tempDepth);
+                    if (uVolumes[i].m_ApproximatedScatteringForClouds != 0)
+                        densityTextureValue *= pow(0.8f, tempDepth);
 
                     // Update transmittance based on actual density vs max density
                     transmittance *= 1.0f - (densityTextureValue / maxDensity);
