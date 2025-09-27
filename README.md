@@ -49,7 +49,8 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - Henyey-Greenstein, Draine, and approximated MIE phase functions implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Emissive Volumes with [temperature parametrization](https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
-- Multiple Atmospheric Scattering
+- Multiple Atmospheric Scattering [A Scalable and Production Ready Sky and Atmosphere Rendering Technique](https://sebh.github.io/publications/egsr2020.pdf)
+- Optimized Cloud Scattering according to [The Design and Evolution of Disney’s Hyperion Renderer](https://media.disneyanimation.com/uploads/production/publication_asset/177/asset/a.pdf)
 - Textures and Normal Maps
 - Editor
   - Changing material and path tracing properties at runtime
@@ -77,7 +78,7 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
-<img src="./Gallery/CloudAtmosphere.png">
+<img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/WispyCloudNoon.png">
@@ -103,6 +104,8 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 - [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - [Scratch a pixel article on volumes](https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/monte-carlo-methods-in-practice/monte-carlo-simulation.html)
 - [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/)
+- [A Scalable and Production Ready Sky and Atmosphere Rendering Technique](https://sebh.github.io/publications/egsr2020.pdf)
+- [The Design and Evolution of Disney’s Hyperion Renderer](https://media.disneyanimation.com/uploads/production/publication_asset/177/asset/a.pdf)
 
 ## Models
 - https://developer.nvidia.com/orca/amazon-lumberyard-bistro - Bistro
@@ -120,5 +123,7 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 - https://disneyanimation.com/resources/clouds/ - Disney Cloud
 - https://www.openvdb.org/download/ - Bunny Cloud
 - https://jangafx.com/software/embergen/download/free-vdb-animations - Smoke Plume
-- https://samk9632.gumroad.com/l/Freebie-Cloud - Wispy Cloud
-- https://www.blackboxcolour.com/assets - Other clouds
+- https://www.blackboxcolour.com/assets - Cloud pack
+- https://samk9632.gumroad.com/l/Freebie-Cloud - Wispy Cloud by Samuel Krug
+- https://drive.google.com/file/d/1ACBLnJBbmFzP07djNC1N15qnlqTGHmOM/view - Cloud by Samuel Krug
+- https://drive.google.com/drive/folders/17RueIORCc-Na4zjszHbShv9MbV_RUeBo - Cloud Pack by Samuel Krug
