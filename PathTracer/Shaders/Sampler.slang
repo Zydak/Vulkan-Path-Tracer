@@ -1,16 +1,21 @@
 import Defines;
-
-public struct AliasMapEntry
-{
-    public uint Alias;
-    public float Importance;
-};
+import Bindings;
 
 public uint PCG_HASH(uint seed)
 {
     uint state = seed * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
+}
+
+float3 Rotate(float3 v, float3 axis, float theta)
+{
+    float cosTheta = cos(theta);
+    float sinTheta = sin(theta);
+
+    float3 normalizedAxis = normalize(axis);
+
+    return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
 }
 
 public struct Sampler
@@ -176,6 +181,28 @@ public struct Sampler
     }
 
     [mutating]
+    public float3 SampleRayleigh(float3 incidentDir)
+    {
+        float2 rand = UniformFloat2();
+        
+        float u = -pow(2 * (2 * rand.x - 1) + sqrt(4 * pow(2 * rand.x - 1, 2) + 1), 1.0f / 3.0f);
+        float cosTheta = u - (1.0f / u);
+        float phi = 2.0 * M_PI * rand.y;
+
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        float3 newDir = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+        // new dir is created in tangent space, so rotate it by incidentDir
+        float3 up = abs(incidentDir.y) < 0.9999999 ? float3(0, 1, 0) : float3(0, 0, 1);
+        float3 tangent = normalize(cross(up, incidentDir));
+        float3 bitangent = cross(incidentDir, tangent);
+        float3 scatteredDir = normalize(newDir.x * tangent + newDir.y * bitangent + newDir.z * incidentDir);
+
+        return scatteredDir;
+    }
+
+    [mutating]
     public float3 SampleDraine(float3 incidentDir, float g, float a)
     {        
         float2 rand = UniformFloat2();
@@ -242,20 +269,20 @@ public struct Sampler
     }
 
     [mutating]
-    public void ImportanceSampleEnvMap(in Texture2D hdrTexture, in SamplerState sampler, in StructuredBuffer<AliasMapEntry> aliasMap, in float azimuth, in float altitude, out float3 toLight, out float4 outValue)
+    public void ImportanceSampleEnvMap(out float3 toLight, out float4 outValue)
     {
         // Uniformly pick a texel index idx in the environment map
         float3 xi = UniformFloat3();
 
         uint width;
         uint height;
-        hdrTexture.GetDimensions(width, height);
+        uEnvMapTexture.GetDimensions(width, height);
 
         uint size = width * height;
         uint idx = min(uint(xi.x * float(size)), size - 1);
 
         // Fetch the entry for that texel, containing the importance and the texel alias
-        AliasMapEntry entry = aliasMap[idx];
+        AliasMapEntry entry = uEnvAliasMap[idx];
 
         uint envIdx;
 
@@ -293,13 +320,67 @@ public struct Sampler
 
         toLight = float3(sinPhi * sinTheta, -cosTheta, -cosPhi * sinTheta);
 
+        float azimuth = uUBO.SkyRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+        float altitude = uUBO.SkyRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+        toLight = Rotate(toLight, float3(0.0f, 1.0f, 0.0f), azimuth);
+        toLight = Rotate(toLight, float3(1.0f, 0.0f, 0.0f), altitude);
+
         // Lookup the environment value using computed uvs
-        outValue = hdrTexture.SampleLevel(sampler, {u, v}, 0);
+        outValue = uEnvMapTexture.SampleLevel(uTextureSampler, {u, v}, 0);
+        outValue.rgb *= uUBO.EnvironmentIntensity;
     }
 
     [mutating]
     public float SampleScatteringDistance(float density)
     {
         return -log(UniformFloat()) / density;
+    }
+
+    [mutating]
+    public void SampleSunDisk(float sunTheta, out float3 toLight, out float4 colorPDF)
+    {
+        float azimuth = uUBO.SkyRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
+        float altitude = uUBO.SkyRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
+        float3 sunDir = Rotate(float3(0.0f, 0.0f, -1.0f), float3(1.0f, 0.0f, 0.0f), altitude); // Start from -Z (front)
+        sunDir = Rotate(sunDir, float3(0.0f, 1.0f, 0.0f), azimuth);
+
+        float cosThetaMax = cos(sunTheta);
+
+        float phi = 2.0 * M_PI * UniformFloat();
+        float cosTheta = lerp(cosThetaMax, 1.0, UniformFloat());
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        // Local direction in cone coordinates (z = cone axis)
+        float3 localDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+        // Build an orthonormal basis around sunDir
+        float3 w = normalize(sunDir);
+        float3 up = abs(w.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+        float3 u = normalize(cross(up, w));
+        float3 v = cross(w, u);
+
+        // Transform local direction to world space
+        float3 dir = u * localDir.x + v * localDir.y + w * localDir.z;
+
+        float solidAngle = 2.0f * M_PI * (1.0 - cosThetaMax);
+        colorPDF.a = 1.0 / solidAngle;
+
+        colorPDF.rgb = 2e6 * uUBO.SunColor.rgb * uUBO.EnvironmentIntensity;
+
+        toLight = dir;
+    }
+
+    [mutating]
+    public void ImportanceSampleSky(out float3 toLight, out float4 outValue)
+    {
+        #ifdef ENABLE_ATMOSPHERE
+        {
+            SampleSunDisk(0.004675f, toLight, outValue); // For now hardcoded to 0.004675 radians
+        }
+        #else
+        {
+            ImportanceSampleEnvMap(toLight, outValue);
+        }
+        #endif
     }
 }

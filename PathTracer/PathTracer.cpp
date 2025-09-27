@@ -7,6 +7,7 @@
 #include <numeric>
 #include <numbers>
 
+#include "Vulkan/CommandBuffer.h"
 #include "openvdb/openvdb.h"
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
@@ -137,7 +138,16 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     auto scene = importer.ImportScene(sceneFilePath).get();
     VH_ASSERT(scene.HasValue(), "Failed to import scene! Current working directory: {}, make sure it is correct!", std::filesystem::current_path().string());
 
-    VH_ASSERT(scene.Value().Cameras.Size() > 0, "No cameras found in scene! Please load a scene that contains a camera!");
+    // Add a default camera if the scene doesn't have any cameras
+    if (scene.Value().Cameras.Size() <= 0)
+    {
+        VulkanHelper::CameraAsset camera;
+        camera.AspectRatio = 16.0f / 9.0f;
+        camera.FOV = 45.0f;
+        camera.ViewMatrix = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        scene.Value().Cameras.PushBack(camera);
+    }
+
     VH_ASSERT(scene.Value().Meshes.Size() > 0, "No meshes found in scene! Please load a scene that contains meshes!");
 
     // Load Camera values
@@ -487,30 +497,32 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     m_Height = initialRes;
     CreateOutputImageView();
 
+    VulkanHelper::ShaderStages allRTShadersStages = VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT;
+
     // Create Descriptor set
     std::array<VulkanHelper::DescriptorSet::BindingDescription, 22> bindingDescriptions = {
-        VulkanHelper::DescriptorSet::BindingDescription{0, 1, VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_IMAGE},
-        VulkanHelper::DescriptorSet::BindingDescription{1, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
-        VulkanHelper::DescriptorSet::BindingDescription{2, 1, VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
-        VulkanHelper::DescriptorSet::BindingDescription{3, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // vertex Meshes
-        VulkanHelper::DescriptorSet::BindingDescription{4, (uint32_t)m_SceneMeshes.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // index Meshes
-        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneBaseColorTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
-        VulkanHelper::DescriptorSet::BindingDescription{6, (uint32_t)m_SceneNormalTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Normal Textures
-        VulkanHelper::DescriptorSet::BindingDescription{7, (uint32_t)m_SceneRoughnessTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Roughness Textures
-        VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
-        VulkanHelper::DescriptorSet::BindingDescription{9, (uint32_t)m_SceneEmissiveTextures.size(), VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Emissive Textures
-        VulkanHelper::DescriptorSet::BindingDescription{10, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
-        VulkanHelper::DescriptorSet::BindingDescription{11, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Materials
-        VulkanHelper::DescriptorSet::BindingDescription{12, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Reflection Lookup
-        VulkanHelper::DescriptorSet::BindingDescription{13, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // RefractionHitFromOutside Lookup
-        VulkanHelper::DescriptorSet::BindingDescription{14, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // ReflectionHitFromInside Lookup
-        VulkanHelper::DescriptorSet::BindingDescription{15, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Env map
-        VulkanHelper::DescriptorSet::BindingDescription{16, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
-        VulkanHelper::DescriptorSet::BindingDescription{17, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
-        VulkanHelper::DescriptorSet::BindingDescription{18, 1, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
-        VulkanHelper::DescriptorSet::BindingDescription{19, MAX_HETEROGENEOUS_VOLUMES, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume density textures
-        VulkanHelper::DescriptorSet::BindingDescription{20, MAX_HETEROGENEOUS_VOLUMES, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume Temperature textures
-        VulkanHelper::DescriptorSet::BindingDescription{21, MAX_HETEROGENEOUS_VOLUMES, VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::RAYGEN_BIT, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Volume max densities buffers
+        VulkanHelper::DescriptorSet::BindingDescription{0, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_IMAGE},
+        VulkanHelper::DescriptorSet::BindingDescription{1, 1, allRTShadersStages, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
+        VulkanHelper::DescriptorSet::BindingDescription{2, 1, allRTShadersStages, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
+        VulkanHelper::DescriptorSet::BindingDescription{3, (uint32_t)m_SceneMeshes.size(), allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // vertex Meshes
+        VulkanHelper::DescriptorSet::BindingDescription{4, (uint32_t)m_SceneMeshes.size(), allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // index Meshes
+        VulkanHelper::DescriptorSet::BindingDescription{5, (uint32_t)m_SceneBaseColorTextures.size(), allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Base Color Textures
+        VulkanHelper::DescriptorSet::BindingDescription{6, (uint32_t)m_SceneNormalTextures.size(), allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Normal Textures
+        VulkanHelper::DescriptorSet::BindingDescription{7, (uint32_t)m_SceneRoughnessTextures.size(), allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Roughness Textures
+        VulkanHelper::DescriptorSet::BindingDescription{8, (uint32_t)m_SceneMetallicTextures.size(), allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Metallic Textures
+        VulkanHelper::DescriptorSet::BindingDescription{9, (uint32_t)m_SceneEmissiveTextures.size(), allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Emissive Textures
+        VulkanHelper::DescriptorSet::BindingDescription{10, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLER}, // Sampler
+        VulkanHelper::DescriptorSet::BindingDescription{11, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Materials
+        VulkanHelper::DescriptorSet::BindingDescription{12, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Reflection Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{13, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // RefractionHitFromOutside Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{14, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // ReflectionHitFromInside Lookup
+        VulkanHelper::DescriptorSet::BindingDescription{15, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Env map
+        VulkanHelper::DescriptorSet::BindingDescription{16, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
+        VulkanHelper::DescriptorSet::BindingDescription{17, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
+        VulkanHelper::DescriptorSet::BindingDescription{18, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
+        VulkanHelper::DescriptorSet::BindingDescription{19, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume density textures
+        VulkanHelper::DescriptorSet::BindingDescription{20, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume Temperature textures
+        VulkanHelper::DescriptorSet::BindingDescription{21, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Volume max densities buffers
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -558,15 +570,26 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     m_CameraProjectionInverse = glm::inverse(glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f));
     pathTracerUniform.CameraViewInverse = m_CameraViewInverse;
     pathTracerUniform.CameraProjectionInverse = m_CameraProjectionInverse;
+    pathTracerUniform.PlanetPosition = glm::vec4(m_PlanetPosition, 0.0f);
+    pathTracerUniform.PlanetRadius = m_PlanetRadius;
+    pathTracerUniform.AtmosphereHeight = m_AtmosphereHeight;
+    pathTracerUniform.RayleighScatteringCoefficientMultiplier = glm::vec4(m_RayleighScatteringCoefficientMultiplier, 0.0f);
+    pathTracerUniform.MieScatteringCoefficientMultiplier = glm::vec4(m_MieScatteringCoefficientMultiplier, 0.0f);
+    pathTracerUniform.OzoneAbsorptionCoefficientMultiplier = glm::vec4(m_OzoneAbsorptionCoefficientMultiplier, 0.0f);
+    pathTracerUniform.SunColor = glm::vec4(m_SunColor, 0.0f);
+    pathTracerUniform.RayleighDensityFalloff = m_RayleighDensityFalloff;
+    pathTracerUniform.MieDensityFalloff = m_MieDensityFalloff;
+    pathTracerUniform.OzoneDensityFalloff = m_OzoneDensityFalloff;
+    pathTracerUniform.OzonePeak = m_OzonePeak;
     pathTracerUniform.MaxDepth = m_MaxDepth;
     pathTracerUniform.SampleCount = m_SamplesPerFrame;
     pathTracerUniform.MaxLuminance = m_MaxLuminance;
     pathTracerUniform.FocusDistance = m_FocusDistance;
     pathTracerUniform.DepthOfFieldStrength = m_DepthOfFieldStrength;
-    pathTracerUniform.EnvMapRotationAzimuth = m_EnvMapRotationAzimuth;
-    pathTracerUniform.EnvMapRotationAltitude = m_EnvMapRotationAltitude;
+    pathTracerUniform.SkyRotationAzimuth = m_SkyRotationAzimuth;
+    pathTracerUniform.SkyRotationAltitude = m_SkyRotationAltitude;
     pathTracerUniform.VolumesCount = 0; // Starts empty
-    pathTracerUniform.EnvironmentIntensity = m_EnvironmentIntensity;
+    pathTracerUniform.SkyIntensity = m_SkyIntensity;
     pathTracerUniform.ScreenChunkCount = m_ScreenChunkCount;
 
     // Create a staging buffer to upload uniform data
@@ -586,11 +609,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     std::vector<VulkanHelper::Shader::Define> defines;
     if (m_EnableEnvMapMIS)
-        defines.push_back({"ENABLE_ENV_MAP_MIS", "1"});
+        defines.push_back({"ENABLE_SKY_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
-    if (m_Volumes.size() > 0)
-        defines.push_back({"ENABLE_VOLUMES", "1"});
     if (m_UseOnlyGeometryNormals)
         defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
     if (m_UseEnergyCompensation)
@@ -599,6 +620,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
+    if (m_EnableAtmosphere)
+        defines.push_back({"ENABLE_ATMOSPHERE", "1"});
 
     switch (m_PhaseFunction)
     {
@@ -617,7 +640,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         break;
     }
 
-    VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", defines.size(), defines.data());
+    VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", (uint32_t)defines.size(), defines.data());
     VulkanHelper::Shader rgenShader = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT}).Value();
     VulkanHelper::Shader hitShader = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT}).Value();
     VulkanHelper::Shader missShader = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT}).Value();
@@ -781,7 +804,7 @@ VulkanHelper::ImageView PathTracer::LoadLookupTable(const char* filepath, glm::u
             0,
             tableSize.x,
             tableSize.y,
-            i
+            (uint32_t)i
         ) == VulkanHelper::VHResult::OK, "Failed to copy staging buffer to image");
 
         // Restart the command buffer
@@ -903,6 +926,14 @@ void PathTracer::UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uin
 
     VH_ASSERT(stagingBuffer.UploadData(data, size, 0) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     VH_ASSERT(buffer.CopyFromBuffer(commandBuffer, stagingBuffer, 0, offset, size) == VulkanHelper::VHResult::OK, "Failed to copy path tracer uniform buffer");
+
+    buffer.Barrier(
+        commandBuffer,
+        VulkanHelper::AccessFlags::TRANSFER_WRITE_BIT,
+        VulkanHelper::AccessFlags::UNIFORM_READ_BIT,
+        VulkanHelper::PipelineStages::TRANSFER_BIT,
+        VulkanHelper::PipelineStages::RAY_TRACING_SHADER_BIT_KHR
+    );
 }
 
 void PathTracer::DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer)
@@ -977,17 +1008,17 @@ void PathTracer::SetEnvMapFilepath(const std::string& filePath, VulkanHelper::Co
     ResetPathTracing();
 }
 
-void PathTracer::SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::SetSkyAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer)
 {
-    m_EnvMapRotationAzimuth = azimuth;
-    UploadDataToBuffer(m_PathTracerUniformBuffer, &azimuth, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAzimuth), commandBuffer);
+    m_SkyRotationAzimuth = azimuth;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &azimuth, sizeof(float), offsetof(PathTracerUniform, SkyRotationAzimuth), commandBuffer);
     ResetPathTracing();
 }
 
-void PathTracer::SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::SetSkyAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer)
 {
-    m_EnvMapRotationAltitude = altitude;
-    UploadDataToBuffer(m_PathTracerUniformBuffer, &altitude, sizeof(float), offsetof(PathTracerUniform, EnvMapRotationAltitude), commandBuffer);
+    m_SkyRotationAltitude = altitude;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &altitude, sizeof(float), offsetof(PathTracerUniform, SkyRotationAltitude), commandBuffer);
     ResetPathTracing();
 }
 
@@ -996,11 +1027,9 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
     std::vector<VulkanHelper::Shader::Define> defines;
 
     if (m_EnableEnvMapMIS)
-        defines.push_back({"ENABLE_ENV_MAP_MIS", "1"});
+        defines.push_back({"ENABLE_SKY_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
-    if (m_Volumes.size() > 0)
-        defines.push_back({"ENABLE_VOLUMES", "1"});
     if (m_UseOnlyGeometryNormals)
         defines.push_back({"USE_ONLY_GEOMETRY_NORMALS", "1"});
     if (m_UseEnergyCompensation)
@@ -1009,6 +1038,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         defines.push_back({"FURNACE_TEST_MODE", "1"});
     if (m_UseRayQueries)
         defines.push_back({"USE_RAY_QUERIES", "1"});
+    if (m_EnableAtmosphere)
+        defines.push_back({"ENABLE_ATMOSPHERE", "1"});
 
     switch (m_PhaseFunction)
     {
@@ -1027,7 +1058,7 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
         break;
     }
 
-    VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", defines.size(), defines.data());
+    VulkanHelper::Shader::InitializeSession("../../PathTracer/Shaders/", (uint32_t)defines.size(), defines.data());
     auto rgenShaderRes = VulkanHelper::Shader::New({m_Device, "RayGen.slang", VulkanHelper::ShaderStages::RAYGEN_BIT});
     auto hitShaderRes = VulkanHelper::Shader::New({m_Device, "ClosestHit.slang", VulkanHelper::ShaderStages::CLOSEST_HIT_BIT});
     auto missShaderRes = VulkanHelper::Shader::New({m_Device, "Miss.slang", VulkanHelper::ShaderStages::MISS_BIT});
@@ -1079,7 +1110,7 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
     const uint32_t width = textureAsset.Width;
     const uint32_t height = textureAsset.Height;
     const uint64_t size = width * height;
-    float* pixels = (float*)textureAsset.Data.Data();
+    float* pixels = (float*)textureAsset.Data.Data(); // TODO wrong alignemnt
 
     // Create Importance Buffer for Importance Sampling
     struct AliasMapEntry
@@ -1251,20 +1282,15 @@ void PathTracer::LoadEnvironmentMap(const std::string& filePath, VulkanHelper::C
 
 void PathTracer::AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer)
 {
-    const uint32_t initialSize = m_Volumes.size();
-
     VolumeGPU volumeGPU(volume);
 
-    UploadDataToBuffer(m_VolumesBuffer, &volumeGPU, sizeof(VolumeGPU), m_Volumes.size() * sizeof(VolumeGPU), commandBuffer);
+    UploadDataToBuffer(m_VolumesBuffer, &volumeGPU, sizeof(VolumeGPU), (uint32_t)m_Volumes.size() * sizeof(VolumeGPU), commandBuffer);
     m_Volumes.push_back(volume);
 
     // Update Uniform Buffer
     uint32_t count = (uint32_t)m_Volumes.size();
     UploadDataToBuffer(m_PathTracerUniformBuffer, &count, sizeof(uint32_t), offsetof(PathTracerUniform, VolumesCount), commandBuffer);
     ResetPathTracing();
-
-    if (initialSize == 0)
-        ReloadShaders(commandBuffer);
 }
 
 void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer)
@@ -1351,7 +1377,7 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
 
     // Scale it down so AABB is more or less -1 to 1
-    float maxDim = glm::max(glm::max(dim.x(), dim.y()), dim.z());
+    float maxDim = (float)glm::max(glm::max(dim.x(), dim.y()), dim.z());
     volume.CornerMin /= maxDim / 2.0f;
     volume.CornerMax /= maxDim / 2.0f;
 
@@ -1494,7 +1520,7 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
 
         volume.MaxDensitiesBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
 
-        UploadDataToBuffer(volume.MaxDensitiesBuffer, volumeMaxDensities.data(), bufferConfig.Size, 0, commandBuffer);
+        UploadDataToBuffer(volume.MaxDensitiesBuffer, volumeMaxDensities.data(), (uint32_t)bufferConfig.Size, 0, commandBuffer);
         
         static int densityDataIndex = 0;
         VH_ASSERT(m_PathTracerDescriptorSet.AddImage(19, (uint32_t)densityDataIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
@@ -1521,8 +1547,6 @@ void PathTracer::RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper:
 
 void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer)
 {
-    const uint32_t initialSize = m_Volumes.size();
-
     // It will remove the volume from the array and move all subsequent volumes down to fill the gap
     uint32_t volumesToMove = (uint32_t)m_Volumes.size() - index - 1;
     m_Volumes.erase(m_Volumes.begin() + index);
@@ -1538,9 +1562,6 @@ void PathTracer::RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer comman
     // Update Uniform Buffer
     UploadDataToBuffer(m_PathTracerUniformBuffer, &volumeCount, sizeof(uint32_t), offsetof(PathTracerUniform, VolumesCount), commandBuffer);
     ResetPathTracing();
-
-    if (initialSize == 1)
-        ReloadShaders(commandBuffer);
 }
 
 void PathTracer::SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer)
@@ -1610,7 +1631,7 @@ VulkanHelper::ImageView PathTracer::LoadDefaultTexture(VulkanHelper::CommandBuff
     return VulkanHelper::ImageView::New(imageViewConfig).Value();
 }
 
-void PathTracer::SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_EnableEnvMapMIS = value;
     ResetPathTracing();
@@ -1645,10 +1666,10 @@ void PathTracer::SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandB
     ReloadShaders(commandBuffer);
 }
 
-void PathTracer::SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer)
+void PathTracer::SetSkyIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer)
 {
-    m_EnvironmentIntensity = environmentIntensity;
-    UploadDataToBuffer(m_PathTracerUniformBuffer, &m_EnvironmentIntensity, sizeof(float), offsetof(PathTracerUniform, EnvironmentIntensity), commandBuffer);
+    m_SkyIntensity = environmentIntensity;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &m_SkyIntensity, sizeof(float), offsetof(PathTracerUniform, SkyIntensity), commandBuffer);
     ResetPathTracing();
 }
 
@@ -1688,5 +1709,89 @@ void PathTracer::SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer
 {
     m_ScreenChunkCount = count;
     UploadDataToBuffer(m_PathTracerUniformBuffer, &count, sizeof(uint32_t), offsetof(PathTracerUniform, ScreenChunkCount), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetEnableAtmosphere(bool enabled, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_EnableAtmosphere = enabled;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
+}
+
+void PathTracer::SetPlanetRadius(float radius, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_PlanetRadius = radius;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &radius, sizeof(float), offsetof(PathTracerUniform, PlanetRadius), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetAtmosphereHeight(float height, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_AtmosphereHeight = height;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &height, sizeof(float), offsetof(PathTracerUniform, AtmosphereHeight), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetRayleighScatteringCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_RayleighScatteringCoefficientMultiplier = multiplier;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&multiplier, sizeof(glm::vec3), offsetof(PathTracerUniform, RayleighScatteringCoefficientMultiplier), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetMieScatteringCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_MieScatteringCoefficientMultiplier = multiplier;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&multiplier, sizeof(glm::vec3), offsetof(PathTracerUniform, MieScatteringCoefficientMultiplier), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetOzoneAbsorptionCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_OzoneAbsorptionCoefficientMultiplier = multiplier;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&multiplier, sizeof(glm::vec3), offsetof(PathTracerUniform, OzoneAbsorptionCoefficientMultiplier), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetPlanetPosition(const glm::vec3& position, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_PlanetPosition = position;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&position, sizeof(glm::vec3), offsetof(PathTracerUniform, PlanetPosition), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetRayleighDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_RayleighDensityFalloff = falloff;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &falloff, sizeof(float), offsetof(PathTracerUniform, RayleighDensityFalloff), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetMieDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_MieDensityFalloff = falloff;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &falloff, sizeof(float), offsetof(PathTracerUniform, MieDensityFalloff), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetOzoneDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_OzoneDensityFalloff = falloff;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &falloff, sizeof(float), offsetof(PathTracerUniform, OzoneDensityFalloff), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetOzonePeak(float altitude, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_OzonePeak = altitude;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &altitude, sizeof(float), offsetof(PathTracerUniform, OzonePeak), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_SunColor = color;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&color, sizeof(glm::vec3), offsetof(PathTracerUniform, SunColor), commandBuffer);
     ResetPathTracing();
 }

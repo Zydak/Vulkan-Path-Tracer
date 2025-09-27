@@ -51,6 +51,9 @@ public:
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
+        // This enables faster but biased methods for rendering clouds
+        int ApproximatedScatteringForClouds = 0;
+
         std::string DensityDataFilepath;
         VulkanHelper::ImageView DensityTextureView;
         VulkanHelper::ImageView TemperatureTextureView;
@@ -96,7 +99,7 @@ public:
     void SetRoughnessTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetMetallicTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEnvMapMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
     void SetCameraProjectionInverse(const glm::mat4& projection, VulkanHelper::CommandBuffer commandBuffer);
@@ -110,23 +113,35 @@ public:
     [[nodiscard]] inline float GetFocusDistance() const { return m_FocusDistance; }
     [[nodiscard]] inline float GetDepthOfFieldStrength() const { return m_DepthOfFieldStrength; }
     [[nodiscard]] inline const std::string& GetEnvMapFilepath() const { return m_EnvMapFilepath; }
-    [[nodiscard]] inline float GetEnvMapRotationAzimuth() const { return m_EnvMapRotationAzimuth; }
-    [[nodiscard]] inline float GetEnvMapRotationAltitude() const { return m_EnvMapRotationAltitude; }
+    [[nodiscard]] inline float GetSkyRotationAzimuth() const { return m_SkyRotationAzimuth; }
+    [[nodiscard]] inline float GetSkyRotationAltitude() const { return m_SkyRotationAltitude; }
     [[nodiscard]] inline uint32_t GetVolumesCount() const { return (uint32_t)m_Volumes.size(); }
     [[nodiscard]] inline const std::vector<Volume>& GetVolumes() const { return m_Volumes; }
-    [[nodiscard]] inline bool IsEnvMapMISEnabled() const { return m_EnableEnvMapMIS; }
+    [[nodiscard]] inline bool IsSkyMISEnabled() const { return m_EnableEnvMapMIS; }
     [[nodiscard]] inline bool IsEnvMapShownDirectly() const { return m_ShowEnvMapDirectly; }
     [[nodiscard]] inline uint64_t GetTotalVertexCount() const { return m_TotalVertexCount; }
     [[nodiscard]] inline uint64_t GetTotalIndexCount() const { return m_TotalIndexCount; }
     [[nodiscard]] inline bool UseOnlyGeometryNormals() const { return m_UseOnlyGeometryNormals; }
     [[nodiscard]] inline bool UseEnergyCompensation() const { return m_UseEnergyCompensation; }
     [[nodiscard]] inline bool IsInFurnaceTestMode() const { return m_FurnaceTestMode; }
-    [[nodiscard]] inline float GetEnvironmentIntensity() const { return m_EnvironmentIntensity; }
+    [[nodiscard]] inline float GetSkyIntensity() const { return m_SkyIntensity; }
     [[nodiscard]] inline bool UseRayQueries() const { return m_UseRayQueries; }
     [[nodiscard]] inline const glm::mat4& GetCameraViewInverse() const { return m_CameraViewInverse; }
     [[nodiscard]] inline const glm::mat4& GetCameraProjectionInverse() const { return m_CameraProjectionInverse; }
     [[nodiscard]] inline PhaseFunction GetPhaseFunction() const { return m_PhaseFunction; }
     [[nodiscard]] inline uint32_t GetSplitScreenCount() const { return m_ScreenChunkCount; }
+    [[nodiscard]] inline bool IsAtmosphereEnabled() const { return m_EnableAtmosphere; }
+    [[nodiscard]] inline const glm::vec3& GetPlanetPosition() const { return m_PlanetPosition; }
+    [[nodiscard]] inline float GetPlanetRadius() const { return m_PlanetRadius; }
+    [[nodiscard]] inline float GetAtmosphereHeight() const { return m_AtmosphereHeight; }
+    [[nodiscard]] inline const glm::vec3& GetRayleighScatteringCoefficientMultiplier() const { return m_RayleighScatteringCoefficientMultiplier; }
+    [[nodiscard]] inline const glm::vec3& GetMieScatteringCoefficientMultiplier() const { return m_MieScatteringCoefficientMultiplier; }
+    [[nodiscard]] inline const glm::vec3& GetOzoneAbsorptionCoefficientMultiplier() const { return m_OzoneAbsorptionCoefficientMultiplier; }
+    [[nodiscard]] inline float GetRayleighDensityFalloff() const { return m_RayleighDensityFalloff; }
+    [[nodiscard]] inline float GetMieDensityFalloff() const { return m_MieDensityFalloff; }
+    [[nodiscard]] inline float GetOzoneDensityFalloff() const { return m_OzoneDensityFalloff; }
+    [[nodiscard]] inline float GetOzonePeak() const { return m_OzonePeak; }
+    [[nodiscard]] inline const glm::vec3& GetSunColor() const { return m_SunColor; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -135,19 +150,31 @@ public:
     void SetFocusDistance(float focusDistance, VulkanHelper::CommandBuffer commandBuffer);
     void SetDepthOfFieldStrength(float depthOfFieldStrength, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapFilepath(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEnvMapAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEnvMapAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSkyAzimuth(float azimuth, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSkyAltitude(float altitude, VulkanHelper::CommandBuffer commandBuffer);
     void AddVolume(const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
     void RemoveVolume(uint32_t index, VulkanHelper::CommandBuffer commandBuffer);
     void SetVolume(uint32_t index, const Volume& volume, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseOnlyGeometryNormals(bool useOnlyGeometryNormals, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseEnergyCompensation(bool useEnergyCompensation, VulkanHelper::CommandBuffer commandBuffer);
     void SetFurnaceTestMode(bool furnaceTestMode, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEnvironmentIntensity(float environmentIntensity, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSkyIntensity(float skyIntensity, VulkanHelper::CommandBuffer commandBuffer);
     void SetUseRayQueries(bool useRayQueries, VulkanHelper::CommandBuffer commandBuffer);
     void AddDensityDataToVolume(uint32_t volumeIndex, const std::string& filepath, VulkanHelper::CommandBuffer commandBuffer);
     void RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer);
     void SetSplitScreenCount(uint32_t count, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEnableAtmosphere(bool enable, VulkanHelper::CommandBuffer commandBuffer);
+    void SetPlanetPosition(const glm::vec3& position, VulkanHelper::CommandBuffer commandBuffer);
+    void SetPlanetRadius(float radius, VulkanHelper::CommandBuffer commandBuffer);
+    void SetAtmosphereHeight(float height, VulkanHelper::CommandBuffer commandBuffer);
+    void SetRayleighScatteringCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer);
+    void SetMieScatteringCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer);
+    void SetOzoneAbsorptionCoefficientMultiplier(const glm::vec3& multiplier, VulkanHelper::CommandBuffer commandBuffer);
+    void SetRayleighDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
+    void SetMieDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
+    void SetOzoneDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
+    void SetOzonePeak(float peak, VulkanHelper::CommandBuffer commandBuffer);
+    void SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
@@ -173,17 +200,29 @@ private:
     float m_FocusDistance = 1.0f;
     float m_DepthOfFieldStrength = 0.0f;
     std::string m_EnvMapFilepath = "../../Assets/meadow_2_4k.hdr";
-    float m_EnvMapRotationAzimuth = 0.0f;
-    float m_EnvMapRotationAltitude = 0.0f;
+    float m_SkyRotationAzimuth = 0.0f;
+    float m_SkyRotationAltitude = 0.0f;
     bool m_EnableEnvMapMIS = true;
     bool m_ShowEnvMapDirectly = true;
     bool m_UseOnlyGeometryNormals = false;
     bool m_UseEnergyCompensation = true;
     bool m_FurnaceTestMode = false;
-    float m_EnvironmentIntensity = 1.0f;
+    float m_SkyIntensity = 1.0f;
     bool m_UseRayQueries = true;
     PhaseFunction m_PhaseFunction = PhaseFunction::HENYEY_GREENSTEIN;
     uint32_t m_ScreenChunkCount = 1;
+    bool m_EnableAtmosphere = false;
+    glm::vec3 m_PlanetPosition = glm::vec3(0.0f, 6360e3f + 1000.0f, 0.0f); // In meters
+    float m_PlanetRadius = 6360e3f; // In meters
+    float m_AtmosphereHeight = 100e3f; // In meters
+    glm::vec3 m_RayleighScatteringCoefficientMultiplier = glm::vec3(1.0f);
+    glm::vec3 m_MieScatteringCoefficientMultiplier = glm::vec3(1.0f);
+    glm::vec3 m_OzoneAbsorptionCoefficientMultiplier = glm::vec3(1.0f);
+    glm::vec3 m_SunColor = glm::vec3(1.0f, 0.956f, 0.88f);
+    float m_RayleighDensityFalloff = 8000.0f; // In meters
+    float m_MieDensityFalloff = 1200.0f; // In meters
+    float m_OzoneDensityFalloff = 5000.0f; // In meters
+    float m_OzonePeak = 22000.0f; // In meters
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -226,15 +265,29 @@ private:
     {
         glm::mat4 CameraViewInverse;
         glm::mat4 CameraProjectionInverse;
+
+        // Atmosphere parameters float4 to ensure alignment
+        glm::vec4 PlanetPosition;
+        glm::vec4 RayleighScatteringCoefficientMultiplier;
+        glm::vec4 MieScatteringCoefficientMultiplier;
+        glm::vec4 OzoneAbsorptionCoefficientMultiplier;
+        glm::vec4 SunColor;
+        float PlanetRadius;
+        float AtmosphereHeight;
+        float RayleighDensityFalloff;
+        float MieDensityFalloff;
+        float OzoneDensityFalloff;
+        float OzonePeak;
+
         uint32_t SampleCount;
         uint32_t MaxDepth;
         float MaxLuminance;
         float FocusDistance;
         float DepthOfFieldStrength;
-        float EnvMapRotationAzimuth;
-        float EnvMapRotationAltitude;
+        float SkyRotationAzimuth;
+        float SkyRotationAltitude;
         uint32_t VolumesCount;
-        float EnvironmentIntensity;
+        float SkyIntensity;
         uint32_t ScreenChunkCount;
     };
 
@@ -284,6 +337,9 @@ private:
         int KelvinMin = 500;
         int KelvinMax = 8000;
 
+        // This enables faster but biased methods for rendering clouds
+        int ApproximatedScatteringForClouds = 0;
+
         VolumeGPU() = default;
 
         VolumeGPU(const Volume& volume)
@@ -303,6 +359,7 @@ private:
             , EmissiveColorGamma(volume.EmissiveColorGamma) // Default value
             , KelvinMin(volume.KelvinMin)
             , KelvinMax(volume.KelvinMax)
+            , ApproximatedScatteringForClouds(volume.ApproximatedScatteringForClouds)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);

@@ -4,43 +4,9 @@ import Surface;
 import Defines;
 import Sampler;
 import Volume;
+import Atmosphere;
 
-[[vk::binding(1, 0)]] RaytracingAccelerationStructure uTopLevelAS;
-
-[[vk::binding(2, 0)]] ConstantBuffer<UniformBuffer> uUBO;
-
-[[vk::binding(3, 0)]] StructuredBuffer<Vertex, ScalarDataLayout> uVertices[];
-[[vk::binding(4, 0)]] StructuredBuffer<uint> uIndices[];
-
-[[vk::image_format("rgba8")]]
-[[vk::binding(5, 0)]] Texture2D uBaseColorTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(6, 0)]] Texture2D uNormalTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(7, 0)]] Texture2D uRoughnessTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(8, 0)]] Texture2D uMetallicTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(9, 0)]] Texture2D uEmissiveTextures[];
-[[vk::binding(10, 0)]] SamplerState uTextureSampler;
-[[vk::binding(11, 0)]] StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
-
-[[vk::image_format("r32f")]]
-[[vk::binding(12, 0)]] Texture2DArray uReflectionLookupTable;
-[[vk::image_format("r32f")]]
-[[vk::binding(13, 0)]] Texture2DArray uRefractionLookupTableHitFromOutside;
-[[vk::image_format("r32f")]]
-[[vk::binding(14, 0)]] Texture2DArray uRefractionLookupTableHitFromInside;
-
-[[vk::image_format("rgba32f")]]
-[[vk::binding(15, 0)]] Texture2D uEnvMapTexture;
-
-// Alias map is used to efficiently select texels from env map based on importance.
-[[vk::binding(16, 0)]] StructuredBuffer<AliasMapEntry> uEnvAliasMap;
-
-[[vk::binding(17, 0)]] StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
-
-[[vk::binding(18, 0)]] SamplerState uLookupTableSampler;
+import Bindings;
 
 float2 getSphericalUv(float3 v)
 {
@@ -158,26 +124,22 @@ void Main(inout Payload payload, in float2 attrib)
     // Importance Sample Env map
     //
 
-    float3 toEnvMapDirectionWorld;
-    float3 toEnvMapDirectionTangent;
-    float4 envMapValue;
-    bool canHitEnvMap = false;
-    #ifdef ENABLE_ENV_MAP_MIS
+    float3 toSkyDirectionWorld;
+    float3 toSkyDirectionTangent;
+    float4 skyValue;
+    bool canHitSky = false;
+    #ifdef ENABLE_SKY_MIS
     {
-        payload.Sampler.ImportanceSampleEnvMap(uEnvMapTexture, uTextureSampler, uEnvAliasMap, uUBO.EnvMapRotationAzimuth, uUBO.EnvMapRotationAltitude, toEnvMapDirectionWorld, envMapValue);
-        envMapValue.rgb *= uUBO.EnvironmentIntensity;
+        payload.Sampler.ImportanceSampleSky(toSkyDirectionWorld, skyValue);
 
-        float azimuth = uUBO.EnvMapRotationAzimuth / 180.0f * M_PI; // Convert degrees to radians
-        float altitude = uUBO.EnvMapRotationAltitude / 180.0f * M_PI; // Convert degrees to radians
-        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(1.0f, 0.0f, 0.0f), altitude);
-        toEnvMapDirectionWorld = Rotate(toEnvMapDirectionWorld, float3(0.0f, 1.0f, 0.0f), azimuth);
+        skyValue.rgb *= uUBO.EnvironmentIntensity;
 
-        toEnvMapDirectionTangent = surface.WorldToTangent(toEnvMapDirectionWorld);
-        canHitEnvMap = toEnvMapDirectionTangent.z > 0.0f;
+        toSkyDirectionTangent = surface.WorldToTangent(toSkyDirectionWorld);
+        canHitSky = toSkyDirectionTangent.z > 0.0f;
 
-        if (canHitEnvMap)
+        if (canHitSky)
         {
-            canHitEnvMap = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toEnvMapDirectionWorld);
+            canHitSky = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toSkyDirectionWorld);
         }
     }
     #endif
@@ -216,11 +178,11 @@ void Main(inout Payload payload, in float2 attrib)
     }
 
     // Evaluate environment map direction
-    BxDFEval envMapDirectionEval = BxDFEval(0, 0);
-    #ifdef ENABLE_ENV_MAP_MIS
-    if (canHitEnvMap)
+    BxDFEval skyDirectionEval = BxDFEval(0, 0);
+    #ifdef ENABLE_SKY_MIS
+    if (canHitSky)
     {
-        envMapDirectionEval = material.EvaluateBSDF(V, H, toEnvMapDirectionTangent, FDielectric);
+        skyDirectionEval = material.EvaluateBSDF(V, H, toSkyDirectionTangent, FDielectric);
     }
     #endif
 
@@ -236,24 +198,41 @@ void Main(inout Payload payload, in float2 attrib)
 
     payload.Emitted = float3(material.Properties.EmissiveColor);
     // Offset origin slightly to avoid self-intersection on the next event
-    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-5 * (float)wasRefracted + 1e-5 * (float)(!wasRefracted));
+    payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-3 * (float)wasRefracted + 1e-3 * (float)(!wasRefracted));
     payload.Direction = newDir;
 
     payload.BxDF *= scatterSample.BxDF;
     payload.PDF *= scatterSample.PDF;
 
-    #ifdef ENABLE_ENV_MAP_MIS
+    #ifdef ENABLE_SKY_MIS
     {
-        const float envMapPDF = envMapValue.a;
-        const float3 envMapColor = envMapValue.rgb;
-        if (canHitEnvMap)
+        const float skyMapPDF = skyValue.a;
+        const float3 skyColor = skyValue.rgb;
+        if (canHitSky)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toEnvMapDirectionWorld, uVolumes, uUBO.VolumesCount, uTextureSampler);
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, payload.Depth);
 
-            if (envMapValue.a > 0.0f && envMapDirectionEval.PDF > 0.0f)
+            #ifdef ENABLE_ATMOSPHERE
             {
-                payload.Emitted += (envMapDirectionEval.BxDF * transmittance * envMapValue.rgb / envMapValue.a) * PowerHeuristics(envMapValue.a, envMapDirectionEval.PDF);
+                if (payload.ColorChannel == -1)
+                {
+                    // Ray hasn't been split yet, so just sum all color channels
+                    transmittance.r *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toSkyDirectionWorld, 0).r;
+                    transmittance.g *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toSkyDirectionWorld, 1).g;
+                    transmittance.b *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toSkyDirectionWorld, 2).b;
+                }
+                else
+                {
+                    // Ray has been split, so only calculate the transmittance for the relevant color channel
+                    transmittance *= CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, toSkyDirectionWorld, payload.ColorChannel);
+                }
+            }
+            #endif
+
+            if (skyValue.a > 0.0f && skyDirectionEval.PDF > 0.0f)
+            {
+                payload.Emitted += (skyDirectionEval.BxDF * transmittance * skyColor / skyMapPDF) * PowerHeuristics(skyMapPDF, skyDirectionEval.PDF);
             }
         }
     }

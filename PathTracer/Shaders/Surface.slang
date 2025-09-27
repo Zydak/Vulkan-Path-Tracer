@@ -1,5 +1,6 @@
 import RTCommon;
 import Defines;
+import Bindings;
 
 // This class holds geometric data of the hit surface, things like world position, normals, tangents and texture coordinates
 public struct Surface

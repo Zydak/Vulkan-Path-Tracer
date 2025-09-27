@@ -29,7 +29,7 @@ private:
     void RenderMaterialSettings();
     void RenderPostProcessingSettings();
     void RenderPathTracingSettings();
-    void RenderEnvMapSettings();
+    void RenderSkySettings();
     void RenderVolumeSettings();
     void SaveToFileSettings();
 
@@ -56,8 +56,8 @@ private:
     glm::mat4 m_InitialViewMatrix = glm::mat4(1.0f);
     glm::mat4 m_InitialProjectionMatrix = glm::mat4(1.0f);
 
-    // A lot of vulkan commands can't be called when the render pass is active. And because ImGui
-    // Is an immediate mode GUI, they have to be deferred to the beginning of the next frame.
+    // A lot of vulkan commands can't be called when the render pass is active. And ImGui
+    // Is an immediate mode GUI, it runs in a render pass, so some commands have to be deferred to the beginning of the next frame.
     std::vector<std::pair<std::shared_ptr<void>, std::function<void(VulkanHelper::CommandBuffer, std::shared_ptr<void> data)>>> m_DeferredTasks;
     void PushDeferredTask(std::shared_ptr<void> data, std::function<void(VulkanHelper::CommandBuffer, std::shared_ptr<void> data)> task)
     {

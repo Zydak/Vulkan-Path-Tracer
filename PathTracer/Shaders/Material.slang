@@ -2,6 +2,7 @@ import Surface;
 import Sampler;
 import RTCommon;
 import Defines;
+import Bindings;
 
 public struct BxDFSample
 {
@@ -16,25 +17,7 @@ public struct BxDFEval
     public float PDF;
 }
 
-// Material data that's passed in from the CPU
-public struct CPUMaterial
-{
-    public float3 BaseColor;
-    public float3 EmissiveColor;
-    public float3 SpecularColor;
-    public float3 MediumColor;
-    public float3 MediumEmissiveColor;
-    public float Metallic;
-    public float Roughness;
-    public float IOR;
-    public float Transmission;
-    public float Anisotropy;
-    public float AnisotropyRotation;
-
-    public float MediumDensity;
-    public float MediumAnisotropy;
-}
-
+// TODO: Don't copy the entire CPUMaterial struct
 public struct Material
 {
     public CPUMaterial Properties;
