@@ -766,20 +766,20 @@ void Editor::SaveToFileSettings()
             std::filesystem::create_directories("../../RenderedImages");
         }
 
-        filePath = "../../RenderedImages/" + std::string(fileName) + ".png";
+        filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(m_PathTracer.GetSamplesAccumulated()) + "spp_" + std::to_string((int)m_RenderTime) + "s.png";
         while(true)
         {
             if (!std::filesystem::exists(filePath))
                 break;
 
-            filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(m_PathTracer.GetSamplesAccumulated()) + "spp_" + std::to_string(m_RenderTime) + "s_" + std::to_string(counter++) + ".png";
+            filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(m_PathTracer.GetSamplesAccumulated()) + "spp_" + std::to_string((int)m_RenderTime) + "s_" + std::to_string(counter++) + ".png";
         }
 
         PushDeferredTask(std::make_shared<std::string>(filePath), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
             SaveToFile(*(std::string*)data.get(), commandBuffer);
         });
         imageSaved = true;
-        strcpy(savedFilename, filePath.c_str() + 20); // +20 to remove the ../../RenderedImages/ part
+        strcpy(savedFilename, filePath.c_str() + 21); // +21 to remove the ../../RenderedImages/ part
     }
 
     if (imageSaved)

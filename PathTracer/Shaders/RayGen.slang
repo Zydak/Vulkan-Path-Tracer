@@ -33,7 +33,7 @@ void Main()
         float3 direction    = mul(uUBO.ViewInverse, float4(normalize(target), 0.0f)).xyz;
 
         float3 focusPoint = origin + direction * max(uUBO.FocusDistance, 0.001f);
-        float2 randomOffset = payload.Sampler.UniformFloat2(-0.5f, 0.5f) * uUBO.DepthOfFieldStrength;
+        float2 randomOffset = payload.Sampler.RandomCircleVec() * 0.5f * uUBO.DepthOfFieldStrength;
 
         const float3 cameraRight = float3(uUBO.ViewInverse[0][0], uUBO.ViewInverse[1][0], uUBO.ViewInverse[2][0]);
         const float3 cameraUp = float3(uUBO.ViewInverse[0][1], uUBO.ViewInverse[1][1], uUBO.ViewInverse[2][1]);

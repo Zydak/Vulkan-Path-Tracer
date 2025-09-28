@@ -100,6 +100,18 @@ public struct Sampler
     }
 
     [mutating]
+    public float2 RandomCircleVec()
+    {
+        float u1 = UniformFloat();
+        float u2 = UniformFloat();
+
+        float theta = 2.0f * M_PI * u1;
+        float r = sqrt(u2);
+
+        return float2(r * cos(theta), r * sin(theta));
+    }
+
+    [mutating]
     public float3 RandomSphereVec()
     {
         // Spherical Coordinates
