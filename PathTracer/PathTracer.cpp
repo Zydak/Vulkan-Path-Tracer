@@ -125,7 +125,11 @@ bool PathTracer::PathTrace(VulkanHelper::CommandBuffer& commandBuffer)
     VH_ASSERT(m_PathTracerPushConstant.SetData(&data, sizeof(PushConstantData)) == VulkanHelper::VHResult::OK, "Failed to set push constant data");
 
     m_PathTracerPipeline.Bind(commandBuffer);
-    m_PathTracerPipeline.RayTrace(commandBuffer, m_OutputImageView.GetImage().GetWidth() / m_ScreenChunkCount, m_OutputImageView.GetImage().GetHeight() / m_ScreenChunkCount);
+    m_PathTracerPipeline.RayTrace(
+        commandBuffer,
+        (uint32_t)glm::ceil((float)m_OutputImageView.GetImage().GetWidth() / (float)m_ScreenChunkCount),
+        (uint32_t)glm::ceil((float)m_OutputImageView.GetImage().GetHeight() / (float)m_ScreenChunkCount)
+    );
     m_DispatchCount++;
     m_FrameCount = (uint32_t)glm::floor((float)m_DispatchCount / (float)(m_ScreenChunkCount * m_ScreenChunkCount));
     m_SamplesAccumulated = (m_FrameCount * m_SamplesPerFrame);
@@ -805,7 +809,7 @@ void PathTracer::UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uin
     buffer.Barrier(
         commandBuffer,
         VulkanHelper::AccessFlags::TRANSFER_WRITE_BIT,
-        VulkanHelper::AccessFlags::UNIFORM_READ_BIT,
+        VulkanHelper::AccessFlags::MEMORY_READ_BIT,
         VulkanHelper::PipelineStages::TRANSFER_BIT,
         VulkanHelper::PipelineStages::RAY_TRACING_SHADER_BIT_KHR
     );

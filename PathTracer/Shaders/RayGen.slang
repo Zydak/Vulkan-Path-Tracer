@@ -12,6 +12,9 @@ void Main()
     uint3 size = DispatchRaysDimensions() * uUBO.ScreenSplitCount;
     uint3 LaunchID = DispatchRaysIndex();
 
+    if (LaunchID.x >= size.x || LaunchID.y >= size.y) // Guard against excess threads, this can happen with screen splitting
+        return;
+
     uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
     LaunchID.x += (splitScreenDispatchIndex % uUBO.ScreenSplitCount) * (size.x / uUBO.ScreenSplitCount);
     LaunchID.y += (splitScreenDispatchIndex / uUBO.ScreenSplitCount) * (size.y / uUBO.ScreenSplitCount);
