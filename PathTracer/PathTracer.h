@@ -21,8 +21,14 @@ public:
         float Anisotropy = 0.0f;
         float AnisotropyRotation = 0.0f;
 
-        float MediumDensity;
-        float MediumAnisotropy;
+        float MediumDensity = 0.0f;
+        float MediumAnisotropy = 0.0f;
+
+        uint32_t BaseColorTextureIndex = 0;
+        uint32_t NormalTextureIndex = 0;
+        uint32_t RoughnessTextureIndex = 0;
+        uint32_t MetallicTextureIndex = 0;
+        uint32_t EmissiveTextureIndex = 0;
     };
 
     struct Volume
@@ -88,17 +94,6 @@ public:
     [[nodiscard]] inline const std::string& GetMaterialName(uint32_t index) const { return m_MaterialNames[index]; }
     void SetMaterial(uint32_t index, const Material& material, VulkanHelper::CommandBuffer commandBuffer);
 
-    [[nodiscard]] inline std::string& GetBaseColorTextureName(uint32_t index) { return m_SceneBaseColorTextureNames[index]; }
-    [[nodiscard]] inline std::string& GetNormalTextureName(uint32_t index) { return m_SceneNormalTextureNames[index]; }
-    [[nodiscard]] inline std::string& GetRoughnessTextureName(uint32_t index) { return m_SceneRoughnessTextureNames[index]; }
-    [[nodiscard]] inline std::string& GetMetallicTextureName(uint32_t index) { return m_SceneMetallicTextureNames[index]; }
-    [[nodiscard]] inline std::string& GetEmissiveTextureName(uint32_t index) { return m_SceneEmissiveTextureNames[index]; }
-
-    void SetBaseColorTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetNormalTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetRoughnessTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetMetallicTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    void SetEmissiveTexture(uint32_t index, const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
     void SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer);
     void SetCameraViewInverse(const glm::mat4& view, VulkanHelper::CommandBuffer commandBuffer);
@@ -181,11 +176,12 @@ public:
 private:
     void CreateOutputImageView();
     void LoadEnvironmentMap(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
-    VulkanHelper::ImageView LoadTexture(const std::string& filePath, VulkanHelper::CommandBuffer commandBuffer);
+    VulkanHelper::ImageView LoadTexture(const std::string& filePath, bool onlySingleChannel, VulkanHelper::CommandBuffer commandBuffer);
     VulkanHelper::ImageView LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer);
-    VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal);
+    VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal, bool onlySingleChannel);
 
-    constexpr static uint32_t MAX_ENTITIES = 2048;
+    constexpr static uint32_t MAX_ENTITIES = 10000;
+    constexpr static uint32_t MAX_INSTANCES = 100000;
     constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 100;
 
     glm::mat4 m_CameraViewInverse = glm::mat4(1.0f);
@@ -236,16 +232,8 @@ private:
     VulkanHelper::ImageView m_EnvMapTexture;
     VulkanHelper::Buffer m_EnvAliasMap;
 
-    std::vector<VulkanHelper::ImageView> m_SceneBaseColorTextures;
-    std::vector<std::string> m_SceneBaseColorTextureNames;
-    std::vector<VulkanHelper::ImageView> m_SceneNormalTextures;
-    std::vector<std::string> m_SceneNormalTextureNames;
-    std::vector<VulkanHelper::ImageView> m_SceneRoughnessTextures;
-    std::vector<std::string> m_SceneRoughnessTextureNames;
-    std::vector<VulkanHelper::ImageView> m_SceneMetallicTextures;
-    std::vector<std::string> m_SceneMetallicTextureNames;
-    std::vector<VulkanHelper::ImageView> m_SceneEmissiveTextures;
-    std::vector<std::string> m_SceneEmissiveTextureNames;
+    std::vector<VulkanHelper::ImageView> m_SceneTextures;
+    std::unordered_map<uint64_t, uint64_t> m_SceneTexturePathToIndex;
     std::vector<VulkanHelper::Mesh> m_SceneMeshes;
     VulkanHelper::TLAS m_SceneTLAS;
 
@@ -306,6 +294,7 @@ private:
     std::vector<Material> m_Materials;
     std::vector<std::string> m_MaterialNames;
     VulkanHelper::Buffer m_MaterialsBuffer;
+    VulkanHelper::Buffer m_MaterialAndMeshIndicesBuffer;
 
     VulkanHelper::Sampler m_TextureSampler;
     VulkanHelper::Sampler m_LookupTableSampler;

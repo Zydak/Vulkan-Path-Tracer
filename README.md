@@ -50,7 +50,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - Multiple Importance Sampling implemented according to [Optimally Combining Sampling Techniques for Monte Carlo Rendering](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Veach95.pdf)
 - Emissive Volumes with [temperature parametrization](https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html)
 - Multiple Atmospheric Scattering [A Scalable and Production Ready Sky and Atmosphere Rendering Technique](https://sebh.github.io/publications/egsr2020.pdf)
-- Optimized Cloud Scattering according to [The Design and Evolution of Disney’s Hyperion Renderer](https://media.disneyanimation.com/uploads/production/publication_asset/177/asset/a.pdf)
+- Optimized Cloud Scattering with techniques described in [The Design and Evolution of Disney’s Hyperion Renderer](https://media.disneyanimation.com/uploads/production/publication_asset/177/asset/a.pdf)
 - Textures and Normal Maps
 - Editor
   - Changing material and path tracing properties at runtime
@@ -69,10 +69,9 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <p align="center">
 
 <img src="./Gallery/GodRays.png"/>
-<img src="./Gallery/Cloud2.png"/>
+<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/DragonHead.png"/>
 <img src="./Gallery/EmissiveVolumes.png">
-<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/Cloud4.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
 <img src="./Gallery/VolumeBunny.png">

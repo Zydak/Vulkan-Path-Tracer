@@ -3,7 +3,7 @@ import Sampler;
 import Defines;
 import Bindings;
 
-[[vk::binding(17, 0)]] public StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
+[[vk::binding(13, 0)]] public StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
 #define MAX_DENSITY_GRID_DIM 32
 

@@ -365,7 +365,7 @@ public struct Sampler
         float solidAngle = 2.0f * M_PI * (1.0 - cosThetaMax);
         colorPDF.a = 1.0 / solidAngle;
 
-        colorPDF.rgb = 2e6 * uUBO.SunColor.rgb * uUBO.EnvironmentIntensity;
+        colorPDF.rgb = 2e5 * uUBO.SunColor.rgb * uUBO.EnvironmentIntensity;
 
         toLight = dir;
     }

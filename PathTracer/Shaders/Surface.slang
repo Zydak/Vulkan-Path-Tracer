@@ -19,7 +19,6 @@ public struct Surface
         in StructuredBuffer<Vertex, ScalarDataLayout> vertices,
         in StructuredBuffer<uint> indices,
         in float3 barycentrics,
-        in SamplerState textureSampler,
         in Texture2D normalTexture
     )
     {
@@ -38,16 +37,19 @@ public struct Surface
 
         #ifdef USE_ONLY_GEOMETRY_NORMALS
         {
-            m_Normal = normalize(cross(v3.Position - v1.Position, v2.Position - v1.Position));
+            const float3 v1World = mul(ObjectToWorld3x4(), float4(v1.Position, 1.0f)).xyz;
+            const float3 v2World = mul(ObjectToWorld3x4(), float4(v2.Position, 1.0f)).xyz;
+            const float3 v3World = mul(ObjectToWorld3x4(), float4(v3.Position, 1.0f)).xyz;
+            m_Normal = normalize(cross(v3World - v1World, v2World - v1World)); // Face normal
         }
         #else
         {
             // Transformed normals often cause rays to go under the geometry, the same goes for normal textures.
             // They aren't implemented properly yet so there is no compensation for that
             m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
+            m_Normal = mul(m_Normal, WorldToObject()).xyz;
         }
         #endif
-        m_Normal = mul(m_Normal, WorldToObject()).xyz;
 
         if (dot(m_Normal, WorldRayDirection()) > 0.0f)
         {
@@ -68,7 +70,8 @@ public struct Surface
 
         #ifndef USE_ONLY_GEOMETRY_NORMALS
         {
-            float3 normalMapValue = normalTexture.SampleLevel(textureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
+            float3 normalMapValue = normalTexture.SampleLevel(uTextureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
+
             normalMapValue = TangentToWorld(normalMapValue);
             m_Normal = normalize(normalMapValue);
         }

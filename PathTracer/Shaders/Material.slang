@@ -25,24 +25,11 @@ public struct Material
     public float Eta;
     public float Ax;
     public float Ay;
-    Texture2DArray m_ReflectionLookupTable;
-    Texture2DArray m_RefractionLookupTableHitFromOutside;
-    Texture2DArray m_RefractionLookupTableHitFromInside;
-    SamplerState m_LookupTableSampler;
 
     [mutating]
     public void Initialize(
         in CPUMaterial materialData,
-        in Surface surface,
-        in SamplerState textureSampler,
-        in SamplerState lookupTableSampler,
-        in Texture2D baseColorTexture,
-        in Texture2D roughnessTexture,
-        in Texture2D metallicTexture,
-        in Texture2D emissiveTexture,
-        in Texture2DArray lookupTableReflection,
-        in Texture2DArray lookupTableRefractionHitFromOutside,
-        in Texture2DArray lookupTableRefractionHitFromInside
+        in Surface surface
     )
     {
         Properties = materialData;
@@ -64,17 +51,12 @@ public struct Material
         
         // Textures
 
-        Properties.BaseColor *= baseColorTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
+        Properties.BaseColor *= uTextures[NonUniformResourceIndex(Properties.BaseColorTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
 
-        const float textureRoughness = roughnessTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
-        Properties.Roughness *= textureRoughness * textureRoughness; // Square roughness
-        Properties.Metallic *= metallicTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).r;
-        Properties.EmissiveColor *= emissiveTexture.SampleLevel(textureSampler, surface.GetTextureCoordinates(), 0).rgb;
-
-        m_ReflectionLookupTable = lookupTableReflection;
-        m_RefractionLookupTableHitFromOutside = lookupTableRefractionHitFromOutside;
-        m_RefractionLookupTableHitFromInside = lookupTableRefractionHitFromInside;
-        m_LookupTableSampler = lookupTableSampler;
+        const float textureRoughness = uTextures[NonUniformResourceIndex(Properties.RoughnessTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
+        Properties.Roughness *= textureRoughness; // Square roughness
+        Properties.Metallic *= uTextures[NonUniformResourceIndex(Properties.MetallicTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
+        Properties.EmissiveColor *= uTextures[NonUniformResourceIndex(Properties.EmissiveTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
 
         const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
         Ax = max(0.001, Properties.Roughness / aspect);
@@ -171,11 +153,11 @@ public struct Material
                 float layer = (clamp(Properties.IOR, 1.0001, 2.0) - 1.0f) * 32.0f;
                 if (isInside)
                 {
-                    glassEnergyCompensation = m_RefractionLookupTableHitFromInside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+                    glassEnergyCompensation = uRefractionLookupTableHitFromInside.SampleLevel(uLookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
                 }
                 else
                 {
-                    glassEnergyCompensation = m_RefractionLookupTableHitFromOutside.SampleLevel(m_LookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
+                    glassEnergyCompensation = uRefractionLookupTableHitFromOutside.SampleLevel(uLookupTableSampler, {pow(V.z, 1.0f / 2.0f), Properties.Roughness, layer}, 0).r;
                 }
             }
             #endif
@@ -249,7 +231,7 @@ public struct Material
         #ifdef USE_ENERGY_COMPENSATION
         {
             float layer = Properties.Anisotropy * 32.0;
-            float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
+            float energyCompensation = uReflectionLookupTable.SampleLevel(uLookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
             energyCompensation = (1.0f - energyCompensation) / energyCompensation;
             eval.BxDF = (1.0 + Properties.BaseColor * float3(energyCompensation)) * eval.BxDF;
         }
@@ -265,7 +247,7 @@ public struct Material
         #ifdef USE_ENERGY_COMPENSATION
         {
             float layer = Properties.Anisotropy * 32.0;
-            float energyCompensation = m_ReflectionLookupTable.SampleLevel(m_LookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
+            float energyCompensation = uReflectionLookupTable.SampleLevel(uLookupTableSampler, {V.z, Properties.Roughness, layer}, 0).r;
             eval.BxDF /= energyCompensation;
         }
         #endif

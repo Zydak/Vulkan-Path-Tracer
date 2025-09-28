@@ -65,6 +65,12 @@ public struct CPUMaterial
 
     public float MediumDensity;
     public float MediumAnisotropy;
+
+    public uint BaseColorTextureIndex;
+    public uint NormalTextureIndex;
+    public uint RoughnessTextureIndex;
+    public uint MetallicTextureIndex;
+    public uint EmissiveTextureIndex;
 }
 
 [[vk::image_format("rgba32f")]]
@@ -78,40 +84,36 @@ public struct CPUMaterial
 [[vk::binding(4, 0)]] public StructuredBuffer<uint> uIndices[];
 
 [[vk::image_format("rgba8")]]
-[[vk::binding(5, 0)]] public Texture2D uBaseColorTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(6, 0)]] public Texture2D uNormalTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(7, 0)]] public Texture2D uRoughnessTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(8, 0)]] public Texture2D uMetallicTextures[];
-[[vk::image_format("rgba8")]]
-[[vk::binding(9, 0)]] public Texture2D uEmissiveTextures[];
-[[vk::binding(10, 0)]] public SamplerState uTextureSampler;
-[[vk::binding(11, 0)]] public StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
+[[vk::binding(5, 0)]] public Texture2D uTextures[];
+
+[[vk::binding(6, 0)]] public SamplerState uTextureSampler;
+[[vk::binding(7, 0)]] public StructuredBuffer<CPUMaterial, ScalarDataLayout> uMaterials;
 
 [[vk::image_format("r32f")]]
-[[vk::binding(12, 0)]] public Texture2DArray uReflectionLookupTable;
+[[vk::binding(8, 0)]] public Texture2DArray uReflectionLookupTable;
 [[vk::image_format("r32f")]]
-[[vk::binding(13, 0)]] public Texture2DArray uRefractionLookupTableHitFromOutside;
+[[vk::binding(9, 0)]] public Texture2DArray uRefractionLookupTableHitFromOutside;
 [[vk::image_format("r32f")]]
-[[vk::binding(14, 0)]] public Texture2DArray uRefractionLookupTableHitFromInside;
+[[vk::binding(10, 0)]] public Texture2DArray uRefractionLookupTableHitFromInside;
 
 [[vk::image_format("rgba32f")]]
-[[vk::binding(15, 0)]] public Texture2D uEnvMapTexture;
+[[vk::binding(11, 0)]] public Texture2D uEnvMapTexture;
 
 // Alias map is used to efficiently select texels from env map based on importance.
-[[vk::binding(16, 0)]] public StructuredBuffer<AliasMapEntry> uEnvAliasMap;
+[[vk::binding(12, 0)]] public StructuredBuffer<AliasMapEntry> uEnvAliasMap;
 
-[[vk::binding(18, 0)]] public SamplerState uLookupTableSampler;
+[[vk::binding(14, 0)]] public SamplerState uLookupTableSampler;
 
 [[vk::push_constant]] public PushConstantData uPushConstants;
 
 [[vk::image_format("r32f")]]
-[[vk::binding(19, 0)]] public Texture2DArray uVolumeDensityTexture[];
+[[vk::binding(15, 0)]] public Texture2DArray uVolumeDensityTexture[];
 
 [[vk::image_format("r32f")]]
-[[vk::binding(20, 0)]] public Texture2DArray uVolumeTemperatureTexture[];
+[[vk::binding(16, 0)]] public Texture2DArray uVolumeTemperatureTexture[];
 
 // 32x32x32 grid of max densities for each heterogeneous volume texture to speed up ray tracing by skipping empty space
-[[vk::binding(21, 0)]] public StructuredBuffer<float> uVolumeMaxDensities[];
+[[vk::binding(17, 0)]] public StructuredBuffer<float> uVolumeMaxDensities[];
+
+// Buffer of material and mesh indices for each instance in TLAS
+[[vk::binding(18, 0)]] public StructuredBuffer<uint> uMaterialAndMeshIndices;

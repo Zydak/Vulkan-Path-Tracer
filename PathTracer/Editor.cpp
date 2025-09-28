@@ -296,7 +296,7 @@ void Editor::RenderMaterialSettings()
         materialNames.push_back(m_PathTracer.GetMaterialName(i).c_str());
 
     static int selectedMaterialIndex = 0;
-    ImGui::ListBox("Materials", &selectedMaterialIndex, materialNames.data(), materialNames.size(), materialNames.size() > 10 ? 10 : (int)materialNames.size());
+    ImGui::ListBox("Materials", &selectedMaterialIndex, materialNames.data(), (int)materialNames.size(), materialNames.size() > 10 ? 10 : (int)materialNames.size());
 
     bool materialModified = false;
     PathTracer::Material selectedMaterial = m_PathTracer.GetMaterial((uint32_t)selectedMaterialIndex);
@@ -330,146 +330,6 @@ void Editor::RenderMaterialSettings()
         materialModified = true;
     
     ImGui::Separator();
-
-    struct DataTex
-    {
-        uint32_t MaterialIndex;
-        std::string FilePath;
-    };
-    std::string baseColorName = m_PathTracer.GetBaseColorTextureName((uint32_t)selectedMaterialIndex);
-    if(ImGui::Button(("Base Color: " + baseColorName).c_str()))
-    {
-        auto selection = pfd::open_file("Select texture", "", {"Image Files","*.png *.jpg *.jpeg"}).result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                auto* d = static_cast<DataTex*>(data.get());
-                m_PathTracer.SetBaseColorTexture(d->MaterialIndex, d->FilePath, commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-    }
-    if (baseColorName != "Default White Texture")
-    {
-        ImGui::SameLine();
-        ImGui::PushID("BaseColorTexture");
-        if (ImGui::Button("X"))
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.SetBaseColorTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-        ImGui::PopID();
-    }
-
-    std::string normalMapName = m_PathTracer.GetNormalTextureName((uint32_t)selectedMaterialIndex);
-    if(ImGui::Button(("Normal: " + normalMapName).c_str()))
-    {
-        auto selection = pfd::open_file("Select texture").result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                auto* d = static_cast<DataTex*>(data.get());
-                m_PathTracer.SetNormalTexture(d->MaterialIndex, d->FilePath, commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-    }
-    if (normalMapName != "Default Normal Texture")
-    {
-        ImGui::SameLine();
-        ImGui::PushID("NormalTexture");
-        if (ImGui::Button("X"))
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.SetNormalTexture((uint32_t)selectedMaterialIndex, "Default Normal Texture", commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-        ImGui::PopID();
-    }
-
-    std::string roughnessTextureName = m_PathTracer.GetRoughnessTextureName((uint32_t)selectedMaterialIndex);
-    if(ImGui::Button(("Roughness: " + roughnessTextureName).c_str()))
-    {
-        auto selection = pfd::open_file("Select texture").result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                auto* d = static_cast<DataTex*>(data.get());
-                m_PathTracer.SetRoughnessTexture(d->MaterialIndex, d->FilePath, commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-    }
-    if (roughnessTextureName != "Default White Texture")
-    {
-        ImGui::SameLine();
-        ImGui::PushID("RoughnessTexture");
-        if (ImGui::Button("X"))
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.SetRoughnessTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-        ImGui::PopID();
-    }
-
-    std::string metallicTextureName = m_PathTracer.GetMetallicTextureName((uint32_t)selectedMaterialIndex);
-    if(ImGui::Button(("Metallic: " + metallicTextureName).c_str()))
-    {
-        auto selection = pfd::open_file("Select texture").result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                auto* d = static_cast<DataTex*>(data.get());
-                m_PathTracer.SetMetallicTexture(d->MaterialIndex, d->FilePath, commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-    }
-    if (metallicTextureName != "Default White Texture")
-    {
-        ImGui::SameLine();
-        ImGui::PushID("MetallicTexture");
-        if (ImGui::Button("X"))
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.SetMetallicTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-        ImGui::PopID();
-    }
-
-    std::string emissiveTextureName = m_PathTracer.GetEmissiveTextureName((uint32_t)selectedMaterialIndex);
-    if(ImGui::Button(("Emissive: " + emissiveTextureName).c_str()))
-    {
-        auto selection = pfd::open_file("Select texture").result();
-        if (!selection.empty())
-        {
-            PushDeferredTask(std::make_shared<DataTex>(DataTex{ (uint32_t)selectedMaterialIndex, selection[0] }), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
-                auto* d = static_cast<DataTex*>(data.get());
-                m_PathTracer.SetEmissiveTexture(d->MaterialIndex, d->FilePath, commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-    }
-    if (emissiveTextureName != "Default White Texture")
-    {
-        ImGui::SameLine();
-        ImGui::PushID("EmissiveTexture");
-        if (ImGui::Button("X"))
-        {
-            PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
-                m_PathTracer.SetEmissiveTexture((uint32_t)selectedMaterialIndex, "Default White Texture", commandBuffer);
-                m_RenderTime = 0.0f;
-            });
-        }
-        ImGui::PopID();
-    }
 
     if (materialModified)
     {
@@ -555,7 +415,7 @@ void Editor::RenderInfo()
     ImGui::Text("Samples Accumulated: %d / %d", m_PathTracer.GetSamplesAccumulated(), m_PathTracer.GetMaxSamplesAccumulated());
     // Samples accumulated can sometimes be higher than max samples which causes funny values, so clamp it to max samples
     uint32_t samplesAccumulated = glm::min(m_PathTracer.GetSamplesAccumulated(), m_PathTracer.GetMaxSamplesAccumulated());
-    ImGui::Text("Estimated Time: %.3f s", m_RenderTime * (m_PathTracer.GetMaxSamplesAccumulated() - samplesAccumulated) / samplesAccumulated);
+    ImGui::Text("Estimated Time: %.3f s", m_RenderTime * (float)(m_PathTracer.GetMaxSamplesAccumulated() - samplesAccumulated) / (float)samplesAccumulated);
 
     ImGui::Text("Total Vertex Count: %u", (uint32_t)m_PathTracer.GetTotalVertexCount());
     ImGui::Text("Total Index Count: %u", (uint32_t)m_PathTracer.GetTotalIndexCount());
@@ -912,14 +772,14 @@ void Editor::SaveToFileSettings()
             if (!std::filesystem::exists(filePath))
                 break;
 
-            filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(counter++) + ".png";
+            filePath = "../../RenderedImages/" + std::string(fileName) + "_" + std::to_string(m_PathTracer.GetSamplesAccumulated()) + "spp_" + std::to_string(m_RenderTime) + "s_" + std::to_string(counter++) + ".png";
         }
 
         PushDeferredTask(std::make_shared<std::string>(filePath), [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void> data) {
             SaveToFile(*(std::string*)data.get(), commandBuffer);
         });
         imageSaved = true;
-        strcpy(savedFilename, fileName);
+        strcpy(savedFilename, filePath.c_str() + 20); // +20 to remove the ../../RenderedImages/ part
     }
 
     if (imageSaved)
@@ -1000,13 +860,14 @@ void Editor::RenderVolumeSettings()
     std::vector<std::string> volumeNames;
     std::vector<const char*> volumeNamesCStr;
     volumeNames.reserve(volumes.size());
+    volumeNamesCStr.reserve(volumes.size());
     for (uint32_t i = 0; i < volumes.size(); i++)
     {
         volumeNames.push_back(std::to_string(i));
         volumeNamesCStr.push_back(volumeNames[i].c_str());
     }
 
-    ImGui::ListBox("Volumes", &selectedVolumeIndex, volumeNamesCStr.data(), volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
+    ImGui::ListBox("Volumes", &selectedVolumeIndex, volumeNamesCStr.data(), (int)volumeNamesCStr.size(), volumeNamesCStr.size() > 10 ? 10 : (int)volumeNamesCStr.size());
 
     bool volumeModified = false;
     PathTracer::Volume selectedVolume = volumes[(size_t)selectedVolumeIndex];

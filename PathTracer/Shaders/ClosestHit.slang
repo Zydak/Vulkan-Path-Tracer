@@ -43,34 +43,30 @@ void Main(inout Payload payload, in float2 attrib)
     #endif
 
     float3 barycentrics = float3(1.0f - attrib.x - attrib.y, attrib.x, attrib.y);
-    uint geometryIndex = InstanceIndex();
+    uint instanceIndex = InstanceIndex();
+    uint materialIndex = uMaterialAndMeshIndices[NonUniformResourceIndex(instanceIndex * 2)];
+    uint meshIndex = uMaterialAndMeshIndices[NonUniformResourceIndex(instanceIndex * 2 + 1)];
 
     Surface surface;
     // AMD requires NonUniformResourceIndex
     surface.Initialize(
-        uVertices[NonUniformResourceIndex(geometryIndex)],
-        uIndices[NonUniformResourceIndex(geometryIndex)],
+        uVertices[NonUniformResourceIndex(meshIndex)],
+        uIndices[NonUniformResourceIndex(meshIndex)],
         barycentrics,
-        uTextureSampler,
-        uNormalTextures[NonUniformResourceIndex(geometryIndex)]
+        uTextures[NonUniformResourceIndex(uMaterials[NonUniformResourceIndex(materialIndex)].NormalTextureIndex)]
     );
 
     Material material;
     material.Initialize(
-        uMaterials[NonUniformResourceIndex(geometryIndex)],
-        surface,
-        uTextureSampler,
-        uLookupTableSampler,
-        uBaseColorTextures[NonUniformResourceIndex(geometryIndex)],
-        uRoughnessTextures[NonUniformResourceIndex(geometryIndex)],
-        uMetallicTextures[NonUniformResourceIndex(geometryIndex)],
-        uEmissiveTextures[NonUniformResourceIndex(geometryIndex)],
-        uReflectionLookupTable,
-        uRefractionLookupTableHitFromOutside,
-        uRefractionLookupTableHitFromInside
+        uMaterials[NonUniformResourceIndex(materialIndex)],
+        surface
     );
 
     surface.RotateTangents(material.Properties.AnisotropyRotation);
+
+    // payload.Emitted = clamp(surface.GetNormal() * 0.5f + 0.5f, 0.0f, 1.0f);
+    // payload.Depth = MAX_DEPTH;
+    // return;
 
     // ---------------------------------------------------------------------------------
 
