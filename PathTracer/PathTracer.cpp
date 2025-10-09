@@ -8,8 +8,13 @@
 #include <numeric>
 #include <numbers>
 
+#include "Log/Log.h"
+#include "Vulkan/Buffer.h"
 #include "Vulkan/CommandBuffer.h"
+
+#define NANOVDB_USE_OPENVDB
 #include "openvdb/openvdb.h"
+#include "nanovdb/tools/CreateNanoGrid.h"
 
 PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::ThreadPool* threadPool)
 {
@@ -475,8 +480,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{12, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Alias map
         VulkanHelper::DescriptorSet::BindingDescription{13, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volumes buffer
         VulkanHelper::DescriptorSet::BindingDescription{14, 1, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLER}, // Lookup sampler
-        VulkanHelper::DescriptorSet::BindingDescription{15, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume density textures
-        VulkanHelper::DescriptorSet::BindingDescription{16, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::SAMPLED_IMAGE}, // Volume Temperature textures
+        VulkanHelper::DescriptorSet::BindingDescription{15, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume density buffers
+        VulkanHelper::DescriptorSet::BindingDescription{16, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume Temperature buffers
         VulkanHelper::DescriptorSet::BindingDescription{17, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume max densities buffers
         VulkanHelper::DescriptorSet::BindingDescription{18, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Instances material indices
     };
@@ -1181,21 +1186,6 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     }
     auto& volume = m_Volumes[volumeIndex];
 
-    // Check if the density data is already loaded for another volume, if so just reuse it, no point in wasting memory
-    bool isDensityDataAlreadyLoaded = false;
-    for (const auto& vol : m_Volumes)
-    {
-        if (vol.DensityDataFilepath == filepath)
-        {
-            volume.DensityTextureView = vol.DensityTextureView;
-            volume.DensityDataIndex = vol.DensityDataIndex;
-            volume.DensityDataFilepath = vol.DensityDataFilepath;
-            volume.MaxDensitiesBuffer = vol.MaxDensitiesBuffer;
-            isDensityDataAlreadyLoaded = true;
-            break;
-        }
-    }
-
     if (std::filesystem::exists(filepath) == false)
     {
         VH_LOG_ERROR("OPENDVDB file does not exist: {}", filepath);
@@ -1228,9 +1218,26 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
         }
     }
     file.close();
+    VH_ASSERT(densityGrid != nullptr, "Density grid not found in VDB file. Volumes without density grid are not supported yet.");
 
     openvdb::FloatGrid::Ptr floatGridDensity = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
+
+    // Density
+    nanovdb::GridHandle<nanovdb::HostBuffer> nanoGridHandleDensity = nanovdb::tools::createNanoGrid(*floatGridDensity);
+
+    // nanoGridHandleDensity.gridMetaData()->worldBBox()
     
+    VulkanHelper::Buffer::Config bufferConfig{};
+    bufferConfig.Device = m_Device;
+    bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+    bufferConfig.DebugName = "NanoVDB Density Grid";
+    bufferConfig.Size = nanoGridHandleDensity.buffer().size();
+    
+    volume.VolumeNanoBufferDensity = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+    UploadDataToBuffer(volume.VolumeNanoBufferDensity, nanoGridHandleDensity.buffer().data(), (uint32_t)nanoGridHandleDensity.buffer().size(), 0, commandBuffer);
+    
+    // Precompute max densities for empty space skipping
     float maxDensity = openvdb::tools::minMax(floatGridDensity->tree(), true).max();
     
     float minTemperature = 0.0f;
@@ -1248,166 +1255,87 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     openvdb::math::Coord min = floatGridDensity->evalActiveVoxelBoundingBox().min();
     openvdb::math::Coord max = floatGridDensity->evalActiveVoxelBoundingBox().max();
 
-    VH_LOG_DEBUG("Volume byte size: {} MB", ((float)dim.x() * (float)dim.y() * (float)dim.z() * sizeof(float)) / (1024.0f * 1024.0f));
-    VH_LOG_DEBUG("Volume dimensions: {} x {} x {}", dim.x(), dim.y(), dim.z());
+    VH_LOG_DEBUG("Density data size: {} MB", ((float)nanoGridHandleDensity.buffer().size()) / (1024.0f * 1024.0f));
+    VH_LOG_DEBUG("Volume dimensions: x: {} y: {} z: {}", dim.x(), dim.y(), dim.z());
     VH_LOG_DEBUG("Max Density: {}", maxDensity);
 
     volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
     volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
 
     // Scale it down so AABB is more or less -1 to 1
-    float maxDim = (float)glm::max(glm::max(dim.x(), dim.y()), dim.z());
-    volume.CornerMin /= maxDim / 2.0f;
-    volume.CornerMax /= maxDim / 2.0f;
+    float maxDimX = glm::max(glm::abs(min.x()), glm::abs(max.x()));
+    float maxDimY = glm::max(glm::abs(min.y()), glm::abs(max.y()));
+    float maxDimZ = glm::max(glm::abs(min.z()), glm::abs(max.z()));
+    float maxDim = glm::max(maxDimX, glm::max(maxDimY, maxDimZ));
+    volume.CornerMin /= maxDim;
+    volume.CornerMax /= maxDim;
 
-    if (!isDensityDataAlreadyLoaded)
+    // For each volume there is 32x32x32 grid of max densities precomputed for empty space skipping
+    std::array<float, 32768> volumeMaxDensities;
+    volumeMaxDensities.fill(0.0f);
+
+    // Prepare max densities and normalize temperature grid if present
+    for (int z = 0; z < dim.z(); z++)
     {
-        volume.DensityDataFilepath = filepath;
-
-        // Prepare density texture
-        VulkanHelper::Image::Config imageConfig{};
-        imageConfig.Device = m_Device;
-        imageConfig.Width = (uint32_t)dim.x();
-        imageConfig.Height = (uint32_t)dim.y();
-        imageConfig.LayerCount = (uint32_t)dim.z();
-        imageConfig.Format = VulkanHelper::Format::R32_SFLOAT;
-        imageConfig.Usage = VulkanHelper::Image::Usage::SAMPLED_BIT | VulkanHelper::Image::Usage::TRANSFER_DST_BIT;
-        imageConfig.UsePersistentStagingBuffer = true;
-
-        VulkanHelper::Image densityImage = VulkanHelper::Image::New(imageConfig).Value();
-        densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-
-        VulkanHelper::ImageView::Config imageViewConfig{};
-        imageViewConfig.image = densityImage;
-        imageViewConfig.ViewType = VulkanHelper::ImageView::ViewType::VIEW_2D_ARRAY;
-        imageViewConfig.BaseLayer = 0;
-        imageViewConfig.LayerCount = (uint32_t)dim.z();
-
-        volume.DensityTextureView = VulkanHelper::ImageView::New(imageViewConfig).Value();
-
-        // Prepare temperature texture if temperature grid is present
-        VulkanHelper::Image temperatureImage;
-        if (temperatureGrid)
+        for (int y = 0; y < dim.y(); y++)
         {
-            temperatureImage = VulkanHelper::Image::New(imageConfig).Value();
-            temperatureImage.TransitionImageLayout(VulkanHelper::Image::Layout::TRANSFER_DST_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-
-            imageViewConfig.image = temperatureImage;
-            volume.TemperatureTextureView = VulkanHelper::ImageView::New(imageViewConfig).Value();
-        }
-
-        // Prepare staging buffer
-        VulkanHelper::Buffer::Config stagingBufferConfig{};
-        stagingBufferConfig.Device = m_Device;
-        stagingBufferConfig.Size = (uint32_t)dim.x() * (uint32_t)dim.y() * sizeof(float);
-        stagingBufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
-        stagingBufferConfig.CpuMapable = true;
-        stagingBufferConfig.DebugName = "Volume Density Staging Buffer";
-
-        VulkanHelper::Buffer stagingBuffer = VulkanHelper::Buffer::New(stagingBufferConfig).Value();
-
-        // Prepare density data
-
-        // For each volume there is 32x32x32 grid of max densities precomputed for empty space skipping
-        std::array<float, 32768> volumeMaxDensities;
-        volumeMaxDensities.fill(0.0f);
-
-        std::vector<float> densityData;
-        std::vector<float> temperatureData;
-        densityData.reserve((size_t)dim.x() * (size_t)dim.y());
-        temperatureData.reserve((size_t)dim.x() * (size_t)dim.y());
-        for (int z = 0; z < dim.z(); z++)
-        {
-            densityData.clear();
-            temperatureData.clear();
-            for (int y = 0; y < dim.y(); y++)
+            for (int x = 0; x < dim.x(); x++)
             {
-                for (int x = 0; x < dim.x(); x++)
+                openvdb::math::Coord coord(min.x() + x, min.y() + (dim.y() - 1 - y), min.z() + z); // Y has to be flipped for vulkan
+
+                float density = floatGridDensity->tree().getValue(coord) / maxDensity; // Normalize to [0, 1]
+
+                int maxDensityGridIndex = ((x * 32) / dim.x()) + ((y * 32) / dim.y()) * 32 + ((z * 32) / dim.z()) * 1024;
+                if (volumeMaxDensities[(uint32_t)maxDensityGridIndex] < density)
+                    volumeMaxDensities[(uint32_t)maxDensityGridIndex] = density;
+
+                // If temperature grid is present, modify the values so that they are rescaled from 0 to 1
+                if (temperatureGrid)
                 {
-                    openvdb::math::Coord coord(min.x() + x, min.y() + (dim.y() - 1 - y), min.z() + z); // Y has to be flipped for vulkan
+                    float temperature = floatGridTemperature->tree().getValue(coord);
 
-                    float density = floatGridDensity->tree().getValue(coord) / maxDensity; // Normalize to [0, 1]
+                    // Store normalized temperature
+                    temperature = glm::max((temperature - minTemperature) / (maxTemperature - minTemperature), 0.0f); // Normalize to [0, 1]
 
-                    int maxDensityGridIndex = ((x * 32) / dim.x()) + ((y * 32) / dim.y()) * 32 + ((z * 32) / dim.z()) * 1024;
-                    if (volumeMaxDensities[(uint32_t)maxDensityGridIndex] < density)
-                        volumeMaxDensities[(uint32_t)maxDensityGridIndex] = density;
-
-                    densityData.push_back(density);
-
-                    // If temperature grid is present, we can use it to modulate density to simulate fire-like volumes
-                    if (temperatureGrid)
-                    {
-                        float temperature = floatGridTemperature->tree().getValue(coord);
-
-                        // Store normalized temperature
-                        temperature = glm::max((temperature - minTemperature) / (maxTemperature - minTemperature), 0.0f); // Normalize to [0, 1]
-
-                        temperatureData.push_back(temperature);
-                    }
+                    // Set the value
+                    floatGridDensity->tree().setValue(coord, temperature);
                 }
             }
-
-            // Upload texture data one layer at a time
-
-            // Density
-            VH_ASSERT(stagingBuffer.UploadData(densityData.data(), densityData.size() * sizeof(float), 0) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
-            VH_ASSERT(stagingBuffer.CopyToImage(
-                commandBuffer,
-                densityImage,
-                0,
-                0,
-                0,
-                UINT32_MAX,
-                UINT32_MAX,
-                (uint32_t)z
-            ) == VulkanHelper::VHResult::OK, "Failed to copy staging buffer to image");
-
-            VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
-            VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit and wait command buffer");
-            VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin command buffer recording");
-        
-            // Temperature
-            if (temperatureGrid)
-            {
-                VH_ASSERT(stagingBuffer.UploadData(temperatureData.data(), temperatureData.size() * sizeof(float), 0) == VulkanHelper::VHResult::OK, "Failed to upload texture data");
-                VH_ASSERT(stagingBuffer.CopyToImage(
-                    commandBuffer,
-                    temperatureImage,
-                    0,
-                    0,
-                    0,
-                    UINT32_MAX,
-                    UINT32_MAX,
-                    (uint32_t)z
-                ) == VulkanHelper::VHResult::OK, "Failed to copy staging buffer to image");
-
-                VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end command buffer recording");
-                VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit and wait command buffer");
-                VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin command buffer recording");
-            }
         }
-
-        densityImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-        if (temperatureGrid)
-            temperatureImage.TransitionImageLayout(VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL, commandBuffer, 0, (uint32_t)dim.z());
-
-        VulkanHelper::Buffer::Config bufferConfig{};
-        bufferConfig.Device = m_Device;
-        bufferConfig.Size = sizeof(float) * volumeMaxDensities.size();
-        bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
-        bufferConfig.DebugName = "VolumeMaxDensities";
-
-        volume.MaxDensitiesBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
-
-        UploadDataToBuffer(volume.MaxDensitiesBuffer, volumeMaxDensities.data(), (uint32_t)bufferConfig.Size, 0, commandBuffer);
-        
-        static int densityDataIndex = 0;
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(15, (uint32_t)densityDataIndex, &volume.DensityTextureView, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
-        VH_ASSERT(m_PathTracerDescriptorSet.AddImage(16, (uint32_t)densityDataIndex, temperatureGrid ? &volume.TemperatureTextureView : nullptr, VulkanHelper::Image::Layout::SHADER_READ_ONLY_OPTIMAL) == VulkanHelper::VHResult::OK, "Failed to add volume temperature textures buffer to descriptor set");
-        VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(17, (uint32_t)densityDataIndex, &volume.MaxDensitiesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volume max densities buffer to descriptor set");
-        volume.DensityDataIndex = densityDataIndex;
-        densityDataIndex = (densityDataIndex + 1) % (int)MAX_HETEROGENEOUS_VOLUMES;
     }
+
+    // Temperature
+    nanovdb::GridHandle<nanovdb::HostBuffer> nanoGridHandleTemperature;
+    if (temperatureGrid)
+    {
+        openvdb::FloatGrid::Ptr floatGridTemperature = openvdb::gridPtrCast<openvdb::FloatGrid>(temperatureGrid);
+        nanoGridHandleTemperature = nanovdb::tools::createNanoGrid(*floatGridTemperature);
+
+        bufferConfig.Size = nanoGridHandleTemperature.buffer().size();
+        bufferConfig.DebugName = "NanoVDB Temperature Grid";
+        
+        volume.VolumeNanoBufferTemperature = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+        VH_LOG_DEBUG("Uploading NanoVDB volume temperature data, size: {} MB", ((float)nanoGridHandleTemperature.buffer().size()) / (1024.0f * 1024.0f));
+
+        UploadDataToBuffer(volume.VolumeNanoBufferTemperature, nanoGridHandleTemperature.buffer().data(), (uint32_t)nanoGridHandleTemperature.buffer().size(), 0, commandBuffer);
+    }
+
+    bufferConfig.Device = m_Device;
+    bufferConfig.Size = sizeof(float) * volumeMaxDensities.size();
+    bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+    bufferConfig.DebugName = "VolumeMaxDensities";
+
+    volume.MaxDensitiesBuffer = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+    UploadDataToBuffer(volume.MaxDensitiesBuffer, volumeMaxDensities.data(), (uint32_t)bufferConfig.Size, 0, commandBuffer);
+        
+    static int densityDataIndex = 0;
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(15, (uint32_t)densityDataIndex, &volume.VolumeNanoBufferDensity) == VulkanHelper::VHResult::OK, "Failed to add volume density textures buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(16, (uint32_t)densityDataIndex, temperatureGrid ? &volume.VolumeNanoBufferTemperature : nullptr) == VulkanHelper::VHResult::OK, "Failed to add volume temperature textures buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(17, (uint32_t)densityDataIndex, &volume.MaxDensitiesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volume max densities buffer to descriptor set");
+    volume.DensityDataIndex = densityDataIndex;
+    densityDataIndex = (densityDataIndex + 1) % (int)MAX_HETEROGENEOUS_VOLUMES;
 
     SetVolume(volumeIndex, volume, commandBuffer);
 }
@@ -1415,8 +1343,8 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
 void PathTracer::RemoveDensityDataFromVolume(uint32_t volumeIndex, VulkanHelper::CommandBuffer commandBuffer)
 {
     auto& volume = m_Volumes[volumeIndex];
-    volume.DensityDataFilepath = "";
-    volume.DensityTextureView = VulkanHelper::ImageView();
+    volume.VolumeNanoBufferDensity = VulkanHelper::Buffer();
+    volume.VolumeNanoBufferTemperature = VulkanHelper::Buffer();
     volume.DensityDataIndex = -1;
     volume.MaxDensitiesBuffer = VulkanHelper::Buffer();
     volume.CornerMin = glm::vec3(-1.0f);

@@ -949,41 +949,41 @@ void Editor::RenderVolumeSettings()
         }
     }
 
-    if(selectedVolume.TemperatureTextureView != nullptr)
+    if(selectedVolume.VolumeNanoBufferTemperature != nullptr)
     {
         if (ImGui::SliderFloat("Temperature Scale", &selectedVolume.TemperatureScale, 0.0f, 10.0f, "%.2f"))
             volumeModified = true;
         if (ImGui::SliderFloat("Temperature Gamma", &selectedVolume.TemperatureGamma, 0.1f, 5.0f, "%.2f"))
             volumeModified = true;
-    }
 
-    static bool useBlackbody = selectedVolume.UseBlackbody;
-    if (ImGui::Checkbox("Use Blackbody", &useBlackbody))
-    {
-        selectedVolume.UseBlackbody = (int)useBlackbody;
-        volumeModified = true;
-    }
-
-    if (useBlackbody && selectedVolume.TemperatureTextureView != nullptr)
-    {
-        if (ImGui::InputInt("Kelvin Min", &selectedVolume.KelvinMin))
+        static bool useBlackbody = selectedVolume.UseBlackbody;
+        if (ImGui::Checkbox("Use Blackbody", &useBlackbody))
         {
+            selectedVolume.UseBlackbody = (int)useBlackbody;
             volumeModified = true;
         }
-        if (ImGui::InputInt("Kelvin Max", &selectedVolume.KelvinMax))
+
+        if (useBlackbody)
         {
-            volumeModified = true;
+            if (ImGui::InputInt("Kelvin Min", &selectedVolume.KelvinMin))
+            {
+                volumeModified = true;
+            }
+            if (ImGui::InputInt("Kelvin Max", &selectedVolume.KelvinMax))
+            {
+                volumeModified = true;
+            }
         }
-    }
 
-    if (!useBlackbody)
-    {
-        if (ImGui::ColorEdit3("Emissive Color For Grid", &selectedVolume.TemperatureColor.r, ImGuiColorEditFlags_Float))
+        if (!useBlackbody)
+        {
+            if (ImGui::ColorEdit3("Emissive Color For Grid", &selectedVolume.TemperatureColor.r, ImGuiColorEditFlags_Float))
+                volumeModified = true;
+        }
+
+        if (ImGui::SliderFloat("Emissive Color Gamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
             volumeModified = true;
     }
-
-    if (ImGui::SliderFloat("Emissive Color Gamma", &selectedVolume.EmissiveColorGamma, 0.1f, 5.0f, "%.2f"))
-        volumeModified = true;
 
     ImGui::PopID();
 

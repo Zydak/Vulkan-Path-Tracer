@@ -16,3 +16,4 @@ Libraries/*
 !Libraries/CMakeLists.txt
 Assets/DragonHead.*
 RenderedImages/*
+PathTracer/Shaders/PNanoVDB.h

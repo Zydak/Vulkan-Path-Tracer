@@ -107,10 +107,10 @@ public struct CPUMaterial
 [[vk::push_constant]] public PushConstantData uPushConstants;
 
 [[vk::image_format("r32f")]]
-[[vk::binding(15, 0)]] public Texture2DArray uVolumeDensityTexture[];
+[[vk::binding(15, 0)]] public StructuredBuffer<uint> uNanoVDBBuffersDensity[];
 
 [[vk::image_format("r32f")]]
-[[vk::binding(16, 0)]] public Texture2DArray uVolumeTemperatureTexture[];
+[[vk::binding(16, 0)]] public StructuredBuffer<uint> uNanoVDBBuffersTemperature[];
 
 // 32x32x32 grid of max densities for each heterogeneous volume texture to speed up ray tracing by skipping empty space
 [[vk::binding(17, 0)]] public StructuredBuffer<float> uVolumeMaxDensities[];

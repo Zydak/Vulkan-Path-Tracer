@@ -236,7 +236,12 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
         float3 transmittance;
         if (!isObscuredByGeometry)
         {
-            transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, payload.Depth);
+            int tempCollisionCount = 0;
+            transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightEnv, payload.Depth, tempCollisionCount);
+
+            // payload.Depth = MAX_DEPTH;
+            // payload.Emitted = tempCollisionCount / 1000.0f;
+            // return;
 
             #ifdef ENABLE_ATMOSPHERE
             {
@@ -262,7 +267,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
 
         float3 colorSample = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
         float3 colorLight = uVolumes[scatteredVolumeIndex].GetColor() * phaseLightDir;
-        payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin);
+        payload.Emitted = uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Sampler, payload.Origin);
 
         if (!isObscuredByGeometry && phaseLightDir > 0.0f)
         {
@@ -276,7 +281,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     #else
     {
         payload.Direction = newDir;
-        payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Origin));
+        payload.Emitted = (uVolumes[scatteredVolumeIndex].GetEmissiveColor() + uVolumes[scatteredVolumeIndex].GetEmissionFromTemperatureAtPoint(payload.Sampler, payload.Origin));
         payload.BxDF = uVolumes[scatteredVolumeIndex].GetColor();
         payload.PDF = 1.0f;
     }
@@ -317,7 +322,8 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             // Compute transmittance to the sun
             transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, skyDirSampled, payload.ColorChannel);
 
-            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.Depth);
+            int tempCollisionCount = 0;
+            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.Depth, tempCollisionCount);
         }
         else
         {
@@ -338,7 +344,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             // Mie
             payload.Emitted += PhaseMie(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
 
-            payload.BxDF = PhaseMie(payload.Direction, newDir);
+            payload.BxDF = PhaseMie(payload.Direction, newDir) * (1.0f - C_MIE * uUBO.MieScatteringCoefficientMultiplier.rgb * 100);
             payload.PDF = PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f);
         }
     }

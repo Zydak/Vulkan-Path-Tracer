@@ -60,10 +60,9 @@ public:
         // This enables faster but biased methods for rendering clouds
         int ApproximatedScatteringForClouds = 0;
 
-        std::string DensityDataFilepath;
-        VulkanHelper::ImageView DensityTextureView;
-        VulkanHelper::ImageView TemperatureTextureView;
-        
+        VulkanHelper::Buffer VolumeNanoBufferDensity;
+        VulkanHelper::Buffer VolumeNanoBufferTemperature;
+
         // Heterogeneous volumes are split into 32x32x32 regions for skipping empty space
         VulkanHelper::Buffer MaxDensitiesBuffer;
     };
@@ -352,7 +351,7 @@ private:
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
-            HasTemperatureData = volume.TemperatureTextureView != nullptr;
+            HasTemperatureData = volume.VolumeNanoBufferTemperature != nullptr;
         }
     };
 

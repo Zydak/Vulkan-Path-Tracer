@@ -3,6 +3,9 @@ import Sampler;
 import Defines;
 import Bindings;
 
+#define PNANOVDB_HLSL
+#include "PNanoVDB.h"
+
 [[vk::binding(13, 0)]] public StructuredBuffer<Volume, ScalarDataLayout> uVolumes;
 
 #define MAX_DENSITY_GRID_DIM 32
@@ -38,8 +41,76 @@ public struct Volume
     int m_KelvinMin;
     int m_KelvinMax;
 
-    // This enables faster but biased methods for rendering clouds
-    int m_ApproximatedScatteringForClouds;
+    // This enables faster but biased methods for rendering volumes, especially clouds
+    int m_ApproximatedScattering;
+
+    // Helper function to sample density from NanoVDB grid at world position x
+    float SampleNanoVDBBuffer(inout Sampler sampler, StructuredBuffer<uint> gridBuffer, float3 x)
+    {
+        pnanovdb_grid_handle_t grid = {0}; // Always use the first grid, there's only one
+
+        float minX = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 0);
+        float minY = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 1);
+        float minZ = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 2);
+        float maxX = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 3);
+        float maxY = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 4);
+        float maxZ = (float)pnanovdb_grid_get_world_bbox(gridBuffer, grid, 5);
+
+        pnanovdb_coord_t worldBboxMin = {(int)floor(minX), (int)floor(minY), (int)floor(minZ)};
+        pnanovdb_coord_t worldBboxMax = {(int)ceil(maxX), (int)ceil(maxY), (int)ceil(maxZ)};
+
+        // First normalize position within the volume's bounding box [0,1]
+        float3 normalizedPos = (x - m_CornerMin) / (m_CornerMax - m_CornerMin);
+        normalizedPos.y = 1.0f - normalizedPos.y; // Flip Y for NanoVDB
+        // Then map to NanoVDB grid space
+        float3 gridPos = normalizedPos * float3(worldBboxMax - worldBboxMin) + float3(worldBboxMin);
+
+        pnanovdb_uint32_t gridType = pnanovdb_grid_get_grid_type(gridBuffer, grid);
+        pnanovdb_tree_handle_t tree = pnanovdb_grid_get_tree(gridBuffer, grid);
+        pnanovdb_root_handle_t root = pnanovdb_tree_get_root(gridBuffer, tree);
+        pnanovdb_readaccessor_t accessor;
+        pnanovdb_readaccessor_init(accessor, root);
+
+        pnanovdb_coord_t bboxMin = pnanovdb_root_get_bbox_min(gridBuffer, root);
+        pnanovdb_coord_t bboxMax = pnanovdb_root_get_bbox_max(gridBuffer, root);
+
+        // Convert world coordinates to index coordinates using the grid's transform
+        float3 indexSpacePosition = pnanovdb_grid_world_to_indexf(gridBuffer, grid, gridPos);
+        pnanovdb_coord_t coord = pnanovdb_hdda_pos_to_ijk(indexSpacePosition);
+
+        // Jitter the coordinate for smoother edges
+        coord.x += (sampler.PCG() % 3 - 1);
+        coord.y += (sampler.PCG() % 3 - 1);
+        coord.z += (sampler.PCG() % 3 - 1);
+
+        // Clamp to valid range, it can't get outside the bounding box
+        coord = clamp(coord, bboxMin, bboxMax);
+
+        // Get the address of the value at the coordinate
+        pnanovdb_address_t valueAddr = pnanovdb_readaccessor_get_value_address(gridType, gridBuffer, accessor, coord);
+
+        // Read the value
+        float value = pnanovdb_read_float(gridBuffer, valueAddr);
+
+        return max(0.0f, value);
+    }
+
+    public float GetDensityAtPoint(inout Sampler sampler, float3 x)
+    {
+        if (m_DensityDataIndex >= 0)
+        {
+            // Use NanoVDB for density sampling
+            const int resourceIndex = m_DensityDataIndex;
+            const StructuredBuffer<uint> densityBuffer = uNanoVDBBuffersDensity[NonUniformResourceIndex(resourceIndex)];
+
+            return SampleNanoVDBBuffer(sampler, densityBuffer, x) * m_Density;
+        }
+        else
+        {
+            // Homogeneous volume
+            return m_Density;
+        }
+    }
 
     public float GetAnisotropy() { return m_Anisotropy; }
     public float GetDensity() { return m_Density; }
@@ -101,18 +172,14 @@ public struct Volume
         return all(point >= m_CornerMin) && all(point <= m_CornerMax);
     }
 
-    public float3 GetEmissionFromTemperatureAtPoint(float3 x)
+    public float3 GetEmissionFromTemperatureAtPoint(inout Sampler sampler, float3 x)
     {
         if (!(bool)m_HasTemperatureData)
            return 0.0f;
-
-        uint3 textureSize;
-        uint numberOfLevels;
-        uVolumeTemperatureTexture[NonUniformResourceIndex(m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
-
-        float3 UV = (x - m_CornerMin) / (m_CornerMax - m_CornerMin);
-        UV.z *= textureSize.z; // Scale Z to sample the texture array
-        float temperatureNormalized = uVolumeTemperatureTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r;
+        
+        const int resourceIndex = m_DensityDataIndex;
+        const StructuredBuffer<uint> temperatureBuffer = uNanoVDBBuffersDensity[NonUniformResourceIndex(resourceIndex)];
+        float temperatureNormalized = SampleNanoVDBBuffer(sampler, temperatureBuffer, x);
 
         float3 color;
 
@@ -148,10 +215,6 @@ public struct Volume
 
         if (m_DensityDataIndex >= 0) // If volume is heterogeneous
         {
-            uint3 textureSize;
-            uint numberOfLevels;
-            uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
-
             float3 blockSize = (m_CornerMax - m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
             float t = 0.0f;
 
@@ -179,7 +242,7 @@ public struct Volume
                 // Use the precomputed max density for this block
                 float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
 
-                if (m_ApproximatedScatteringForClouds != 0)
+                if (m_ApproximatedScattering != 0)
                     maxDensity *= pow(0.8f, tempDepth);
 
                 // Sample a distance based on the max density of the block
@@ -216,11 +279,9 @@ public struct Volume
 
                 // Sample the actual density at the scattering position
                 float3 scatterPosition = rayOrigin + rayDirection * (tEnter + t);
-                float3 UV = (scatterPosition - m_CornerMin) / (m_CornerMax - m_CornerMin);
-                UV.z *= textureSize.z; // Scale Z to sample the texture array
-                float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * m_Density;
+                float densityTextureValue = GetDensityAtPoint(sampler, scatterPosition);
 
-                if (m_ApproximatedScatteringForClouds != 0)
+                if (m_ApproximatedScattering != 0)
                     densityTextureValue *= pow(0.8f, tempDepth);
 
                 if (densityTextureValue / maxDensity < sampler.UniformFloat())
@@ -260,7 +321,7 @@ public struct Volume
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
             float anisotropy;
-            if (m_ApproximatedScatteringForClouds != 0)
+            if (m_ApproximatedScattering != 0)
                 anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
             else
                 anisotropy = m_Anisotropy;
@@ -270,7 +331,7 @@ public struct Volume
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
             float anisotropy;
-            if (m_ApproximatedScatteringForClouds != 0)
+            if (m_ApproximatedScattering != 0)
                 anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
             else
                 anisotropy = m_Anisotropy;
@@ -291,7 +352,7 @@ public struct Volume
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
             float anisotropy;
-            if (m_ApproximatedScatteringForClouds != 0)
+            if (m_ApproximatedScattering != 0)
                 anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
             else
                 anisotropy = m_Anisotropy;
@@ -301,7 +362,7 @@ public struct Volume
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
             float anisotropy;
-            if (m_ApproximatedScatteringForClouds != 0)
+            if (m_ApproximatedScattering != 0)
                 anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
             else
                 anisotropy = m_Anisotropy;
@@ -338,9 +399,10 @@ public struct Volume
         return PhaseDraine(V, L, g, a);
     }
 
-    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float tempDepth)
+    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float tempDepth, out int tempCollisionCount)
     {
         float transmittance = 1.0f;
+        tempCollisionCount = 0;
         for (uint i = 0; i < uUBO.VolumesCount; i++)
         {
             VolumeIntersection intersection = uVolumes[i].IntersectWithRay(origin, direction);
@@ -349,10 +411,6 @@ public struct Volume
             if (uVolumes[i].m_DensityDataIndex >= 0 && intersection.HitPointFar >= 0.0f)
             {
                 // Heterogeneous volume, transmittance has to be integrated numerically
-                
-                uint3 textureSize;
-                uint numberOfLevels;
-                uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].GetDimensions(0, textureSize.x, textureSize.y, textureSize.z, numberOfLevels);
 
                 float3 blockSize = (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
                 float t = 0.0f;
@@ -364,6 +422,15 @@ public struct Volume
                 // Max 100K steps
                 for (int j = 0; j < 10000; j++)
                 {
+                    // Russian roulette based on transmittance
+                    float p = transmittance;
+                    if (sampler.UniformFloat() > p)
+                    {
+                        // Early termination - ray is absorbed
+                        return 0.0f;
+                    }
+                    transmittance /= p;
+
                     float3 currentPosition = origin + direction * (tEnter + t);
 
                     // Calculate current block indices (ensure they're in valid range [0,15])
@@ -383,7 +450,7 @@ public struct Volume
                     // Use the precomputed max density for this block
                     float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
 
-                    if (uVolumes[i].m_ApproximatedScatteringForClouds != 0)
+                    if (uVolumes[i].m_ApproximatedScattering != 0)
                         maxDensity *= pow(0.8f, tempDepth);
 
                     // Sample a distance based on the max density of the block
@@ -396,6 +463,7 @@ public struct Volume
                         t += epsilon;
                         if (tEnter + t > tExit)
                             break; // Exited the volume
+                        tempCollisionCount++;
                         continue;
                     }
                     
@@ -407,6 +475,7 @@ public struct Volume
                         t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
                         if (tEnter + t > tExit)
                             break; // Exited the volume
+                        tempCollisionCount++;
                         continue;
                     }
 
@@ -418,24 +487,14 @@ public struct Volume
 
                     // Sample the actual density at the interaction position
                     float3 interactionPosition = origin + direction * (tEnter + t);
-                    float3 UV = (interactionPosition - uVolumes[i].m_CornerMin) / (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin);
-                    UV.z *= textureSize.z; // Scale Z to sample the texture array
-                    float densityTextureValue = clamp(uVolumeDensityTexture[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)].SampleLevel(uTextureSampler, UV, 0).r, 0.0f, 1.0f) * uVolumes[i].GetDensity();
+                    float densityTextureValue = uVolumes[i].GetDensityAtPoint(sampler, interactionPosition);
 
-                    if (uVolumes[i].m_ApproximatedScatteringForClouds != 0)
+                    if (uVolumes[i].m_ApproximatedScattering != 0)
                         densityTextureValue *= pow(0.8f, tempDepth);
 
                     // Update transmittance based on actual density vs max density
                     transmittance *= 1.0f - (densityTextureValue / maxDensity);
-
-                    // Russian roulette based on transmittance
-                    float p = transmittance;
-                    if (sampler.UniformFloat() > p)
-                    {
-                        // Early termination - ray is absorbed
-                        return 0.0f;
-                    }
-                    transmittance /= p;
+                    tempCollisionCount++;
                 }
             }
             else

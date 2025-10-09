@@ -207,7 +207,8 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitSky)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, payload.Depth);
+            int tempCollisionCount = 0;
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, payload.Depth, tempCollisionCount);
 
             #ifdef ENABLE_ATMOSPHERE
             {
