@@ -9,6 +9,7 @@
 #include <numbers>
 
 #include "Log/Log.h"
+#include "Vulkan/BLASBuilder.h"
 #include "Vulkan/Buffer.h"
 #include "Vulkan/CommandBuffer.h"
 
@@ -24,9 +25,14 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     pathTracer.m_Device = device;
     pathTracer.m_ThreadPool = threadPool;
 
-    pathTracer.m_CommandPool = VulkanHelper::CommandPool::New({
+    pathTracer.m_CommandPoolGraphics = VulkanHelper::CommandPool::New({
         .Device = device,
         .QueueFamilyIndex = device.GetQueueFamilyIndices().GraphicsFamily
+    }).Value();
+
+    pathTracer.m_CommandPoolCompute = VulkanHelper::CommandPool::New({
+        .Device = device,
+        .QueueFamilyIndex = device.GetQueueFamilyIndices().ComputeFamily
     }).Value();
 
     // Descriptor pool
@@ -170,6 +176,19 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(scene.Value().Materials.Size() < MAX_ENTITIES, "Too many materials in the scene: {}! The maximum supported number of materials is {}", scene.Value().Materials.Size(), MAX_ENTITIES);
     VH_ASSERT(scene.Value().MeshInstances.Size() < MAX_INSTANCES, "Too many mesh instances in the scene: {}! The maximum supported number of mesh instances is {}", scene.Value().MeshInstances.Size(), MAX_INSTANCES);
 
+    // Apply transforms to meshes
+    for (auto& instance : scene.Value().MeshInstances)
+    {
+        if (instance.MeshIndex < scene.Value().Meshes.Size())
+        {
+            for (auto& vertex : scene.Value().Meshes[instance.MeshIndex].Vertices)
+            {
+                vertex.Position = glm::vec3(instance.Transform * glm::vec4(vertex.Position, 1.0f));
+                vertex.Normal = glm::mat3(glm::transpose(glm::inverse(instance.Transform))) * vertex.Normal;
+            }
+        }
+    }
+
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
     m_CameraViewInverse = glm::inverse(scene.Value().Cameras[0].ViewMatrix);
@@ -180,7 +199,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::Format::R32G32_SFLOAT, // UV
     };
 
-    VulkanHelper::CommandBuffer initializationCmd = m_CommandPool.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
+    VulkanHelper::CommandBuffer initializationCmd = m_CommandPoolGraphics.AllocateCommandBuffer({VulkanHelper::CommandBuffer::Level::PRIMARY}).Value();
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
 
     m_ReflectionLookup = LoadLookupTable("../../Assets/LookupTables/ReflectionLookup.bin", {64, 64, 32}, initializationCmd);
@@ -412,6 +431,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(initializationCmd.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit initialization command buffer");
     VH_ASSERT(initializationCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
 
+    VulkanHelper::CommandBuffer computeCmd = m_CommandPoolCompute.AllocateCommandBuffer({ VulkanHelper::CommandBuffer::Level::PRIMARY }).Value();
+    VH_ASSERT(computeCmd.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording initialization command buffer");
+
     VulkanHelper::Vector<VulkanHelper::BLAS> blasVector;
     blasVector.Reserve(m_SceneMeshes.size());
     VulkanHelper::Vector<glm::mat4> modelMatrices;
@@ -421,6 +443,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::Vector<uint32_t> customIndices;
     customIndices.Reserve(scene.Value().MeshInstances.Size());
     uint32_t index = 0;
+
+    VulkanHelper::Vector<VulkanHelper::BLAS::Config> blasConfigs;
     for (const auto& instance : scene.Value().MeshInstances)
     {
         customIndices.PushBack(index);
@@ -430,9 +454,9 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         materialAndMeshIndices.PushBack(instance.MeshIndex);
         VH_ASSERT(instance.MaterialIndex < m_Materials.size(), "Mesh instance has invalid material index!");
 
-        VulkanHelper::BLAS::Config blasConfig{};
+        blasConfigs.PushBack({});
+        auto& blasConfig = blasConfigs.Back();
         blasConfig.Device = m_Device;
-        blasConfig.CommandBuffer = &initializationCmd;
 
         blasConfig.VertexBuffers.PushBack(m_SceneMeshes[instance.MeshIndex].GetVertexBuffer());
         blasConfig.IndexBuffers.PushBack(m_SceneMeshes[instance.MeshIndex].GetIndexBuffer());
@@ -440,19 +464,27 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         blasConfig.VertexSize = sizeof(VulkanHelper::LoadedMeshVertex);
         blasConfig.EnableCompaction = true;
 
-        blasVector.PushBack(VulkanHelper::BLAS::New(blasConfig).Value());
-        modelMatrices.PushBack(instance.Transform);
+        modelMatrices.PushBack(glm::mat4(1.0f));
     }
+
+    VulkanHelper::BLASBuilder blasBuilder = VulkanHelper::BLASBuilder::New({ .Device = m_Device }).Value();
+    auto buildResult = blasBuilder.Build(blasConfigs.Data(), (uint32_t)blasConfigs.Size(), computeCmd);
+    
+    VulkanHelper::Vector<VulkanHelper::BLAS> blasList = Move(buildResult.Value());
+    VH_ASSERT(blasBuilder.Compact(blasList, computeCmd) == VulkanHelper::VHResult::OK, "Failed to compact BLASes");
 
     UploadDataToBuffer(m_MaterialAndMeshIndicesBuffer, materialAndMeshIndices.Data(), (uint32_t)materialAndMeshIndices.Size() * sizeof(uint32_t), 0, initializationCmd);
 
     m_SceneTLAS = VulkanHelper::TLAS::New({
         m_Device,
-        std::move(blasVector),
+        std::move(blasList),
         std::move(customIndices),
         modelMatrices.Data(),
-        &initializationCmd
+        &computeCmd
     }).Value();
+
+    VH_ASSERT(computeCmd.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording compute command buffer");
+    VH_ASSERT(computeCmd.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit compute command buffer");
 
     // Create Output Image
     // Size of the output image is based on the Aspect ratio of the camera, so it has to be created when new scene is loaded
@@ -1298,7 +1330,8 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
                     temperature = glm::max((temperature - minTemperature) / (maxTemperature - minTemperature), 0.0f); // Normalize to [0, 1]
 
                     // Set the value
-                    floatGridDensity->tree().setValue(coord, temperature);
+                    if (temperature > 0.0f)
+                        floatGridDensity->tree().setValue(coord, temperature);
                 }
             }
         }

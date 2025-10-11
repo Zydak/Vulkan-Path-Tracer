@@ -44,6 +44,23 @@ public struct Volume
     // This enables faster but biased methods for rendering volumes, especially clouds
     int m_ApproximatedScattering;
 
+    // Helper structures for internal calculations
+    struct VolumeTraversalContext
+    {
+        float3 blockSize;
+        float epsilon;
+        float tEnter;
+        float tExit;
+    };
+
+    struct BlockInfo
+    {
+        int3 indices;
+        int blockIndex;
+        float3 minCorner;
+        float3 maxCorner;
+    };
+
     // Helper function to sample density from NanoVDB grid at world position x
     float SampleNanoVDBBuffer(inout Sampler sampler, StructuredBuffer<uint> gridBuffer, float3 x)
     {
@@ -95,6 +112,54 @@ public struct Volume
         return max(0.0f, value);
     }
 
+    // Helper function to create traversal context
+    VolumeTraversalContext CreateTraversalContext(VolumeIntersection intersection)
+    {
+        VolumeTraversalContext context;
+        context.blockSize = (m_CornerMax - m_CornerMin) / float3(MAX_DENSITY_GRID_DIM);
+        context.epsilon = 0.0001f * max(m_CornerMax.x - m_CornerMin.x, max(m_CornerMax.y - m_CornerMin.y, m_CornerMax.z - m_CornerMin.z));
+        context.tEnter = max(intersection.HitPointNear, 0.0f);
+        context.tExit = intersection.HitPointFar;
+        return context;
+    }
+
+    // Helper function to calculate block information for a given position
+    BlockInfo CalculateBlockInfo(float3 position, VolumeTraversalContext context)
+    {
+        BlockInfo info;
+        
+        // Calculate block indices
+        float3 relativePos = (position - m_CornerMin) / (m_CornerMax - m_CornerMin);
+        info.indices = clamp(int3(relativePos * (float)MAX_DENSITY_GRID_DIM), 0, MAX_DENSITY_GRID_DIM - 1);
+        
+        // Calculate linear index
+        info.blockIndex = info.indices.x + info.indices.y * MAX_DENSITY_GRID_DIM + info.indices.z * MAX_DENSITY_GRID_DIM * MAX_DENSITY_GRID_DIM;
+        
+        // Calculate block bounds
+        info.minCorner = m_CornerMin + context.blockSize * float3(info.indices);
+        info.maxCorner = info.minCorner + context.blockSize;
+        
+        return info;
+    }
+
+    // Helper function to get effective anisotropy based on depth
+    float GetEffectiveAnisotropy(float rayDepth)
+    {
+        if (m_ApproximatedScattering != 0)
+            return pow(max(m_Anisotropy, 0.0f), 1.0f + rayDepth); // decrease anisotropy with depth for faster rendering
+        else
+            return m_Anisotropy;
+    }
+
+    // Helper function to get effective density based on depth
+    float GetEffectiveDensity(float baseDensity, float rayDepth)
+    {
+        if (m_ApproximatedScattering != 0)
+            return baseDensity * pow(0.8f, rayDepth); // decrease density with depth for faster rendering
+        else
+            return baseDensity;
+    }
+
     public float GetDensityAtPoint(inout Sampler sampler, float3 x)
     {
         if (m_DensityDataIndex >= 0)
@@ -117,32 +182,8 @@ public struct Volume
     public float3 GetColor() { return m_Color; }
     public float3 GetEmissiveColor() { return m_EmissiveColor; }
 
-    public VolumeIntersection IntersectWithRay(in float3 rayOrigin, in float3 rayDirection)
-    {
-        float3 invDir = 1.0f / rayDirection;
-        float3 t0s = (m_CornerMin - rayOrigin) * invDir;
-        float3 t1s = (m_CornerMax - rayOrigin) * invDir;
-
-        float3 tsmaller = min(t0s, t1s);
-        float3 tbigger = max(t0s, t1s);
-
-        float tmin = max(max(tsmaller.x, tsmaller.y), max(tsmaller.x, tsmaller.z));
-        float tmax = min(min(tbigger.x, tbigger.y), min(tbigger.x, tbigger.z));
-
-        VolumeIntersection result;
-        result.HitPointNear = tmin;
-        result.HitPointFar = tmax;
-
-        if (tmax < 0.0f || tmin > tmax)
-        {
-            result.HitPointNear = -1.0f;
-            result.HitPointFar = -1.0f;
-        }
-
-        return result;
-    }
-
-    static public VolumeIntersection IntersectWithRay(in float3 rayOrigin, in float3 rayDirection, in float3 boxMin, in float3 boxMax)
+    // Shared ray-AABB intersection function
+    static VolumeIntersection ComputeRayAABBIntersection(in float3 rayOrigin, in float3 rayDirection, in float3 boxMin, in float3 boxMax)
     {
         float3 invDir = 1.0f / rayDirection;
         float3 t0s = (boxMin - rayOrigin) * invDir;
@@ -165,6 +206,16 @@ public struct Volume
         }
 
         return result;
+    }
+
+    public VolumeIntersection IntersectWithRay(in float3 rayOrigin, in float3 rayDirection)
+    {
+        return ComputeRayAABBIntersection(rayOrigin, rayDirection, m_CornerMin, m_CornerMax);
+    }
+
+    static public VolumeIntersection IntersectWithRay(in float3 rayOrigin, in float3 rayDirection, in float3 boxMin, in float3 boxMax)
+    {
+        return ComputeRayAABBIntersection(rayOrigin, rayDirection, boxMin, boxMax);
     }
 
     public bool IsPointInside(in float3 point)
@@ -198,7 +249,7 @@ public struct Volume
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
-    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float tempDepth)
+    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth)
     {
         tempNullCollisions = 0;
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);
@@ -206,107 +257,22 @@ public struct Volume
         if (intersection.HitPointFar < 0.0f)
             return -1.0f; // No intersection
 
-        float tEnter = max(intersection.HitPointNear, 0.0f); // Clamp to 0, ray is inside AABB
-        float tExit = intersection.HitPointFar;
-
-        float distanceInsideVolume = tExit - tEnter;
+        float distanceInsideVolume = intersection.HitPointFar - max(intersection.HitPointNear, 0.0f);
         if (distanceInsideVolume <= 0.0f)
             return -1.0f; // No valid distance inside volume
 
         if (m_DensityDataIndex >= 0) // If volume is heterogeneous
         {
-            float3 blockSize = (m_CornerMax - m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
-            float t = 0.0f;
-
-            float epsilon = 0.0001f * max(m_CornerMax.x - m_CornerMin.x, max(m_CornerMax.y - m_CornerMin.y, m_CornerMax.z - m_CornerMin.z)); // Small epsilon based on scene scale
-
-            // Max 100 steps
-            for (int i = 0; i < 10000; i++)
-            {
-                float3 currentPosition = rayOrigin + rayDirection * (tEnter + t);
-
-                // Calculate current block indices (ensure they're in valid range [0,15])
-                int3 block3DIndex;
-                float3 relativePos = (currentPosition - m_CornerMin) / (m_CornerMax - m_CornerMin);
-                block3DIndex.x = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.x * MAX_DENSITY_GRID_DIM)));
-                block3DIndex.y = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.y * MAX_DENSITY_GRID_DIM)));
-                block3DIndex.z = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.z * MAX_DENSITY_GRID_DIM)));
-
-                int blockIndex = block3DIndex.x + block3DIndex.y * MAX_DENSITY_GRID_DIM + block3DIndex.z * MAX_DENSITY_GRID_DIM * MAX_DENSITY_GRID_DIM;
-
-                float3 blockMin = m_CornerMin + blockSize * float3(block3DIndex);
-                float3 blockMax = blockMin + blockSize;
-
-                VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, rayDirection, blockMin, blockMax);
-
-                // Use the precomputed max density for this block
-                float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockIndex] * m_Density;
-
-                if (m_ApproximatedScattering != 0)
-                    maxDensity *= pow(0.8f, tempDepth);
-
-                // Sample a distance based on the max density of the block
-                float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
-                
-                // Validate block intersection
-                if (blockIntersection.HitPointFar <= 0.0f)
-                {
-                    // Ray doesn't intersect block properly, sometimes caused by precision issues I guess, advance by small amount
-                    t += epsilon;
-                    if (tEnter + t > tExit)
-                        return -1.0f;
-                    tempNullCollisions++;
-                    continue;
-                }
-                
-                float distanceToBlockExit = blockIntersection.HitPointFar - max(blockIntersection.HitPointNear, 0.0f);
-
-                if (sampledDistance > distanceToBlockExit)
-                {
-                    // Move to the next block
-                    t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
-                    if (tEnter + t > tExit)
-                        return -1.0f; // Exited the volume, no scattering occurred
-                    tempNullCollisions++;
-                    continue;
-                }
-
-                t += sampledDistance;
-                if (tEnter + t > tExit)
-                {
-                    return -1.0f; // Exited the volume, no scattering occurred
-                }
-
-                // Sample the actual density at the scattering position
-                float3 scatterPosition = rayOrigin + rayDirection * (tEnter + t);
-                float densityTextureValue = GetDensityAtPoint(sampler, scatterPosition);
-
-                if (m_ApproximatedScattering != 0)
-                    densityTextureValue *= pow(0.8f, tempDepth);
-
-                if (densityTextureValue / maxDensity < sampler.UniformFloat())
-                {
-                    // Null Collision, continue sampling
-                    tempNullCollisions++;
-                    continue;
-                }
-                else
-                {
-                    return tEnter + t; // Return the distance along the ray where scattering occurs
-                }
-            }
-
-            // Failed to find a scattering event in the given number of steps, assume no scattering
-            return -1.0f;
+            return ProcessHeterogeneousVolumeScattering(rayOrigin, rayDirection, sampler, tempNullCollisions, rayDepth, intersection);
         }
         else // Homogeneous Volume
         {
             // Sample a distance based on the density
             float sampledDistance = sampler.SampleScatteringDistance(m_Density);
-
+            
             if (sampledDistance < distanceInsideVolume)
             {
-                return tEnter + sampledDistance; // Return the distance along the ray where scattering occurs
+                return max(intersection.HitPointNear, 0.0f) + sampledDistance; // Return the distance along the ray where scattering occurs
             }
             else
             {
@@ -315,58 +281,106 @@ public struct Volume
         }
     }
 
-    public float3 GetScatteringDirection(in float3 incidentDirection, inout Sampler sampler, in float tempDepth)
+    // Helper function for heterogeneous volume scattering
+    float ProcessHeterogeneousVolumeScattering(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth, VolumeIntersection intersection)
     {
-        float3 newdir;
+        VolumeTraversalContext context = CreateTraversalContext(intersection);
+        BlockInfo blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + context.epsilon), context);
+        float t = 0.0f;
+
+        // Max 10000 steps
+        for (int i = 0; i < 10000; i++)
+        {
+            float3 currentPosition = rayOrigin + rayDirection * (context.tEnter + t + context.epsilon);
+
+            VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, rayDirection, blockInfo.minCorner, blockInfo.maxCorner);
+
+            // Use the precomputed max density for this block
+            float maxDensity = GetEffectiveDensity(uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockInfo.blockIndex] * m_Density, rayDepth);
+
+            // Sample a distance based on the max density of the block
+            float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
+            
+            // Validate block intersection
+            if (blockIntersection.HitPointFar <= 0.0f)
+            {
+                // Ray doesn't intersect block properly, sometimes caused by precision issues, advance by small amount
+                t += context.epsilon;
+                if (context.tEnter + t > context.tExit)
+                    return -1.0f;
+                tempNullCollisions++;
+                blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + t + context.epsilon), context);
+                continue;
+            }
+            
+            float distanceToBlockExit = blockIntersection.HitPointFar - max(blockIntersection.HitPointNear, 0.0f);
+
+            if (sampledDistance > distanceToBlockExit)
+            {
+                // Move to the next block
+                t += distanceToBlockExit + context.epsilon; // Add small epsilon to ensure the ray moves to the next block
+                if (context.tEnter + t > context.tExit)
+                    return -1.0f; // Exited the volume, no scattering occurred
+                tempNullCollisions++;
+                blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + t + context.epsilon), context);
+                continue;
+            }
+
+            t += sampledDistance;
+            if (context.tEnter + t > context.tExit)
+            {
+                return -1.0f; // Exited the volume, no scattering occurred
+            }
+
+            // Sample the actual density at the scattering position
+            float3 scatterPosition = rayOrigin + rayDirection * (context.tEnter + t);
+            float densityTextureValue = GetEffectiveDensity(GetDensityAtPoint(sampler, scatterPosition), rayDepth);
+
+            if (densityTextureValue / maxDensity < sampler.UniformFloat())
+            {
+                // Null Collision, continue sampling
+                tempNullCollisions++;
+                continue;
+            }
+            else
+            {
+                return context.tEnter + t; // Return the distance along the ray where scattering occurs
+            }
+        }
+
+        // Failed to find a scattering event in the given number of steps, assume no scattering
+        return -1.0f;
+    }
+
+    public float3 GetScatteringDirection(in float3 incidentDirection, inout Sampler sampler, in float rayDepth)
+    {
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            float anisotropy;
-            if (m_ApproximatedScattering != 0)
-                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
-            else
-                anisotropy = m_Anisotropy;
-
-            newdir = sampler.SampleHenyeyGreenstein(incidentDirection, anisotropy);
+            float anisotropy = GetEffectiveAnisotropy(rayDepth);
+            return sampler.SampleHenyeyGreenstein(incidentDirection, anisotropy);
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
-            float anisotropy;
-            if (m_ApproximatedScattering != 0)
-                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
-            else
-                anisotropy = m_Anisotropy;
-
-            newdir = sampler.SampleDraine(incidentDirection, anisotropy, m_Alpha);
+            float anisotropy = GetEffectiveAnisotropy(rayDepth);
+            return sampler.SampleDraine(incidentDirection, anisotropy, m_Alpha);
         }
         #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
         {
-            newdir = sampler.SampleHGPlusDraine(incidentDirection, m_DropletSize);
+            return sampler.SampleHGPlusDraine(incidentDirection, m_DropletSize);
         }
         #endif
-
-        return newdir;
     }
 
-    public float EvaluatePhaseFunction(in float3 V, in float3 L, in float tempDepth)
+    public float EvaluatePhaseFunction(in float3 V, in float3 L, in float rayDepth)
     {
         #ifdef PHASE_FUNCTION_HENYEY_GREENSTEIN
         {
-            float anisotropy;
-            if (m_ApproximatedScattering != 0)
-                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
-            else
-                anisotropy = m_Anisotropy;
-
+            float anisotropy = GetEffectiveAnisotropy(rayDepth);
             return EvaluateHenyeyGreenstein(V, L, anisotropy);
         }
         #elif defined(PHASE_FUNCTION_DRAINE)
         {
-            float anisotropy;
-            if (m_ApproximatedScattering != 0)
-                anisotropy = pow(m_Anisotropy, 1.0f + tempDepth);
-            else
-                anisotropy = m_Anisotropy;
-
+            float anisotropy = GetEffectiveAnisotropy(rayDepth);
             return EvaluateDraine(V, L, anisotropy, m_Alpha);
         }
         #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
@@ -399,10 +413,11 @@ public struct Volume
         return PhaseDraine(V, L, g, a);
     }
 
-    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float tempDepth, out int tempCollisionCount)
+    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth, out int tempCollisionCount)
     {
         float transmittance = 1.0f;
         tempCollisionCount = 0;
+        
         for (uint i = 0; i < uUBO.VolumesCount; i++)
         {
             VolumeIntersection intersection = uVolumes[i].IntersectWithRay(origin, direction);
@@ -411,91 +426,10 @@ public struct Volume
             if (uVolumes[i].m_DensityDataIndex >= 0 && intersection.HitPointFar >= 0.0f)
             {
                 // Heterogeneous volume, transmittance has to be integrated numerically
-
-                float3 blockSize = (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin) / float3(MAX_DENSITY_GRID_DIM); // 32x32x32 blocks
-                float t = 0.0f;
-                float tEnter = intersection.HitPointNear;
-                float tExit = intersection.HitPointFar;
-
-                float epsilon = 0.0001f * max(uVolumes[i].m_CornerMax.x - uVolumes[i].m_CornerMin.x, max(uVolumes[i].m_CornerMax.y - uVolumes[i].m_CornerMin.y, uVolumes[i].m_CornerMax.z - uVolumes[i].m_CornerMin.z)); // Small epsilon based on scene scale
-
-                // Max 100K steps
-                for (int j = 0; j < 10000; j++)
-                {
-                    // Russian roulette based on transmittance
-                    float p = transmittance;
-                    if (sampler.UniformFloat() > p)
-                    {
-                        // Early termination - ray is absorbed
-                        return 0.0f;
-                    }
-                    transmittance /= p;
-
-                    float3 currentPosition = origin + direction * (tEnter + t);
-
-                    // Calculate current block indices (ensure they're in valid range [0,15])
-                    int3 block3DIndex;
-                    float3 relativePos = (currentPosition - uVolumes[i].m_CornerMin) / (uVolumes[i].m_CornerMax - uVolumes[i].m_CornerMin);
-                    block3DIndex.x = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.x * MAX_DENSITY_GRID_DIM)));
-                    block3DIndex.y = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.y * MAX_DENSITY_GRID_DIM)));
-                    block3DIndex.z = max(0, min(MAX_DENSITY_GRID_DIM - 1, int(relativePos.z * MAX_DENSITY_GRID_DIM)));
-
-                    int blockIndex = block3DIndex.x + block3DIndex.y * MAX_DENSITY_GRID_DIM + block3DIndex.z * MAX_DENSITY_GRID_DIM * MAX_DENSITY_GRID_DIM;
-
-                    float3 blockMin = uVolumes[i].m_CornerMin + blockSize * float3(block3DIndex);
-                    float3 blockMax = blockMin + blockSize;
-
-                    VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, direction, blockMin, blockMax);
-
-                    // Use the precomputed max density for this block
-                    float maxDensity = uVolumeMaxDensities[NonUniformResourceIndex(uVolumes[i].m_DensityDataIndex)][blockIndex] * uVolumes[i].m_Density;
-
-                    if (uVolumes[i].m_ApproximatedScattering != 0)
-                        maxDensity *= pow(0.8f, tempDepth);
-
-                    // Sample a distance based on the max density of the block
-                    float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
-                    
-                    // Validate block intersection
-                    if (blockIntersection.HitPointFar <= 0.0f)
-                    {
-                        // Ray doesn't intersect block properly, sometime caused by precision issues I guess, advance by small amount
-                        t += epsilon;
-                        if (tEnter + t > tExit)
-                            break; // Exited the volume
-                        tempCollisionCount++;
-                        continue;
-                    }
-                    
-                    float distanceToBlockExit = blockIntersection.HitPointFar - max(blockIntersection.HitPointNear, 0.0f);
-
-                    if (sampledDistance > distanceToBlockExit)
-                    {
-                        // Move to the next block
-                        t += distanceToBlockExit + epsilon; // Add small epsilon to ensure the ray moves to the next block
-                        if (tEnter + t > tExit)
-                            break; // Exited the volume
-                        tempCollisionCount++;
-                        continue;
-                    }
-
-                    t += sampledDistance;
-                    if (tEnter + t > tExit)
-                    {
-                        break; // Exited the volume
-                    }
-
-                    // Sample the actual density at the interaction position
-                    float3 interactionPosition = origin + direction * (tEnter + t);
-                    float densityTextureValue = uVolumes[i].GetDensityAtPoint(sampler, interactionPosition);
-
-                    if (uVolumes[i].m_ApproximatedScattering != 0)
-                        densityTextureValue *= pow(0.8f, tempDepth);
-
-                    // Update transmittance based on actual density vs max density
-                    transmittance *= 1.0f - (densityTextureValue / maxDensity);
-                    tempCollisionCount++;
-                }
+                transmittance *= uVolumes[i].ProcessHeterogeneousVolumeTransmittance(sampler, origin, direction, rayDepth, tempCollisionCount, intersection);
+                
+                if (transmittance <= 0.0f)
+                    return 0.0f; // Early termination if transmittance becomes zero
             }
             else
             {
@@ -507,5 +441,82 @@ public struct Volume
         }
 
         return clamp(transmittance, 0.0f, 1.0f);
+    }
+
+    // Helper function for heterogeneous volume transmittance calculation
+    float ProcessHeterogeneousVolumeTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth, inout int tempCollisionCount, VolumeIntersection intersection)
+    {
+        VolumeTraversalContext context = CreateTraversalContext(intersection);
+        BlockInfo blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + context.epsilon), context);
+        float transmittance = 1.0f;
+        float t = 0.0f;
+
+        // Max 1000 steps
+        int j = 0;
+        for (j = 0; j < 1000; j++)
+        {
+            // Russian roulette based on transmittance
+            float p = transmittance;
+            if (sampler.UniformFloat() > p)
+            {
+                // Early termination - ray is absorbed
+                return 0.0f;
+            }
+            transmittance /= p;
+
+            float3 currentPosition = origin + direction * (context.tEnter + t + context.epsilon);
+
+            VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, direction, blockInfo.minCorner, blockInfo.maxCorner);
+
+            // Use the precomputed max density for this block
+            float maxDensity = GetEffectiveDensity(uVolumeMaxDensities[NonUniformResourceIndex(m_DensityDataIndex)][blockInfo.blockIndex] * m_Density, rayDepth);
+
+            // Sample a distance based on the max density of the block
+            float sampledDistance = sampler.SampleScatteringDistance(maxDensity);
+            
+            // Validate block intersection
+            if (blockIntersection.HitPointFar <= 0.0f)
+            {
+                // Ray doesn't intersect block properly, sometimes caused by precision issues, advance by small amount
+                t += context.epsilon;
+                if (context.tEnter + t > context.tExit)
+                    break; // Exited the volume
+                tempCollisionCount++;
+                blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + t + context.epsilon), context);
+                continue;
+            }
+            
+            float distanceToBlockExit = blockIntersection.HitPointFar - max(blockIntersection.HitPointNear, 0.0f);
+
+            if (sampledDistance > distanceToBlockExit)
+            {
+                // Move to the next block
+                t += distanceToBlockExit + context.epsilon; // Add small epsilon to ensure the ray moves to the next block
+                if (context.tEnter + t > context.tExit)
+                    break; // Exited the volume
+                tempCollisionCount++;
+                blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + t + context.epsilon), context);
+                continue;
+            }
+
+            t += sampledDistance;
+            if (context.tEnter + t > context.tExit)
+            {
+                break; // Exited the volume
+            }
+
+            // Sample the actual density at the interaction position
+            float3 interactionPosition = origin + direction * (context.tEnter + t);
+            float densityTextureValue = GetEffectiveDensity(GetDensityAtPoint(sampler, interactionPosition), rayDepth);
+
+            // Update transmittance based on actual density vs max density
+            transmittance *= 1.0f - (densityTextureValue / maxDensity);
+            tempCollisionCount++;
+        }
+
+        if (j == 1000)
+            return 0.0f;
+            
+        return transmittance;
     }
 };

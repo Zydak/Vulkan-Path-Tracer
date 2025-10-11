@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_COMPILER gcc)
 set(CMAKE_CXX_COMPILER g++)
 
+add_compile_definitions(
+    $<$<CONFIG:RelWithDebInfo>:INCLUDE_DEBUG_INFO>
+)
+
+add_compile_definitions(
+    $<$<CONFIG:Debug>:INCLUDE_DEBUG_INFO>
+)
+
 # Set up vcpkg toolchain to work with VulkanHelper's manifest
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(VCPKG_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/VulkanHelper/Libraries/vcpkg")

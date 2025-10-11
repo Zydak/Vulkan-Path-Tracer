@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Vulkan/CommandPool.h"
 #include "VulkanHelper.h"
 
 #include <unordered_map>
@@ -241,7 +242,8 @@ private:
     VulkanHelper::ImageView m_RefractionFromInsideLookup;
     VulkanHelper::ImageView m_GGXALookup;
 
-    VulkanHelper::CommandPool m_CommandPool;
+    VulkanHelper::CommandPool m_CommandPoolGraphics;
+    VulkanHelper::CommandPool m_CommandPoolCompute;
 
     VulkanHelper::Pipeline m_PathTracerPipeline;
 

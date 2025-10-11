@@ -117,7 +117,7 @@ void Main()
     accumulatedLight *= scale;
 
     float3 color;
-    if (uPushConstants.FrameCount > 1)
+    if (uPushConstants.FrameCount > 0)
     {
         float a = 1.0f / float(uPushConstants.FrameCount);
         color = lerp(prevColor, accumulatedLight, a);
