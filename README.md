@@ -69,11 +69,13 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <p align="center">
 
 <img src="./Gallery/GodRays.png"/>
-<img src="./Gallery/Cloud3.png">
+<img src="./Gallery/Cloud2.png"/>
 <img src="./Gallery/DragonHead.png"/>
+<img src="./Gallery/Cloud3.png">
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
+<img src="./Gallery/Cloud0.png">
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>

@@ -831,29 +831,55 @@ VulkanHelper::ImageView PathTracer::LoadLookupTable(const char* filepath, glm::u
 }
 
 // Creates a staging buffer and uploads data to the uniform buffer using the provided command buffer
-void PathTracer::UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer)
+void PathTracer::UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint64_t size, uint64_t offset, VulkanHelper::CommandBuffer& commandBuffer, bool deleteStageAfterUpload)
 {
+    const uint64_t maxSize = 100 * 1024 * 1024; // 100 MB
+    
+    // If data exceeds max size, split the upload into multiple smaller uploads
+    if (size > maxSize)
+    {
+        uint64_t uploaded = 0;
+        while (uploaded < size)
+        {
+            uint64_t chunkSize = std::min(maxSize, size - uploaded);
+            UploadDataToBuffer(buffer, (uint8_t*)data + uploaded, chunkSize, offset + uploaded, commandBuffer, true);
+            uploaded += chunkSize;
+        }
+        return;
+    }
+
     // Create a staging buffer to upload uniform data
     VulkanHelper::Buffer::Config stagingBufferConfig{};
     stagingBufferConfig.Device = m_Device;
     stagingBufferConfig.Size = size;
     stagingBufferConfig.Usage = VulkanHelper::Buffer::Usage::TRANSFER_SRC_BIT;
     stagingBufferConfig.CpuMapable = true;
+    if (deleteStageAfterUpload)
+        stagingBufferConfig.DeleteDelayInFrames = 0; // Delete immediately after going out of scope
     VulkanHelper::Buffer stagingBuffer = VulkanHelper::Buffer::New(stagingBufferConfig).Value();
 
     VH_ASSERT(stagingBuffer.UploadData(data, size, 0) == VulkanHelper::VHResult::OK, "Failed to upload path tracer uniform data");
     VH_ASSERT(buffer.CopyFromBuffer(commandBuffer, stagingBuffer, 0, offset, size) == VulkanHelper::VHResult::OK, "Failed to copy path tracer uniform buffer");
 
-    buffer.Barrier(
-        commandBuffer,
-        VulkanHelper::AccessFlags::TRANSFER_WRITE_BIT,
-        VulkanHelper::AccessFlags::MEMORY_READ_BIT,
-        VulkanHelper::PipelineStages::TRANSFER_BIT,
-        VulkanHelper::PipelineStages::RAY_TRACING_SHADER_BIT_KHR
-    );
+    if (deleteStageAfterUpload)
+    {
+        VH_ASSERT(commandBuffer.EndRecording() == VulkanHelper::VHResult::OK, "Failed to end recording command buffer");
+        VH_ASSERT(commandBuffer.SubmitAndWait() == VulkanHelper::VHResult::OK, "Failed to submit command buffer");
+        VH_ASSERT(commandBuffer.BeginRecording(VulkanHelper::CommandBuffer::Usage::ONE_TIME_SUBMIT_BIT) == VulkanHelper::VHResult::OK, "Failed to begin recording command buffer");
+    }
+    else
+    {
+        buffer.Barrier(
+            commandBuffer,
+            VulkanHelper::AccessFlags::TRANSFER_WRITE_BIT,
+            VulkanHelper::AccessFlags::MEMORY_READ_BIT,
+            VulkanHelper::PipelineStages::TRANSFER_BIT,
+            VulkanHelper::PipelineStages::RAY_TRACING_SHADER_BIT_KHR
+        );
+    }
 }
 
-void PathTracer::DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer)
+void PathTracer::DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint64_t size, uint64_t offset, VulkanHelper::CommandBuffer& commandBuffer)
 {
     // Create a staging buffer to download uniform data
     VulkanHelper::Buffer::Config stagingBufferConfig{};
@@ -1254,21 +1280,6 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     VH_ASSERT(densityGrid != nullptr, "Density grid not found in VDB file. Volumes without density grid are not supported yet.");
 
     openvdb::FloatGrid::Ptr floatGridDensity = openvdb::gridPtrCast<openvdb::FloatGrid>(densityGrid);
-
-    // Density
-    nanovdb::GridHandle<nanovdb::HostBuffer> nanoGridHandleDensity = nanovdb::tools::createNanoGrid(*floatGridDensity);
-
-    // nanoGridHandleDensity.gridMetaData()->worldBBox()
-    
-    VulkanHelper::Buffer::Config bufferConfig{};
-    bufferConfig.Device = m_Device;
-    bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
-    bufferConfig.DebugName = "NanoVDB Density Grid";
-    bufferConfig.Size = nanoGridHandleDensity.buffer().size();
-    
-    volume.VolumeNanoBufferDensity = VulkanHelper::Buffer::New(bufferConfig).Value();
-
-    UploadDataToBuffer(volume.VolumeNanoBufferDensity, nanoGridHandleDensity.buffer().data(), (uint32_t)nanoGridHandleDensity.buffer().size(), 0, commandBuffer);
     
     // Precompute max densities for empty space skipping
     float maxDensity = openvdb::tools::minMax(floatGridDensity->tree(), true).max();
@@ -1288,14 +1299,10 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     openvdb::math::Coord min = floatGridDensity->evalActiveVoxelBoundingBox().min();
     openvdb::math::Coord max = floatGridDensity->evalActiveVoxelBoundingBox().max();
 
-    VH_LOG_DEBUG("Density data size: {} MB", ((float)nanoGridHandleDensity.buffer().size()) / (1024.0f * 1024.0f));
-    VH_LOG_DEBUG("Volume dimensions: x: {} y: {} z: {}", dim.x(), dim.y(), dim.z());
-    VH_LOG_DEBUG("Max Density: {}", maxDensity);
-
     volume.CornerMin = glm::vec3(min.x(), min.y(), min.z());
     volume.CornerMax = glm::vec3(max.x(), max.y(), max.z());
 
-    // Scale it down so AABB is more or less -1 to 1
+    // // Scale it down so AABB is more or less -1 to 1
     float maxDimX = glm::max(glm::abs(min.x()), glm::abs(max.x()));
     float maxDimY = glm::max(glm::abs(min.y()), glm::abs(max.y()));
     float maxDimZ = glm::max(glm::abs(min.z()), glm::abs(max.z()));
@@ -1338,6 +1345,25 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
         }
     }
 
+    // Density
+    {
+        nanovdb::GridHandle<nanovdb::HostBuffer> nanoGridHandleDensity = nanovdb::tools::createNanoGrid(*floatGridDensity);
+
+        VH_LOG_DEBUG("Density data size: {} MB", ((float)nanoGridHandleDensity.buffer().size()) / (1024.0f * 1024.0f));
+        VH_LOG_DEBUG("Volume dimensions: x: {} y: {} z: {}", dim.x(), dim.y(), dim.z());
+        VH_LOG_DEBUG("Max Density: {}", maxDensity);
+
+        VulkanHelper::Buffer::Config bufferConfig{};
+        bufferConfig.Device = m_Device;
+        bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+        bufferConfig.DebugName = "NanoVDB Density Grid";
+        bufferConfig.Size = nanoGridHandleDensity.buffer().size();
+        
+        volume.VolumeNanoBufferDensity = VulkanHelper::Buffer::New(bufferConfig).Value();
+
+        UploadDataToBuffer(volume.VolumeNanoBufferDensity, nanoGridHandleDensity.buffer().data(), (uint32_t)nanoGridHandleDensity.buffer().size(), 0, commandBuffer);
+    }
+
     // Temperature
     nanovdb::GridHandle<nanovdb::HostBuffer> nanoGridHandleTemperature;
     if (temperatureGrid)
@@ -1345,6 +1371,9 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
         openvdb::FloatGrid::Ptr floatGridTemperature = openvdb::gridPtrCast<openvdb::FloatGrid>(temperatureGrid);
         nanoGridHandleTemperature = nanovdb::tools::createNanoGrid(*floatGridTemperature);
 
+        VulkanHelper::Buffer::Config bufferConfig{};
+        bufferConfig.Device = m_Device;
+        bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
         bufferConfig.Size = nanoGridHandleTemperature.buffer().size();
         bufferConfig.DebugName = "NanoVDB Temperature Grid";
         
@@ -1355,6 +1384,7 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
         UploadDataToBuffer(volume.VolumeNanoBufferTemperature, nanoGridHandleTemperature.buffer().data(), (uint32_t)nanoGridHandleTemperature.buffer().size(), 0, commandBuffer);
     }
 
+    VulkanHelper::Buffer::Config bufferConfig{};
     bufferConfig.Device = m_Device;
     bufferConfig.Size = sizeof(float) * volumeMaxDensities.size();
     bufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;

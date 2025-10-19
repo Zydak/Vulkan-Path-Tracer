@@ -109,7 +109,7 @@ public struct Volume
         // Read the value
         float value = pnanovdb_read_float(gridBuffer, valueAddr);
 
-        return max(0.0f, value);
+        return clamp(value, 0.0f, 1.0f);
     }
 
     // Helper function to create traversal context

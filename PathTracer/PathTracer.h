@@ -289,8 +289,8 @@ private:
     VulkanHelper::Buffer m_PathTracerUniformBuffer;
     VulkanHelper::PushConstant m_PathTracerPushConstant;
 
-    void UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
-    void DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint32_t size, uint32_t offset, VulkanHelper::CommandBuffer& commandBuffer);
+    void UploadDataToBuffer(VulkanHelper::Buffer buffer, void* data, uint64_t size, uint64_t offset, VulkanHelper::CommandBuffer& commandBuffer, bool deleteStageAfterUpload = false);
+    void DownloadDataFromBuffer(VulkanHelper::Buffer buffer, void* data, uint64_t size, uint64_t offset, VulkanHelper::CommandBuffer& commandBuffer);
 
     std::vector<Material> m_Materials;
     std::vector<std::string> m_MaterialNames;

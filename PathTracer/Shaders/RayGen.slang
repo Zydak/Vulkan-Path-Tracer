@@ -83,18 +83,8 @@ void Main()
             if (!scatteredInVolume)
                 TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
-            if (payload.ColorChannel == -1)
-            {
-                // Ray hasn't been split, so just sum all color channels
-                pathLight += payload.Emitted * pathThroughput;
-                pathThroughput *= payload.BxDF / payload.PDF;
-            }
-            else
-            {
-                // Ray has been split, so only track the relevant color channel
-                pathLight[payload.ColorChannel] += payload.Emitted[payload.ColorChannel] * pathThroughput[payload.ColorChannel];
-                pathThroughput[payload.ColorChannel] *= (payload.BxDF[payload.ColorChannel] / payload.PDF);
-            }
+            pathLight += payload.Emitted * pathThroughput;
+            pathThroughput *= payload.BxDF / payload.PDF;
 
             // Russian roulette
             float p = max(pathThroughput.x, max(pathThroughput.y, pathThroughput.z));
@@ -107,7 +97,16 @@ void Main()
             pathThroughput /= p;
         }
 
-        accumulatedLight += pathLight;
+        if (payload.ColorChannel == -1)
+        {
+            // Ray hasn't been split, so accumulate all color channels
+            accumulatedLight += pathLight;
+        }
+        else
+        {
+            // Ray has been split, so only track the relevant color channel
+            accumulatedLight[payload.ColorChannel] += pathLight[payload.ColorChannel];
+        }
     }
     accumulatedLight /= (float)uUBO.SampleCount;
     
