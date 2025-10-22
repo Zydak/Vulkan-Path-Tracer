@@ -63,8 +63,6 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - Depth of Field
 - Russian roulette
 
-There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) explaining some of the features.
-
 # Gallery
 <p align="center">
 
