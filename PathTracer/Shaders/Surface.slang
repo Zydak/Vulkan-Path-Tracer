@@ -12,6 +12,10 @@ public struct Surface
     float3 m_Tangent;
     float3 m_Bitangent;
 
+    Vertex m_V1;
+    Vertex m_V2;
+    Vertex m_V3;
+
     bool m_HitFromInside;
 
     [mutating]
@@ -28,25 +32,25 @@ public struct Surface
         const uint i2 = indices[primitiveIndex * 3 + 1];
         const uint i3 = indices[primitiveIndex * 3 + 2];
 
-        const Vertex v1 = vertices[i1];
-        const Vertex v2 = vertices[i2];
-        const Vertex v3 = vertices[i3];
+        m_V1 = vertices[i1];
+        m_V2 = vertices[i2];
+        m_V3 = vertices[i3];
 
-        m_WorldPos = v1.Position * barycentrics.x + v2.Position * barycentrics.y + v3.Position * barycentrics.z;
+        m_WorldPos = m_V1.Position * barycentrics.x + m_V2.Position * barycentrics.y + m_V3.Position * barycentrics.z;
         m_WorldPos = mul(ObjectToWorld3x4(), float4(m_WorldPos, 1.0f)).xyz;
 
         #ifdef USE_ONLY_GEOMETRY_NORMALS
         {
-            const float3 v1World = mul(ObjectToWorld3x4(), float4(v1.Position, 1.0f)).xyz;
-            const float3 v2World = mul(ObjectToWorld3x4(), float4(v2.Position, 1.0f)).xyz;
-            const float3 v3World = mul(ObjectToWorld3x4(), float4(v3.Position, 1.0f)).xyz;
+            const float3 v1World = mul(ObjectToWorld3x4(), float4(m_V1.Position, 1.0f)).xyz;
+            const float3 v2World = mul(ObjectToWorld3x4(), float4(m_V2.Position, 1.0f)).xyz;
+            const float3 v3World = mul(ObjectToWorld3x4(), float4(m_V3.Position, 1.0f)).xyz;
             m_Normal = normalize(cross(v3World - v1World, v2World - v1World)); // Face normal
         }
         #else
         {
             // Transformed normals often cause rays to go under the geometry, the same goes for normal textures.
             // They aren't implemented properly yet so there is no compensation for that
-            m_Normal = normalize(v1.Normal * barycentrics.x + v2.Normal * barycentrics.y + v3.Normal * barycentrics.z);
+            m_Normal = normalize(m_V1.Normal * barycentrics.x + m_V2.Normal * barycentrics.y + m_V3.Normal * barycentrics.z);
             m_Normal = mul(m_Normal, WorldToObject()).xyz;
         }
         #endif
@@ -62,7 +66,7 @@ public struct Surface
             m_HitFromInside = false;
         }
 
-        m_TextureCoord = v1.TexCoord * barycentrics.x + v2.TexCoord * barycentrics.y + v3.TexCoord * barycentrics.z;
+        m_TextureCoord = m_V1.TexCoord * barycentrics.x + m_V2.TexCoord * barycentrics.y + m_V3.TexCoord * barycentrics.z;
 
         float3 up = abs(m_Normal.z) < 0.9999999 ? float3(0, 0, 1) : float3(1, 0, 0);
         m_Tangent = normalize(cross(up, m_Normal));
@@ -104,4 +108,7 @@ public struct Surface
     public inline float3 GetWorldPos() { return m_WorldPos; }
     public inline float2 GetTextureCoordinates() { return m_TextureCoord; }
     public inline bool WasHitFromInside() { return m_HitFromInside; }
+    public inline Vertex GetV1() { return m_V1; }
+    public inline Vertex GetV2() { return m_V2; }
+    public inline Vertex GetV3() { return m_V3; }
 }

@@ -74,6 +74,12 @@ PathTracer PathTracer::New(const VulkanHelper::Device& device, VulkanHelper::Thr
     materialIndicesBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
     pathTracer.m_MaterialAndMeshIndicesBuffer = VulkanHelper::Buffer::New(materialIndicesBufferConfig).Value();
 
+    VulkanHelper::Buffer::Config emissiveMeshesBufferConfig{};
+    emissiveMeshesBufferConfig.Device = device;
+    emissiveMeshesBufferConfig.Size = sizeof(EmissiveMeshEntry) * MAX_EMISSIVE_MESHES;
+    emissiveMeshesBufferConfig.Usage = VulkanHelper::Buffer::Usage::STORAGE_BUFFER_BIT | VulkanHelper::Buffer::Usage::TRANSFER_DST_BIT;
+    pathTracer.m_EmissiveMeshesBuffer = VulkanHelper::Buffer::New(emissiveMeshesBufferConfig).Value();
+
     // Sampler
     VulkanHelper::Sampler::Config samplerConfig{};
     samplerConfig.AddressMode = VulkanHelper::Sampler::AddressMode::REPEAT;
@@ -210,6 +216,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
 
     // Meshes
     m_SceneMeshes.clear();
+    m_SceneMeshInfo.clear();
     for (const auto& mesh : scene.Value().Meshes)
     {
         VulkanHelper::Mesh::Config meshConfig{};
@@ -224,11 +231,12 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         meshConfig.CommandBuffer = &initializationCmd;
 
         m_SceneMeshes.push_back(std::move(VulkanHelper::Mesh::New(meshConfig).Value()));
+        m_SceneMeshInfo.push_back(MeshInfoEntry{ .TriangleCount = static_cast<uint32_t>(mesh.Indices.Size() / 3) });
 
         m_TotalVertexCount += mesh.Vertices.Size();
         m_TotalIndexCount += mesh.Indices.Size();
     }
-    
+
     // Textures
     m_SceneTextures.clear();
     m_SceneTexturePathToIndex.clear();
@@ -443,17 +451,26 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     materialAndMeshIndices.Reserve(scene.Value().MeshInstances.Size() * 2);
     VulkanHelper::Vector<uint32_t> customIndices;
     customIndices.Reserve(scene.Value().MeshInstances.Size());
+    m_EmissiveMeshes.clear();
     uint32_t index = 0;
+
+    uint32_t emissiveTriangleCount = 0;
 
     VulkanHelper::Vector<VulkanHelper::BLAS::Config> blasConfigs;
     for (const auto& instance : scene.Value().MeshInstances)
     {
         customIndices.PushBack(index);
-        index++;
 
+        VH_ASSERT(instance.MaterialIndex < m_Materials.size(), "Mesh instance has invalid material index!");
         materialAndMeshIndices.PushBack(instance.MaterialIndex);
         materialAndMeshIndices.PushBack(instance.MeshIndex);
-        VH_ASSERT(instance.MaterialIndex < m_Materials.size(), "Mesh instance has invalid material index!");
+
+        if (m_Materials[instance.MaterialIndex].EmissiveColor != glm::vec3(0.0f))
+        {
+            uint32_t triangleCount = (uint32_t)((m_SceneMeshes[instance.MeshIndex].GetIndexBuffer().GetSize() / sizeof(uint32_t)) / 3);
+            emissiveTriangleCount += triangleCount;
+            m_EmissiveMeshes.push_back({ .MeshIndex = instance.MeshIndex, .MaterialIndex = instance.MaterialIndex, .TriangleCount = triangleCount, .InstanceIndex = index });
+        }
 
         blasConfigs.PushBack({});
         auto& blasConfig = blasConfigs.Back();
@@ -466,7 +483,10 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         blasConfig.EnableCompaction = true;
 
         modelMatrices.PushBack(glm::mat4(1.0f));
+        index++;
     }
+
+    UploadDataToBuffer(m_EmissiveMeshesBuffer, m_EmissiveMeshes.data(), (uint32_t)m_EmissiveMeshes.size() * sizeof(EmissiveMeshEntry), 0, initializationCmd);
 
     VulkanHelper::BLASBuilder blasBuilder = VulkanHelper::BLASBuilder::New({ .Device = m_Device }).Value();
     auto buildResult = blasBuilder.Build(blasConfigs.Data(), (uint32_t)blasConfigs.Size(), computeCmd);
@@ -497,7 +517,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VulkanHelper::ShaderStages allRTShadersStages = VulkanHelper::ShaderStages::RAYGEN_BIT | VulkanHelper::ShaderStages::CLOSEST_HIT_BIT | VulkanHelper::ShaderStages::MISS_BIT;
 
     // Create Descriptor set
-    std::array<VulkanHelper::DescriptorSet::BindingDescription, 19> bindingDescriptions = {
+    std::array<VulkanHelper::DescriptorSet::BindingDescription, 20> bindingDescriptions = {
         VulkanHelper::DescriptorSet::BindingDescription{0, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_IMAGE},
         VulkanHelper::DescriptorSet::BindingDescription{1, 1, allRTShadersStages, VulkanHelper::DescriptorType::ACCELERATION_STRUCTURE_KHR},
         VulkanHelper::DescriptorSet::BindingDescription{2, 1, allRTShadersStages, VulkanHelper::DescriptorType::UNIFORM_BUFFER},
@@ -516,7 +536,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         VulkanHelper::DescriptorSet::BindingDescription{15, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume density buffers
         VulkanHelper::DescriptorSet::BindingDescription{16, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume Temperature buffers
         VulkanHelper::DescriptorSet::BindingDescription{17, MAX_HETEROGENEOUS_VOLUMES, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Volume max densities buffers
-        VulkanHelper::DescriptorSet::BindingDescription{18, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER} // Instances material indices
+        VulkanHelper::DescriptorSet::BindingDescription{18, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}, // Instances material indices
+        VulkanHelper::DescriptorSet::BindingDescription{19, 1, allRTShadersStages, VulkanHelper::DescriptorType::STORAGE_BUFFER}  // Emissive meshes buffer
     };
 
     VulkanHelper::DescriptorSet::Config descriptorSetConfig{};
@@ -553,6 +574,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(13, 0, &m_VolumesBuffer) == VulkanHelper::VHResult::OK, "Failed to add volumes buffer to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddSampler(14, 0, &m_LookupTableSampler) == VulkanHelper::VHResult::OK, "Failed to add lookup table sampler to descriptor set");
     VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(18, 0, &m_MaterialAndMeshIndicesBuffer) == VulkanHelper::VHResult::OK, "Failed to add instances material indices buffer to descriptor set");
+    VH_ASSERT(m_PathTracerDescriptorSet.AddBuffer(19, 0, &m_EmissiveMeshesBuffer) == VulkanHelper::VHResult::OK, "Failed to add emissive meshes buffer to descriptor set");
 
     // Upload Path Tracer uniform data
     PathTracerUniform pathTracerUniform{};
@@ -580,6 +602,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.VolumesCount = 0; // Starts empty
     pathTracerUniform.SkyIntensity = m_SkyIntensity;
     pathTracerUniform.ScreenChunkCount = m_ScreenChunkCount;
+    pathTracerUniform.EmissiveMeshCount = (uint32_t)m_EmissiveMeshes.size();
+    pathTracerUniform.TotalEmissiveTriangleCount = emissiveTriangleCount;
 
     // Create a staging buffer to upload uniform data
     VulkanHelper::Buffer::Config uniformStagingBufferConfig{};

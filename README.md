@@ -75,7 +75,7 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>
-<img src="./Gallery/Cloud0.png">
+<img src="./Gallery/Cloud4.png">
 <img src="./Gallery/VolumeBunny.png">
 <img src="./Gallery/Bistro.png"/>
 <img src="./Gallery/OceanAjax.png"/>
@@ -83,6 +83,7 @@ There's also a [Project Overview](https://zydak.github.io/Vulkan-Path-Tracer/) e
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/WispyCloudNoon.png">
 <img src="./Gallery/CornellBox.png"/>
+<img src="./Gallery/Cloud5.png"/>
 <img src="./Gallery/Mustang0.png"/>
 <img src="./Gallery/FogCarUndenoised.png"/>
 <img src="./Gallery/TeapotMarble.png" width="49%"/>

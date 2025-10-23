@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Vulkan/Buffer.h"
 #include "Vulkan/CommandPool.h"
 #include "VulkanHelper.h"
 
@@ -180,6 +181,7 @@ private:
     VulkanHelper::ImageView LoadLookupTable(const char* filepath, glm::uvec3 tableSize, VulkanHelper::CommandBuffer& commandBuffer);
     VulkanHelper::ImageView LoadDefaultTexture(VulkanHelper::CommandBuffer commandBuffer, bool normal, bool onlySingleChannel);
 
+    constexpr static uint32_t MAX_EMISSIVE_MESHES = 10000;
     constexpr static uint32_t MAX_ENTITIES = 10000;
     constexpr static uint32_t MAX_INSTANCES = 100000;
     constexpr static uint32_t MAX_HETEROGENEOUS_VOLUMES = 100;
@@ -237,6 +239,12 @@ private:
     std::vector<VulkanHelper::Mesh> m_SceneMeshes;
     VulkanHelper::TLAS m_SceneTLAS;
 
+    struct MeshInfoEntry
+    {
+        uint32_t TriangleCount;
+    };
+    std::vector<MeshInfoEntry> m_SceneMeshInfo;
+
     VulkanHelper::ImageView m_ReflectionLookup;
     VulkanHelper::ImageView m_RefractionFromOutsideLookup;
     VulkanHelper::ImageView m_RefractionFromInsideLookup;
@@ -278,6 +286,8 @@ private:
         uint32_t VolumesCount;
         float SkyIntensity;
         uint32_t ScreenChunkCount;
+        uint32_t EmissiveMeshCount;
+        uint32_t TotalEmissiveTriangleCount;
     };
 
     struct PushConstantData
@@ -296,6 +306,16 @@ private:
     std::vector<std::string> m_MaterialNames;
     VulkanHelper::Buffer m_MaterialsBuffer;
     VulkanHelper::Buffer m_MaterialAndMeshIndicesBuffer;
+
+    struct EmissiveMeshEntry
+    {
+        uint32_t MeshIndex;
+        uint32_t MaterialIndex;
+        uint32_t TriangleCount;
+        uint32_t InstanceIndex;
+    };
+    std::vector<EmissiveMeshEntry> m_EmissiveMeshes;
+    VulkanHelper::Buffer m_EmissiveMeshesBuffer;
 
     VulkanHelper::Sampler m_TextureSampler;
     VulkanHelper::Sampler m_LookupTableSampler;

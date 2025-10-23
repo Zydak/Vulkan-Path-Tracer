@@ -27,6 +27,8 @@ public struct Payload
     // This variable indicates which channel that is. -1 means all channels are being currently tracked so the ray hasn't been split
     // 0 = R, 1 = G, 2 = B.
     public int ColorChannel;
+
+    public uint InstanceIndex; // The instance index of the hit geometry, needed for emissive meshes MIS
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)
@@ -39,14 +41,21 @@ public float3 Rotate(float3 v, float3 axis, float theta)
     return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
 }
 
-public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction)
+public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction, out uint hitInstanceIndex)
 {
+    hitInstanceIndex = 0;
+
     #ifdef USE_RAY_QUERIES
     {
         RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
         query.__rayQueryInitializeEXT(as, RAY_FLAG_FORCE_OPAQUE, 0xFF, origin, 0.0001, direction, 1000000);
         query.Proceed();
-        return query.CommittedStatus() != COMMITTED_NOTHING;
+        if (query.CommittedStatus() != COMMITTED_NOTHING)
+        {
+            hitInstanceIndex = query.CommittedInstanceID();
+            return true;
+        }
+        return false;
     }
     #else
     {
@@ -60,6 +69,8 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
         payload.Depth = 0;
 
         TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
+
+        hitInstanceIndex = payload.InstanceIndex;
         
         return payload.Depth == 0;
     }

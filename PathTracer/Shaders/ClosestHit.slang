@@ -8,6 +8,8 @@ import Atmosphere;
 
 import Bindings;
 
+#define ENABLE_MESH_MIS
+
 float2 getSphericalUv(float3 v)
 {
     float gamma = asin(-v.y);
@@ -21,8 +23,6 @@ float2 getSphericalUv(float3 v)
 void Main(inout Payload payload, in float2 attrib)
 {
     // Reset values from previous hit
-    payload.BxDF = float3(1.0f, 1.0f, 1.0f);
-    payload.PDF = 1.0f;
     payload.Emitted = float3(0.0f, 0.0f, 0.0f);
 
     // ---------------------------------------------------------------------------------
@@ -37,6 +37,7 @@ void Main(inout Payload payload, in float2 attrib)
         if (payload.QueryDistance)
         {
             payload.DistanceToSurface = RayTCurrent();
+            payload.InstanceIndex = InstanceIndex();
             return;
         }
     }
@@ -62,6 +63,8 @@ void Main(inout Payload payload, in float2 attrib)
         surface
     );
 
+    const bool isLightSource = material.Properties.EmissiveColor.r > 0.0f || material.Properties.EmissiveColor.g > 0.0f || material.Properties.EmissiveColor.b > 0.0f;
+
     surface.RotateTangents(material.Properties.AnisotropyRotation);
 
     // payload.Emitted = clamp(surface.GetNormal() * 0.5f + 0.5f, 0.0f, 1.0f);
@@ -85,7 +88,7 @@ void Main(inout Payload payload, in float2 attrib)
             // If the anisotropy equals 1 the entire path through volume is perfectly straight line, in that case
             // it's pointless to simulate each scattering event since we know where we'll end up. So just use Beer's law instead which is way faster
             // and gives the same result.
-            payload.BxDF *= exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
+            payload.BxDF = exp(-(1.0f - material.Properties.MediumColor.rgb) * material.Properties.MediumDensity * geometryHitDistance);
         }
         else
         {
@@ -104,7 +107,7 @@ void Main(inout Payload payload, in float2 attrib)
                 payload.Direction = payload.Sampler.SampleHenyeyGreenstein( payload.Direction, payload.MediumAnisotropy);
 
                 // Change weight
-                payload.BxDF *= payload.MediumColor.rgb;
+                payload.BxDF = payload.MediumColor.rgb;
 
                 // Return from hit shader. It doesn't terminate the path, it goes back to raygen and starts a new path
                 // and since the input.Payload.InMedium is still set we'll end up back here and simulate the next event
@@ -135,7 +138,37 @@ void Main(inout Payload payload, in float2 attrib)
 
         if (canHitSky)
         {
-            canHitSky = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toSkyDirectionWorld);
+            uint temp;
+            canHitSky = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toSkyDirectionWorld, temp);
+        }
+    }
+    #endif
+
+    // ---------------------------------------------------------------------------------
+    //
+    // Importance Sample Emissive Meshes
+    //
+
+    float3 toLightDirectionWorld;
+    float3 toLightDirectionTangent;
+    float4 lightColorPDF;
+    bool canHitLight = false;
+    #ifdef ENABLE_MESH_MIS
+    if (!isLightSource)
+    {
+        uint lightInstanceIndex;
+        payload.Sampler.SampleEmissiveTriangle(surface.GetWorldPos(), toLightDirectionWorld, lightColorPDF, lightInstanceIndex);
+
+        if (lightColorPDF.a > 0.0f)
+        {
+            toLightDirectionTangent = surface.WorldToTangent(toLightDirectionWorld);
+            canHitLight = toLightDirectionTangent.z > 0.0f;
+            if (canHitLight)
+            {
+                uint hitInstanceIndex;
+                DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toLightDirectionWorld, hitInstanceIndex);
+                canHitLight = lightInstanceIndex == hitInstanceIndex;
+            }
         }
     }
     #endif
@@ -182,6 +215,15 @@ void Main(inout Payload payload, in float2 attrib)
     }
     #endif
 
+    // Evaluate light direction
+    BxDFEval lightDirectionEval = BxDFEval(0, 0);
+    #ifdef ENABLE_MESH_MIS
+    if (canHitLight && !isLightSource)
+    {
+        lightDirectionEval = material.EvaluateBSDF(V, H, toLightDirectionTangent, FDielectric);
+    }
+    #endif
+
     // ---------------------------------------------------------------------------------
 
     // ---------------------------------------------------------------------------------
@@ -192,13 +234,44 @@ void Main(inout Payload payload, in float2 attrib)
     // Everything is calculated in tangent space, so at the end we have to convert to world space
     const float3 newDir = surface.TangentToWorld(scatterSample.L);
 
-    payload.Emitted = float3(material.Properties.EmissiveColor);
+    #ifdef ENABLE_MESH_MIS
+    if (payload.Depth == 0 && isLightSource)
+    {
+        // If the first hit is a light source we have to add its emission directly since MIS can't handle this case
+        payload.Emitted += float3(material.Properties.EmissiveColor);
+    }
+    else if (isLightSource)
+    {
+        // When BSDF sampling hits a light source, we need to compute the MIS weight
+        // This prevents double-counting with direct light sampling
+
+        float3 edge1 = surface.GetV2().Position - surface.GetV1().Position;
+        float3 edge2 = surface.GetV3().Position - surface.GetV1().Position;
+        float area = length(cross(edge1, edge2)) * 0.5f;
+
+        float distanceSquared = dot(surface.GetWorldPos() - payload.Origin, surface.GetWorldPos() - payload.Origin);
+        float cosTheta = abs(dot(surface.GetNormal(), normalize(payload.Origin - surface.GetWorldPos())));
+
+        // Calculate the PDF if this light was sampled directly
+        float lightSamplingPDF = (1.0f / float(uUBO.EmissiveMeshCount)) * 
+                                (1.0f / float(uUBO.TotalEmissiveTriangleCount)) * 
+                                (1.0f / area) * 
+                                (distanceSquared / max(cosTheta, 1e-8f));
+        
+        payload.Emitted += float3(material.Properties.EmissiveColor) * PowerHeuristics(payload.PDF, lightSamplingPDF);
+    }
+    #else
+    {
+        payload.Emitted += float3(material.Properties.EmissiveColor);
+    }
+    #endif
+    
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-3 * (float)wasRefracted + 1e-3 * (float)(!wasRefracted));
     payload.Direction = newDir;
 
-    payload.BxDF *= scatterSample.BxDF;
-    payload.PDF *= scatterSample.PDF;
+    payload.BxDF = scatterSample.BxDF;
+    payload.PDF = scatterSample.PDF;
 
     #ifdef ENABLE_SKY_MIS
     {
@@ -232,6 +305,21 @@ void Main(inout Payload payload, in float2 attrib)
                 payload.Emitted += (skyDirectionEval.BxDF * transmittance * skyColor / skyMapPDF) * PowerHeuristics(skyMapPDF, skyDirectionEval.PDF);
             }
         }
+    }
+    #endif
+
+    #ifdef ENABLE_MESH_MIS
+    if (!isLightSource && canHitLight && lightColorPDF.a > 0.0f && lightDirectionEval.PDF > 0.0f)
+    {
+        // Calculate transmittance along the light ray for shadow effects
+        int tempCollisionCount = 0;
+        float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDirectionWorld, payload.Depth, tempCollisionCount);
+
+        // Ignore the atmosphere for emissive meshes
+        // I can't imagine a scene with a light so bright that transmittance from atmosphere would matter
+        // since it would have to be visible from really far away
+
+        payload.Emitted += (lightDirectionEval.BxDF * transmittance * lightColorPDF.rgb / lightColorPDF.a) * PowerHeuristics(lightColorPDF.a, lightDirectionEval.PDF);
     }
     #endif
 

@@ -249,13 +249,16 @@ public struct Volume
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
-    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth)
+    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth, in float ignoreIfFartherThan)
     {
         tempNullCollisions = 0;
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);
 
         if (intersection.HitPointFar < 0.0f)
             return -1.0f; // No intersection
+
+        if (ignoreIfFartherThan >= 0.0f && intersection.HitPointNear > ignoreIfFartherThan)
+            return -1.0f;
 
         float distanceInsideVolume = intersection.HitPointFar - max(intersection.HitPointNear, 0.0f);
         if (distanceInsideVolume <= 0.0f)
@@ -366,7 +369,7 @@ public struct Volume
         }
         #elif defined(PHASE_FUNCTION_HENYEY_GREENSTEIN_PLUS_DRAINE)
         {
-            return sampler.SampleHGPlusDraine(incidentDirection, m_DropletSize);
+            return sampler.SampleHGPlusDraine(incidentDirection, m_DropletSize, rayDepth);
         }
         #endif
     }
@@ -453,7 +456,7 @@ public struct Volume
 
         // Max 1000 steps
         int j = 0;
-        for (j = 0; j < 1000; j++)
+        for (j = 0; j < 10000; j++)
         {
             // Russian roulette based on transmittance
             float p = transmittance;
@@ -509,13 +512,19 @@ public struct Volume
             float3 interactionPosition = origin + direction * (context.tEnter + t);
             float densityTextureValue = GetEffectiveDensity(GetDensityAtPoint(sampler, interactionPosition), rayDepth);
 
+            if (sampler.UniformFloat() < (densityTextureValue / maxDensity))
+            {
+                // Real collision, terminate transmittance calculation
+                return 0.0f;
+            }
+
             // Update transmittance based on actual density vs max density
-            transmittance *= 1.0f - (densityTextureValue / maxDensity);
+            //transmittance *= 1.0f - (densityTextureValue / maxDensity);
             tempCollisionCount++;
         }
 
-        if (j == 1000)
-            return 0.0f;
+        // if (j == 1000)
+        //     return 0.0f;
             
         return transmittance;
     }

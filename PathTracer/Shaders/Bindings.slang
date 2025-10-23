@@ -46,6 +46,8 @@ public struct UniformBuffer
     public uint VolumesCount;
     public float EnvironmentIntensity;
     public uint ScreenSplitCount;
+    public uint EmissiveMeshCount;
+    public uint TotalEmissiveTriangleCount;
 };
 
 // Material data that's passed in from the CPU
@@ -71,6 +73,14 @@ public struct CPUMaterial
     public uint RoughnessTextureIndex;
     public uint MetallicTextureIndex;
     public uint EmissiveTextureIndex;
+}
+
+public struct EmissiveMeshEntry
+{
+    public uint MeshIndex;
+    public uint MaterialIndex;
+    public uint TriangleCount;
+    public uint InstanceIndex;
 }
 
 [[vk::image_format("rgba32f")]]
@@ -117,3 +127,6 @@ public struct CPUMaterial
 
 // Buffer of material and mesh indices for each instance in TLAS
 [[vk::binding(18, 0)]] public StructuredBuffer<uint> uMaterialAndMeshIndices;
+
+// Buffer of emissive mesh info
+[[vk::binding(19, 0)]] public StructuredBuffer<EmissiveMeshEntry> uEmissiveMeshes;
