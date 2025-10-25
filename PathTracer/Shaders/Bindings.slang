@@ -48,6 +48,7 @@ public struct UniformBuffer
     public uint ScreenSplitCount;
     public uint EmissiveMeshCount;
     public uint TotalEmissiveTriangleCount;
+    public float EmissiveMeshSamplingPDFBias;
 };
 
 // Material data that's passed in from the CPU
@@ -81,6 +82,7 @@ public struct EmissiveMeshEntry
     public uint MaterialIndex;
     public uint TriangleCount;
     public uint InstanceIndex;
+    public float4x4 Transform;
 }
 
 [[vk::image_format("rgba32f")]]

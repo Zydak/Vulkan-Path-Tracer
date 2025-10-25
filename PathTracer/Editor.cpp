@@ -1,3 +1,4 @@
+#include "imgui.h"
 #define NOMINMAX
 #include "Editor.h"
 
@@ -521,6 +522,26 @@ void Editor::RenderPathTracingSettings()
             m_RenderTime = 0.0f;
         });
     }
+
+    static bool enableMeshMIS = m_PathTracer.IsMeshMISEnabled();
+    if (ImGui::Checkbox("Enable Mesh MIS", &enableMeshMIS))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetMeshMIS(enableMeshMIS, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+
+    ImGui::BeginDisabled(!enableMeshMIS);
+    static float emissiveMeshSamplingPDFBias = m_PathTracer.GetEmissiveMeshSamplingPDFBias();
+    if (ImGui::SliderFloat("Emissive Mesh Sampling PDF Bias", &emissiveMeshSamplingPDFBias, 0.0f, 5.0f, "%.2f"))
+    {
+        PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
+            m_PathTracer.SetEmissiveMeshSamplingPDFBias(emissiveMeshSamplingPDFBias, commandBuffer);
+            m_RenderTime = 0.0f;
+        });
+    }
+    ImGui::EndDisabled();
 
     static bool areRayQueriesSupported = m_Device.AreRayQueriesSupported();
 

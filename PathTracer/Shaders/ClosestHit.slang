@@ -8,8 +8,6 @@ import Atmosphere;
 
 import Bindings;
 
-#define ENABLE_MESH_MIS
-
 float2 getSphericalUv(float3 v)
 {
     float gamma = asin(-v.y);
@@ -37,7 +35,8 @@ void Main(inout Payload payload, in float2 attrib)
         if (payload.QueryDistance)
         {
             payload.DistanceToSurface = RayTCurrent();
-            payload.InstanceIndex = InstanceIndex();
+            payload.TriangleIdx = PrimitiveIndex();
+            payload.InstanceIdx = InstanceIndex();
             return;
         }
     }
@@ -134,12 +133,15 @@ void Main(inout Payload payload, in float2 attrib)
         skyValue.rgb *= uUBO.EnvironmentIntensity;
 
         toSkyDirectionTangent = surface.WorldToTangent(toSkyDirectionWorld);
-        canHitSky = toSkyDirectionTangent.z > 0.0f;
-
-        if (canHitSky)
         {
             uint temp;
-            canHitSky = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toSkyDirectionWorld, temp);
+            uint temp1;
+            canHitSky = !DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toSkyDirectionWorld, temp, temp1);
+        }
+
+        if (!canHitSky)
+        {
+            skyValue = float4(0.0f, 0.0f, 0.0f, 0.0f);
         }
     }
     #endif
@@ -153,21 +155,32 @@ void Main(inout Payload payload, in float2 attrib)
     float3 toLightDirectionTangent;
     float4 lightColorPDF;
     bool canHitLight = false;
+    float tempDistance;
     #ifdef ENABLE_MESH_MIS
     if (!isLightSource)
     {
+        uint lightTriangleIndex;
         uint lightInstanceIndex;
-        payload.Sampler.SampleEmissiveTriangle(surface.GetWorldPos(), toLightDirectionWorld, lightColorPDF, lightInstanceIndex);
+        tempDistance = payload.Sampler.SampleEmissiveTriangle(surface.GetWorldPos(), toLightDirectionWorld, lightColorPDF, lightTriangleIndex, lightInstanceIndex);
 
         if (lightColorPDF.a > 0.0f)
         {
             toLightDirectionTangent = surface.WorldToTangent(toLightDirectionWorld);
-            canHitLight = toLightDirectionTangent.z > 0.0f;
-            if (canHitLight)
+
             {
+                uint hitTriangleIndex;
                 uint hitInstanceIndex;
-                DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + surface.GetNormal() * 1e-5, toLightDirectionWorld, hitInstanceIndex);
-                canHitLight = lightInstanceIndex == hitInstanceIndex;
+                bool foundIntersection = DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + toLightDirectionWorld * 1e-5, toLightDirectionWorld, hitTriangleIndex, hitInstanceIndex);
+                
+                if (foundIntersection)
+                    canHitLight = lightTriangleIndex == hitTriangleIndex && lightInstanceIndex == hitInstanceIndex;
+                else
+                    canHitLight = false;
+            }
+
+            if (!canHitLight)
+            {
+                lightColorPDF = float4(0.0f, 0.0f, 0.0f, 0.0f);
             }
         }
     }
@@ -185,12 +198,10 @@ void Main(inout Payload payload, in float2 attrib)
 
     // Sample the microsurface
     float3 H = payload.Sampler.GGXSampleAnisotopic(V, material.Ax, material.Ay);
-
-    // Choose sampling probabilities for each lobe
-    float FDielectric = material.DielectricFresnel(dot(V, H));
     
     // Sample and evaluate scattering
-    BxDFSample scatterSample = material.SampleBSDF(payload.Sampler, V, H, FDielectric);
+    BSDFComponent sampledComponent;
+    BxDFSample scatterSample = material.SampleBSDF(payload.Sampler, V, H, sampledComponent);
     bool wasRefracted = scatterSample.L.z < 0.0f;
 
     if (wasRefracted && surface.WasHitFromInside())
@@ -211,7 +222,7 @@ void Main(inout Payload payload, in float2 attrib)
     #ifdef ENABLE_SKY_MIS
     if (canHitSky)
     {
-        skyDirectionEval = material.EvaluateBSDF(V, H, toSkyDirectionTangent, FDielectric);
+        skyDirectionEval = material.EvaluateBSDF(V, toSkyDirectionTangent);
     }
     #endif
 
@@ -220,7 +231,7 @@ void Main(inout Payload payload, in float2 attrib)
     #ifdef ENABLE_MESH_MIS
     if (canHitLight && !isLightSource)
     {
-        lightDirectionEval = material.EvaluateBSDF(V, H, toLightDirectionTangent, FDielectric);
+        lightDirectionEval = material.EvaluateBSDF(V, toLightDirectionTangent);
     }
     #endif
 
@@ -235,30 +246,52 @@ void Main(inout Payload payload, in float2 attrib)
     const float3 newDir = surface.TangentToWorld(scatterSample.L);
 
     #ifdef ENABLE_MESH_MIS
-    if (payload.Depth == 0 && isLightSource)
     {
-        // If the first hit is a light source we have to add its emission directly since MIS can't handle this case
-        payload.Emitted += float3(material.Properties.EmissiveColor);
-    }
-    else if (isLightSource)
-    {
-        // When BSDF sampling hits a light source, we need to compute the MIS weight
-        // This prevents double-counting with direct light sampling
+        if (payload.Depth == 0 && isLightSource)
+        {
+            // If the first hit is a light source we have to add its emission directly since MIS can't handle this case
+            payload.Emitted += float3(material.Properties.EmissiveColor);
+        }
+        else if (isLightSource)
+        {
+            // When BSDF sampling hits a light source, we need to compute the MIS weight
+            // This prevents double-counting with direct light sampling
 
-        float3 edge1 = surface.GetV2().Position - surface.GetV1().Position;
-        float3 edge2 = surface.GetV3().Position - surface.GetV1().Position;
-        float area = length(cross(edge1, edge2)) * 0.5f;
+            float3 v1 = surface.GetV1().Position;
+            float3 v2 = surface.GetV2().Position;
+            float3 v3 = surface.GetV3().Position;
 
-        float distanceSquared = dot(surface.GetWorldPos() - payload.Origin, surface.GetWorldPos() - payload.Origin);
-        float cosTheta = abs(dot(surface.GetNormal(), normalize(payload.Origin - surface.GetWorldPos())));
+            // Apply transform to get world space positions
+            v1 = mul(ObjectToWorld3x4(), float4(v1, 1.0f)).xyz;
+            v2 = mul(ObjectToWorld3x4(), float4(v2, 1.0f)).xyz;
+            v3 = mul(ObjectToWorld3x4(), float4(v3, 1.0f)).xyz;
 
-        // Calculate the PDF if this light was sampled directly
-        float lightSamplingPDF = (1.0f / float(uUBO.EmissiveMeshCount)) * 
-                                (1.0f / float(uUBO.TotalEmissiveTriangleCount)) * 
-                                (1.0f / area) * 
-                                (distanceSquared / max(cosTheta, 1e-8f));
-        
-        payload.Emitted += float3(material.Properties.EmissiveColor) * PowerHeuristics(payload.PDF, lightSamplingPDF);
+            float3 edge1 = v2 - v1;
+            float3 edge2 = v3 - v1;
+            float area = length(cross(edge1, edge2)) * 0.5f;
+
+            float distanceSquared = dot(surface.GetWorldPos() - payload.Origin, surface.GetWorldPos() - payload.Origin);
+
+            float cosTheta = abs(dot(surface.GetNormal(), normalize(payload.Origin - surface.GetWorldPos())));
+
+            // Find mesh index
+            EmissiveMeshEntry emissiveMesh;
+            for (int i = 0; i < uUBO.EmissiveMeshCount; i++)
+            {
+                if (uEmissiveMeshes[NonUniformResourceIndex(i)].InstanceIndex == instanceIndex)
+                {
+                    emissiveMesh = uEmissiveMeshes[NonUniformResourceIndex(i)];
+                    break;
+                }
+            }
+
+            // Calculate the PDF if this light was sampled directly
+            float lightSamplingPDF = (1.0f / float(uUBO.EmissiveMeshCount)) * (1.0f / float(emissiveMesh.TriangleCount)) * (1.0f / area) * (distanceSquared / cosTheta);
+
+            lightSamplingPDF = max(lightSamplingPDF, uUBO.EmissiveMeshSamplingPDFBias);
+
+            payload.Emitted += float3(material.Properties.EmissiveColor) * PowerHeuristics(payload.PDF, lightSamplingPDF);
+        }
     }
     #else
     {
@@ -319,6 +352,7 @@ void Main(inout Payload payload, in float2 attrib)
         // I can't imagine a scene with a light so bright that transmittance from atmosphere would matter
         // since it would have to be visible from really far away
 
+        // Ignore MIS weight, have to fix this first
         payload.Emitted += (lightDirectionEval.BxDF * transmittance * lightColorPDF.rgb / lightColorPDF.a) * PowerHeuristics(lightColorPDF.a, lightDirectionEval.PDF);
     }
     #endif

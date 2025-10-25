@@ -28,7 +28,8 @@ public struct Payload
     // 0 = R, 1 = G, 2 = B.
     public int ColorChannel;
 
-    public uint InstanceIndex; // The instance index of the hit geometry, needed for emissive meshes MIS
+    public uint TriangleIdx; // The index of the hit triangle, needed for emissive meshes MIS
+    public uint InstanceIdx;
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)
@@ -41,8 +42,9 @@ public float3 Rotate(float3 v, float3 axis, float theta)
     return (v * cosTheta) + (cross(normalizedAxis, v) * sinTheta) + (normalizedAxis * dot(normalizedAxis, v)) * (1.0f - cosTheta);
 }
 
-public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction, out uint hitInstanceIndex)
+public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in float3 origin, in float3 direction, out uint hitTriangleIdx, out uint hitInstanceIndex)
 {
+    hitTriangleIdx = 0;
     hitInstanceIndex = 0;
 
     #ifdef USE_RAY_QUERIES
@@ -52,7 +54,8 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
         query.Proceed();
         if (query.CommittedStatus() != COMMITTED_NOTHING)
         {
-            hitInstanceIndex = query.CommittedInstanceID();
+            hitTriangleIdx = query.CommittedPrimitiveIndex();
+            hitInstanceIndex = query.CommittedInstanceIndex();
             return true;
         }
         return false;
@@ -70,7 +73,8 @@ public bool DoesRayIntersectWithAS(in RaytracingAccelerationStructure as, in flo
 
         TraceRay(as, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xff, 0u, 0u, 1u, rayDesc, payload);
 
-        hitInstanceIndex = payload.InstanceIndex;
+        hitTriangleIdx = payload.TriangleIdx;
+        hitInstanceIndex = payload.InstanceIdx;
         
         return payload.Depth == 0;
     }

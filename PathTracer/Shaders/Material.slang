@@ -17,6 +17,15 @@ public struct BxDFEval
     public float PDF;
 }
 
+public enum BSDFComponent
+{
+    Metallic,
+    Diffuse,
+    SpecularDielectric,
+    GlassReflect,
+    GlassRefract
+};
+
 // TODO: Don't copy the entire CPUMaterial struct
 public struct Material
 {
@@ -59,8 +68,8 @@ public struct Material
         Properties.EmissiveColor *= uTextures[NonUniformResourceIndex(Properties.EmissiveTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
 
         const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
-        Ax = max(0.001, Properties.Roughness / aspect);
-        Ay = max(0.001, Properties.Roughness * aspect);
+        Ax = max(0.00001, Properties.Roughness / aspect);
+        Ay = max(0.00001, Properties.Roughness * aspect);
 
         #ifdef FURNACE_TEST_MODE
         {
@@ -78,7 +87,7 @@ public struct Material
     //
     //
 
-    public BxDFSample SampleBSDF(inout Sampler sampler, in float3 V, in float3 H, in float FDielectric)
+    public BxDFSample SampleBSDF(inout Sampler sampler, in float3 V, in float3 H, out BSDFComponent sampledComponent)
     {
         // Compute sampling probabilities
         float metallicProbability = Properties.Metallic;
@@ -91,13 +100,17 @@ public struct Material
         dielectricProbability /= probabilitySum;
         glassProbability /= probabilitySum;
 
+        float FDielectric = DielectricFresnel(dot(V, H));
+
         float x1 = sampler.UniformFloat();
 
         float3 L;
+        bool refracted = false;
         if (x1 < metallicProbability)
         {
             // Sample metallic lobe
             L = normalize(reflect(-V, H));
+            sampledComponent = BSDFComponent::Metallic;
         }
         else if (x1 < metallicProbability + dielectricProbability)
         {
@@ -106,11 +119,13 @@ public struct Material
             {
                 // Reflect
                 L = normalize(reflect(-V, H));
+                sampledComponent = BSDFComponent::SpecularDielectric;
             }
             else
             {
                 // Scatter diffusely
                 L = sampler.RandomHemisphereVecCosineWeight(float3(0.0f, 0.0f, 1.0f));
+                sampledComponent = BSDFComponent::Diffuse;
             }
         }
         else
@@ -119,19 +134,33 @@ public struct Material
             {
                 // Reflect
                 L = normalize(reflect(-V, H));
+                sampledComponent = BSDFComponent::GlassReflect;
             }
             else
             {
                 // Refract
                 L = normalize(refract(-V, H, Eta));
+                sampledComponent = BSDFComponent::GlassRefract;
+                refracted = true;
             }
         }
 
-        BxDFEval scatteringEval = EvaluateBSDF(V, H, L, FDielectric);
+        if (L.z < 0.0f && !refracted)
+        {
+            // Invalid reflection direction
+            return { float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), 0.0f };
+        }
+        else if (refracted && L.z >= 0.0f)
+        {
+            // Invalid refraction direction
+            return { float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), 0.0f };
+        }
+
+        BxDFEval scatteringEval = EvaluateBSDF(V, L);
         return { L, scatteringEval.BxDF, scatteringEval.PDF };
     }
 
-    public BxDFEval EvaluateBSDF(in float3 V, in float3 H, in float3 L, in float FDielectric)
+    public BxDFEval EvaluateBSDF(in float3 V, in float3 L)
     {
         // Compute sampling probabilities
         float metallicProbability = Properties.Metallic;
@@ -144,7 +173,31 @@ public struct Material
         dielectricProbability /= probabilitySum;
         glassProbability /= probabilitySum;
 
-        BxDFEval scatterDirectionEval = {0, 0};
+        bool refracted = L.z < 0.0f;
+        float3 H;
+        bool validRefraction = false;
+
+        if (refracted)
+        {
+            H = normalize(Eta * V + L);
+            if (H.z < 0.0f)
+                H = -H;
+                
+            float VdotH = dot(V, H);
+            float LdotH = dot(L, H);
+            
+            // For refraction to be valid both V and L must be on opposite sides of H, and that's sometimes not the case
+            // with NEE
+            validRefraction = (VdotH > 0.0f && LdotH < 0.0f) || (VdotH < 0.0f && LdotH > 0.0f);
+        }
+        else
+        {
+            H = normalize(V + L);
+        }
+
+        float FDielectric = DielectricFresnel(abs(dot(V, H)));
+
+        BxDFEval directionEval = {0, 0};
         {
             float glassEnergyCompensation;
             #ifdef USE_ENERGY_COMPENSATION
@@ -163,24 +216,31 @@ public struct Material
             #endif
 
             // Metallic
+            if (!refracted)
             {
-                BxDFEval metallicEval = EvaluateMetallic(V, H, L);
-                scatterDirectionEval.BxDF += metallicEval.BxDF * metallicProbability;
-                scatterDirectionEval.PDF += metallicEval.PDF * metallicProbability;
+                BxDFEval metallicEval = EvaluateMetallic(V, L);
+                directionEval.BxDF += metallicEval.BxDF * metallicProbability;
+                directionEval.PDF += metallicEval.PDF * metallicProbability;
             }
+            
             // Diffuse
+            if (!refracted)
             {
-                BxDFEval diffuseEval = EvaluateDiffuse(V, H, L);
-                scatterDirectionEval.BxDF += diffuseEval.BxDF * dielectricProbability * (1.0f - FDielectric);
-                scatterDirectionEval.PDF += diffuseEval.PDF * dielectricProbability * (1.0f - FDielectric);
+                BxDFEval diffuseEval = EvaluateDiffuse(V, L);
+                directionEval.BxDF += diffuseEval.BxDF * dielectricProbability * (1.0f - FDielectric);
+                directionEval.PDF += diffuseEval.PDF * dielectricProbability * (1.0f - FDielectric);
             }
+            
             // Specular Dielectric
+            if (!refracted)
             {
-                BxDFEval specularEval = EvaluateDielectricReflection(V, H, L);
-                scatterDirectionEval.BxDF += specularEval.BxDF * dielectricProbability * FDielectric;
-                scatterDirectionEval.PDF += specularEval.PDF * dielectricProbability * FDielectric;
+                BxDFEval specularEval = EvaluateDielectricReflection(V, L);
+                directionEval.BxDF += specularEval.BxDF * dielectricProbability * FDielectric;
+                directionEval.PDF += specularEval.PDF * dielectricProbability * FDielectric;
             }
+            
             // Glass Reflect
+            if (!refracted)
             {
                 BxDFEval glassEval = EvaluateReflection(V, L, Properties.SpecularColor);
 
@@ -191,10 +251,12 @@ public struct Material
                 }
                 #endif
 
-                scatterDirectionEval.BxDF += glassEval.BxDF * glassProbability * FDielectric;
-                scatterDirectionEval.PDF += glassEval.PDF * glassProbability * FDielectric;
+                directionEval.BxDF += glassEval.BxDF * glassProbability * FDielectric;
+                directionEval.PDF += glassEval.PDF * glassProbability * FDielectric;
             }
+            
             // Glass Refract
+            if (refracted && validRefraction)
             {
                 BxDFEval glassEval = EvaluateRefraction(V, L, Properties.BaseColor);
 
@@ -205,14 +267,14 @@ public struct Material
                 }
                 #endif
 
-                scatterDirectionEval.BxDF += glassEval.BxDF * glassProbability * (1.0f - FDielectric);
-                scatterDirectionEval.PDF += glassEval.PDF * glassProbability * (1.0f - FDielectric);
+                directionEval.BxDF += glassEval.BxDF * glassProbability * (1.0f - FDielectric);
+                directionEval.PDF += glassEval.PDF * glassProbability * (1.0f - FDielectric);
             }
         }
-        return scatterDirectionEval;
+        return directionEval;
     }
 
-    public BxDFEval EvaluateDiffuse(in float3 V, in float3 H, in float3 L)
+    public BxDFEval EvaluateDiffuse(in float3 V, in float3 L)
     {
         float PDF = L.z * M_1_OVER_PI;
         float3 BRDF = M_1_OVER_PI * Properties.BaseColor * L.z;
@@ -222,8 +284,9 @@ public struct Material
         return { BRDF, PDF };
     }
 
-    public BxDFEval EvaluateMetallic(in float3 V, in float3 H, in float3 L)
+    public BxDFEval EvaluateMetallic(in float3 V, in float3 L)
     {
+        float3 H = normalize(V + L);
         float3 F = lerp(Properties.BaseColor, Properties.SpecularColor, SchlickFresnel(dot(V, H)));
 
         BxDFEval eval = EvaluateReflection(V, L, F);
@@ -240,7 +303,7 @@ public struct Material
         return eval;
     }
 
-    public BxDFEval EvaluateDielectricReflection(in float3 V, in float3 H, in float3 L)
+    public BxDFEval EvaluateDielectricReflection(in float3 V, in float3 L)
     {
         BxDFEval eval = EvaluateReflection(V, L, Properties.SpecularColor);
 

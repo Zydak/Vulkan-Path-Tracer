@@ -183,19 +183,6 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     VH_ASSERT(scene.Value().Materials.Size() < MAX_ENTITIES, "Too many materials in the scene: {}! The maximum supported number of materials is {}", scene.Value().Materials.Size(), MAX_ENTITIES);
     VH_ASSERT(scene.Value().MeshInstances.Size() < MAX_INSTANCES, "Too many mesh instances in the scene: {}! The maximum supported number of mesh instances is {}", scene.Value().MeshInstances.Size(), MAX_INSTANCES);
 
-    // Apply transforms to meshes
-    for (auto& instance : scene.Value().MeshInstances)
-    {
-        if (instance.MeshIndex < scene.Value().Meshes.Size())
-        {
-            for (auto& vertex : scene.Value().Meshes[instance.MeshIndex].Vertices)
-            {
-                vertex.Position = glm::vec3(instance.Transform * glm::vec4(vertex.Position, 1.0f));
-                vertex.Normal = glm::mat3(glm::transpose(glm::inverse(instance.Transform))) * vertex.Normal;
-            }
-        }
-    }
-
     // Load Camera values
     const float aspectRatio = scene.Value().Cameras[0].AspectRatio;
     m_CameraViewInverse = glm::inverse(scene.Value().Cameras[0].ViewMatrix);
@@ -469,7 +456,13 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         {
             uint32_t triangleCount = (uint32_t)((m_SceneMeshes[instance.MeshIndex].GetIndexBuffer().GetSize() / sizeof(uint32_t)) / 3);
             emissiveTriangleCount += triangleCount;
-            m_EmissiveMeshes.push_back({ .MeshIndex = instance.MeshIndex, .MaterialIndex = instance.MaterialIndex, .TriangleCount = triangleCount, .InstanceIndex = index });
+            m_EmissiveMeshes.push_back({
+                .MeshIndex = instance.MeshIndex,
+                .MaterialIndex = instance.MaterialIndex,
+                .TriangleCount = triangleCount,
+                .InstanceIndex = index,
+                .Transform = instance.Transform
+            });
         }
 
         blasConfigs.PushBack({});
@@ -482,11 +475,12 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         blasConfig.VertexSize = sizeof(VulkanHelper::LoadedMeshVertex);
         blasConfig.EnableCompaction = true;
 
-        modelMatrices.PushBack(glm::mat4(1.0f));
+        modelMatrices.PushBack(instance.Transform);
         index++;
     }
 
-    UploadDataToBuffer(m_EmissiveMeshesBuffer, m_EmissiveMeshes.data(), (uint32_t)m_EmissiveMeshes.size() * sizeof(EmissiveMeshEntry), 0, initializationCmd);
+    if (m_EmissiveMeshes.size() > 0)
+        UploadDataToBuffer(m_EmissiveMeshesBuffer, m_EmissiveMeshes.data(), (uint32_t)m_EmissiveMeshes.size() * sizeof(EmissiveMeshEntry), 0, initializationCmd);
 
     VulkanHelper::BLASBuilder blasBuilder = VulkanHelper::BLASBuilder::New({ .Device = m_Device }).Value();
     auto buildResult = blasBuilder.Build(blasConfigs.Data(), (uint32_t)blasConfigs.Size(), computeCmd);
@@ -604,6 +598,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.ScreenChunkCount = m_ScreenChunkCount;
     pathTracerUniform.EmissiveMeshCount = (uint32_t)m_EmissiveMeshes.size();
     pathTracerUniform.TotalEmissiveTriangleCount = emissiveTriangleCount;
+    pathTracerUniform.EmissiveMeshSamplingPDFBias = m_EmissiveMeshSamplingPDFBias;
 
     // Create a staging buffer to upload uniform data
     VulkanHelper::Buffer::Config uniformStagingBufferConfig{};
@@ -623,6 +618,8 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     std::vector<VulkanHelper::Shader::Define> defines;
     if (m_EnableEnvMapMIS)
         defines.push_back({"ENABLE_SKY_MIS", "1"});
+    if (m_EnableMeshMIS)
+        defines.push_back({"ENABLE_MESH_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_UseOnlyGeometryNormals)
@@ -995,6 +992,8 @@ void PathTracer::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
 
     if (m_EnableEnvMapMIS)
         defines.push_back({"ENABLE_SKY_MIS", "1"});
+    if (m_EnableMeshMIS)
+        defines.push_back({"ENABLE_MESH_MIS", "1"});
     if (m_ShowEnvMapDirectly)
         defines.push_back({"SHOW_ENV_MAP_DIRECTLY", "1"});
     if (m_UseOnlyGeometryNormals)
@@ -1540,6 +1539,13 @@ void PathTracer::SetSkyMIS(bool value, VulkanHelper::CommandBuffer commandBuffer
     ReloadShaders(commandBuffer);
 }
 
+void PathTracer::SetMeshMIS(bool value, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_EnableMeshMIS = value;
+    ResetPathTracing();
+    ReloadShaders(commandBuffer);
+}
+
 void PathTracer::SetEnvMapShownDirectly(bool value, VulkanHelper::CommandBuffer commandBuffer)
 {
     m_ShowEnvMapDirectly = value;
@@ -1695,5 +1701,12 @@ void PathTracer::SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer
 {
     m_SunColor = color;
     UploadDataToBuffer(m_PathTracerUniformBuffer, (void*)&color, sizeof(glm::vec3), offsetof(PathTracerUniform, SunColor), commandBuffer);
+    ResetPathTracing();
+}
+
+void PathTracer::SetEmissiveMeshSamplingPDFBias(float bias, VulkanHelper::CommandBuffer commandBuffer)
+{
+    m_EmissiveMeshSamplingPDFBias = bias;
+    UploadDataToBuffer(m_PathTracerUniformBuffer, &bias, sizeof(float), offsetof(PathTracerUniform, EmissiveMeshSamplingPDFBias), commandBuffer);
     ResetPathTracing();
 }

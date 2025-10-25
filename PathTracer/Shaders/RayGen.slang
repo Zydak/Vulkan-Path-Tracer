@@ -118,7 +118,7 @@ void Main()
     float3 color;
     if (uPushConstants.FrameCount > 0)
     {
-        float a = 1.0f / float(uPushConstants.FrameCount);
+        float a = 1.0f / float(uPushConstants.FrameCount + 1);
         color = lerp(prevColor, accumulatedLight, a);
     }
     else
@@ -242,7 +242,6 @@ bool ScatteredInVolume(inout Payload payload)
     return false;
 }
 
-#define ENABLE_MESH_MIS
 void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance, int scatteredVolumeIndex)
 {
     payload.Origin += payload.Direction * scatterDistance;
@@ -257,7 +256,8 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
         skyColorPdf.rgb *= uUBO.EnvironmentIntensity;
 
         uint temp;
-        bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toSkyDir, temp);
+        uint temp1;
+        bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toSkyDir, temp, temp1);
 
         if (isObscuredByGeometry)
         {
@@ -271,12 +271,14 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     float4 lightColorPdf;
     #ifdef ENABLE_MESH_MIS
     {
-        uint lightInstanceIndex;
-        payload.Sampler.SampleEmissiveTriangle(payload.Origin, toLightDir, lightColorPdf, lightInstanceIndex);
+        uint lightTriangleIndex;
+        uint instanceIndex;
+        payload.Sampler.SampleEmissiveTriangle(payload.Origin, toLightDir, lightColorPdf, lightTriangleIndex, instanceIndex);
 
+        uint hitTriangleIndex;
         uint hitInstanceIndex;
-        DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightDir, hitInstanceIndex);
-        bool isObscuredByGeometry = hitInstanceIndex != lightInstanceIndex;
+        DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, toLightDir, hitTriangleIndex, hitInstanceIndex);
+        bool isObscuredByGeometry = hitTriangleIndex != lightTriangleIndex || hitInstanceIndex != instanceIndex;
 
         if (isObscuredByGeometry)
         {
@@ -383,7 +385,8 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         colorPdf.rgb *= uUBO.EnvironmentIntensity;
 
         uint temp;
-        bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, skyDirSampled, temp);
+        uint temp1;
+        bool isObscuredByGeometry = DoesRayIntersectWithAS(uTopLevelAS, payload.Origin, skyDirSampled, temp, temp1);
 
         float3 transmittanceToSun = float3(1.0f);
         if (!isObscuredByGeometry)

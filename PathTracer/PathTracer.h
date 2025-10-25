@@ -138,6 +138,8 @@ public:
     [[nodiscard]] inline float GetOzoneDensityFalloff() const { return m_OzoneDensityFalloff; }
     [[nodiscard]] inline float GetOzonePeak() const { return m_OzonePeak; }
     [[nodiscard]] inline const glm::vec3& GetSunColor() const { return m_SunColor; }
+    [[nodiscard]] inline bool IsMeshMISEnabled() const { return m_EnableMeshMIS; }
+    [[nodiscard]] inline float GetEmissiveMeshSamplingPDFBias() const { return m_EmissiveMeshSamplingPDFBias; }
 
     void SetMaxSamplesAccumulated(uint32_t maxSamples);
     void SetMaxDepth(uint32_t maxDepth, VulkanHelper::CommandBuffer commandBuffer);
@@ -171,6 +173,8 @@ public:
     void SetOzoneDensityFalloff(float falloff, VulkanHelper::CommandBuffer commandBuffer);
     void SetOzonePeak(float peak, VulkanHelper::CommandBuffer commandBuffer);
     void SetSunColor(const glm::vec3& color, VulkanHelper::CommandBuffer commandBuffer);
+    void SetMeshMIS(bool enabled, VulkanHelper::CommandBuffer commandBuffer);
+    void SetEmissiveMeshSamplingPDFBias(float bias, VulkanHelper::CommandBuffer commandBuffer);
 
     void ResetPathTracing() { m_FrameCount = 0; m_DispatchCount = 0; m_SamplesAccumulated = 0; }
 
@@ -201,6 +205,7 @@ private:
     float m_SkyRotationAzimuth = 0.0f;
     float m_SkyRotationAltitude = 0.0f;
     bool m_EnableEnvMapMIS = true;
+    bool m_EnableMeshMIS = true;
     bool m_ShowEnvMapDirectly = true;
     bool m_UseOnlyGeometryNormals = false;
     bool m_UseEnergyCompensation = true;
@@ -221,6 +226,7 @@ private:
     float m_MieDensityFalloff = 1200.0f; // In meters
     float m_OzoneDensityFalloff = 5000.0f; // In meters
     float m_OzonePeak = 22000.0f; // In meters
+    float m_EmissiveMeshSamplingPDFBias = 1.000f;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -288,6 +294,7 @@ private:
         uint32_t ScreenChunkCount;
         uint32_t EmissiveMeshCount;
         uint32_t TotalEmissiveTriangleCount;
+        float EmissiveMeshSamplingPDFBias;
     };
 
     struct PushConstantData
@@ -313,6 +320,7 @@ private:
         uint32_t MaterialIndex;
         uint32_t TriangleCount;
         uint32_t InstanceIndex;
+        glm::mat4 Transform;
     };
     std::vector<EmissiveMeshEntry> m_EmissiveMeshes;
     VulkanHelper::Buffer m_EmissiveMeshesBuffer;

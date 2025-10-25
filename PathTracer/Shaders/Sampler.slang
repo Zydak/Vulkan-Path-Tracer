@@ -346,25 +346,28 @@ public struct Sampler
     }
 
     [mutating]
-    public void SampleEmissiveTriangle(in float3 position, out float3 toLight, out float4 colorPDF, out uint lightInstanceIndex)
+    public float SampleEmissiveTriangle(in float3 position, out float3 toLight, out float4 colorPDF, out uint sampledTriangleIndex, out uint sampledInstanceIndex)
     {
-        lightInstanceIndex = UINT_MAX;
-        uint emissiveMeshCount = uUBO.EmissiveMeshCount;
+        sampledTriangleIndex = UINT_MAX;
+        sampledInstanceIndex = UINT_MAX;
+        const uint emissiveMeshCount = uUBO.EmissiveMeshCount;
         if (emissiveMeshCount == 0)
         {
             toLight = float3(0, 0, 0);
             colorPDF = float4(0, 0, 0, 0);
-            return;
+            return -1;
         }
 
         // Pick a random emissive mesh
-        uint meshIdx = min(uint(UniformFloat() * float(emissiveMeshCount)), emissiveMeshCount - 1);
+        uint meshIdx = min((uint)floor(UniformFloat() * float(emissiveMeshCount)), emissiveMeshCount - 1);
         EmissiveMeshEntry emissiveMesh = uEmissiveMeshes[meshIdx];
 
-        lightInstanceIndex = emissiveMesh.InstanceIndex;
+        sampledInstanceIndex = emissiveMesh.InstanceIndex;
 
         // Pick a random triangle in the mesh
-        uint triangleIdx = min(uint(UniformFloat() * float(emissiveMesh.TriangleCount)), emissiveMesh.TriangleCount - 1);
+        uint triangleIdx = min((uint)floor(UniformFloat() * float(emissiveMesh.TriangleCount)), emissiveMesh.TriangleCount - 1);
+
+        sampledTriangleIndex = triangleIdx;
 
         // Get the actual mesh and material indices
         const uint materialIndex = emissiveMesh.MaterialIndex;
@@ -382,6 +385,11 @@ public struct Sampler
         Vertex v1 = vertices[i1];
         Vertex v2 = vertices[i2];
 
+        // Apply Transform
+        v0.Position = mul(emissiveMesh.Transform, float4(v0.Position, 1.0f)).xyz;
+        v1.Position = mul(emissiveMesh.Transform, float4(v1.Position, 1.0f)).xyz;
+        v2.Position = mul(emissiveMesh.Transform, float4(v2.Position, 1.0f)).xyz;
+
         // Sample a point on the triangle
         float2 xi = UniformFloat2();
         float su1 = sqrt(xi.x);
@@ -390,6 +398,7 @@ public struct Sampler
         float b2 = 1.0f - b0 - b1;
 
         float3 trianglePosition = b0 * v0.Position + b1 * v1.Position + b2 * v2.Position;
+
         toLight = normalize(trianglePosition - position);
 
         float3 normal = normalize(cross(v2.Position - v0.Position, v1.Position - v0.Position));
@@ -401,16 +410,16 @@ public struct Sampler
 
         // Compute PDF in solid angle measure
         float distanceSquared = dot(trianglePosition - position, trianglePosition - position);
-        float cosTheta = abs(dot(normal, toLight));
-        
-        // PDF = (1/numMeshes) * (1/numTriangles) * (1/area) * (r²/cos(theta))
-        colorPDF.a = (1.0f / float(emissiveMeshCount)) * 
-                     (1.0f / float(uUBO.TotalEmissiveTriangleCount)) * 
-                     (1.0f / area) * 
-                     (distanceSquared / max(cosTheta, 1e-8f));
 
-        // Fetch the material emissive color (without cosine - that's handled by BSDF)
+        float cosTheta = abs(dot(normal, toLight));
+
+        colorPDF.a = distanceSquared / (float(emissiveMeshCount) * float(emissiveMesh.TriangleCount) * area * cosTheta);
+
+        colorPDF.a = max(colorPDF.a, uUBO.EmissiveMeshSamplingPDFBias);
+
         colorPDF.rgb = uMaterials[emissiveMesh.MaterialIndex].EmissiveColor;
+
+        return sqrt(distanceSquared);
     }
 
     [mutating]
