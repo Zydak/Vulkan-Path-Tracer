@@ -1306,6 +1306,7 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     
     // Precompute max densities for empty space skipping
     float maxDensity = openvdb::tools::minMax(floatGridDensity->tree(), true).max();
+    volume.MaxDensityInTheGrid = maxDensity;
     
     float minTemperature = 0.0f;
     float maxTemperature = 0.0f;

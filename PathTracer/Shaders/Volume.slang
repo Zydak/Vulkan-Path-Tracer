@@ -31,6 +31,7 @@ public struct Volume
     float m_DropletSize;
 
     int m_DensityDataIndex; // -1 if homogeneous
+    float m_MaxDensityInTheGrid;
 
     // I have no clue why I can't use bool here, the layout ends up incorrect even tho I use ScalarDataLayout
     int m_UseBlackbody; // 1 to use blackbody radiation, 0 to use m_TemperatureColor
@@ -109,7 +110,7 @@ public struct Volume
         // Read the value
         float value = pnanovdb_read_float(gridBuffer, valueAddr);
 
-        return clamp(value, 0.0f, 1.0f);
+        return clamp(value / m_MaxDensityInTheGrid, 0.0f, 1.0f);
     }
 
     // Helper function to create traversal context

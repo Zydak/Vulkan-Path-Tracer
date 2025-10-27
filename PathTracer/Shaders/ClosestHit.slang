@@ -314,7 +314,7 @@ void Main(inout Payload payload, in float2 attrib)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
             int tempCollisionCount = 0;
-            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, payload.Depth, tempCollisionCount);
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, 0, tempCollisionCount);
 
             #ifdef ENABLE_ATMOSPHERE
             {
@@ -346,7 +346,7 @@ void Main(inout Payload payload, in float2 attrib)
     {
         // Calculate transmittance along the light ray for shadow effects
         int tempCollisionCount = 0;
-        float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDirectionWorld, payload.Depth, tempCollisionCount);
+        float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDirectionWorld, 0, tempCollisionCount);
 
         // Ignore the atmosphere for emissive meshes
         // I can't imagine a scene with a light so bright that transmittance from atmosphere would matter

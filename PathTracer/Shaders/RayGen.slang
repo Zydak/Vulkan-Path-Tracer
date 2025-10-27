@@ -53,6 +53,7 @@ void Main()
         payload.InMedium = false;
         payload.QueryDistance = false;
         payload.ColorChannel = -1; // Start with all channels being tracked
+        payload.VolumeDepth = 0;
 
         float3 pathThroughput = 1.0f;
         float3 pathLight = 0.0f;
@@ -288,10 +289,10 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     #endif
 
     // Sample scattering direction
-    const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler, payload.Depth);
+    const float3 newDir = uVolumes[scatteredVolumeIndex].GetScatteringDirection(payload.Direction, payload.Sampler, payload.VolumeDepth);
 
     // Evaluate scatter direction
-    float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir, payload.Depth);
+    float phaseSampledDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, newDir, payload.VolumeDepth);
     float3 sampledDirBxDF = uVolumes[scatteredVolumeIndex].GetColor() * phaseSampledDir;
     float sampledDirPDF = phaseSampledDir;
 
@@ -299,12 +300,12 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     #ifdef ENABLE_SKY_MIS
     if (skyColorPdf.a > 0.0f)
     {
-        float phaseSkyDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toSkyDir, payload.Depth);
+        float phaseSkyDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toSkyDir, payload.VolumeDepth);
 
         // Transmittance along the ray has to be accounted for
         float3 transmittance;
         int tempCollisionCount = 0;
-        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDir, payload.Depth, tempCollisionCount);
+        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDir, payload.VolumeDepth, tempCollisionCount);
 
         #ifdef ENABLE_ATMOSPHERE
         {
@@ -336,11 +337,11 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     #ifdef ENABLE_MESH_MIS
     if (lightColorPdf.a > 0.0f)
     {
-        float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightDir, payload.Depth);
+        float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightDir, payload.VolumeDepth);
         // Transmittance along the ray has to be accounted for
         float3 transmittance;
         int tempCollisionCount = 0;
-        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDir, payload.Depth, tempCollisionCount);
+        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDir, payload.VolumeDepth + 1, tempCollisionCount);
 
         // For emissive meshes ignore the transmittance through atmosphere since the light would have to really really
         // really far away for that to matter, and then the intensity would be negligible anyway.
@@ -358,6 +359,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     payload.PDF = sampledDirPDF;
 
     payload.Depth++;
+    payload.VolumeDepth++;
 }
 
 void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDistance, int componentHit)
@@ -395,7 +397,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, skyDirSampled, payload.ColorChannel);
 
             int tempCollisionCount = 0;
-            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.Depth, tempCollisionCount);
+            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.VolumeDepth, tempCollisionCount);
         }
         else
         {

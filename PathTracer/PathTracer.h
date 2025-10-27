@@ -50,6 +50,7 @@ public:
         float DropletSize = 20.0f;
 
         int DensityDataIndex = -1; // -1 if homogeneous
+        float MaxDensityInTheGrid = 0.0f;
 
         int UseBlackbody = 1;
         int HasTemperatureData = 0;
@@ -346,6 +347,7 @@ private:
         float DropletSize = 20.0f;
 
         int DensityDataIndex = -1; // -1 if homogeneous
+        float MaxDensityInTheGrid = 0.0f;
 
         int UseBlackbody = 1;
         int HasTemperatureData = 0;
@@ -367,6 +369,7 @@ private:
             , EmissiveColor(volume.EmissiveColor)
             , TemperatureColor(volume.TemperatureColor)
             , Density(volume.Density)
+            , MaxDensityInTheGrid(volume.MaxDensityInTheGrid)
             , Anisotropy(volume.Anisotropy)
             , Alpha(volume.Alpha)
             , DropletSize(volume.DropletSize)

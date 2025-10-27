@@ -30,6 +30,8 @@ public struct Payload
 
     public uint TriangleIdx; // The index of the hit triangle, needed for emissive meshes MIS
     public uint InstanceIdx;
+
+    public uint VolumeDepth; // How many scatterings have occurred in the volumes
 };
 
 public float3 Rotate(float3 v, float3 axis, float theta)
