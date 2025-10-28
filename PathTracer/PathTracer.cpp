@@ -441,12 +441,15 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     m_EmissiveMeshes.clear();
     uint32_t index = 0;
 
-    uint32_t emissiveTriangleCount = 0;
+    m_EmissiveTriangleCount = 0;
 
     VulkanHelper::Vector<VulkanHelper::BLAS::Config> blasConfigs;
+    m_SceneMeshInstances.clear();
+    m_SceneMeshInstances.reserve(scene.Value().MeshInstances.Size());
     for (const auto& instance : scene.Value().MeshInstances)
     {
         customIndices.PushBack(index);
+        m_SceneMeshInstances.push_back(instance);
 
         VH_ASSERT(instance.MaterialIndex < m_Materials.size(), "Mesh instance has invalid material index!");
         materialAndMeshIndices.PushBack(instance.MaterialIndex);
@@ -455,7 +458,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
         if (m_Materials[instance.MaterialIndex].EmissiveColor != glm::vec3(0.0f))
         {
             uint32_t triangleCount = (uint32_t)((m_SceneMeshes[instance.MeshIndex].GetIndexBuffer().GetSize() / sizeof(uint32_t)) / 3);
-            emissiveTriangleCount += triangleCount;
+            m_EmissiveTriangleCount += triangleCount;
             m_EmissiveMeshes.push_back({
                 .MeshIndex = instance.MeshIndex,
                 .MaterialIndex = instance.MaterialIndex,
@@ -597,7 +600,7 @@ void PathTracer::SetScene(const std::string& sceneFilePath)
     pathTracerUniform.SkyIntensity = m_SkyIntensity;
     pathTracerUniform.ScreenChunkCount = m_ScreenChunkCount;
     pathTracerUniform.EmissiveMeshCount = (uint32_t)m_EmissiveMeshes.size();
-    pathTracerUniform.TotalEmissiveTriangleCount = emissiveTriangleCount;
+    pathTracerUniform.TotalEmissiveTriangleCount = m_EmissiveTriangleCount;
     pathTracerUniform.EmissiveMeshSamplingPDFBias = m_EmissiveMeshSamplingPDFBias;
 
     // Create a staging buffer to upload uniform data
@@ -708,6 +711,85 @@ void PathTracer::CreateOutputImageView()
 
 void PathTracer::SetMaterial(uint32_t index, const Material& material, VulkanHelper::CommandBuffer commandBuffer)
 {
+    // There is NEE for emissive meshes so GPU needs some additional data on how to sample these meshes
+    // so this info has to be updated if emissive property of the material changes
+    bool emissiveChanged = (m_Materials[index].EmissiveColor != material.EmissiveColor);
+    if (emissiveChanged)
+    {
+        std::vector<std::pair<VulkanHelper::MeshInstance, uint32_t>> emissiveMeshInstances;
+        // Find all meshes in the scene with this material
+        for (int i = 0; i < m_SceneMeshInstances.size(); ++i)
+        {
+            if (m_SceneMeshInstances[i].MaterialIndex == index)
+            {
+                emissiveMeshInstances.push_back({m_SceneMeshInstances[i], i});
+            }
+        }
+
+        // Check if they are already in the emissive meshes list
+        for (const auto& instance : emissiveMeshInstances)
+        {
+            bool found = false;
+            for (const auto& emissiveMesh : m_EmissiveMeshes)
+            {
+                if (emissiveMesh.MeshIndex == instance.first.MeshIndex && emissiveMesh.InstanceIndex == instance.second)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            // New emissive mesh to add
+            if (!found && material.EmissiveColor != glm::vec3(0.0f))
+            {
+                EmissiveMeshEntry emissiveMeshEntry{};
+                emissiveMeshEntry.MeshIndex = instance.first.MeshIndex;
+                emissiveMeshEntry.MaterialIndex = instance.first.MaterialIndex;
+                uint32_t triangleCount = (uint32_t)((m_SceneMeshes[instance.first.MeshIndex].GetIndexBuffer().GetSize() / sizeof(uint32_t)) / 3);
+                emissiveMeshEntry.TriangleCount = triangleCount;
+                emissiveMeshEntry.InstanceIndex = instance.second;
+                emissiveMeshEntry.Transform = instance.first.Transform;
+                m_EmissiveMeshes.push_back(emissiveMeshEntry);
+
+                m_EmissiveTriangleCount += triangleCount;
+            }
+
+            // Emissive mesh to remove
+            else if(found && material.EmissiveColor == glm::vec3(0.0f))
+            {
+                m_EmissiveMeshes.erase(std::remove_if(
+                    m_EmissiveMeshes.begin(),
+                    m_EmissiveMeshes.end(),
+                    [&](const EmissiveMeshEntry& entry)
+                    {
+                        return entry.MeshIndex == instance.first.MeshIndex && entry.InstanceIndex == instance.second;
+                    }
+                ), m_EmissiveMeshes.end());
+
+                m_EmissiveTriangleCount -= (uint32_t)((m_SceneMeshes[instance.first.MeshIndex].GetIndexBuffer().GetSize() / sizeof(uint32_t)) / 3);
+            }
+        }
+
+        // Upload data to the GPU
+        UploadDataToBuffer(
+            m_EmissiveMeshesBuffer,
+            m_EmissiveMeshes.data(),
+            sizeof(EmissiveMeshEntry) * m_EmissiveMeshes.size(),
+            0,
+            commandBuffer
+        );
+
+        // And the uniform
+        struct temp {
+            uint32_t EmissiveMeshCount;
+            uint32_t TotalEmissiveTriangleCount;
+        } updatedData;
+        updatedData.EmissiveMeshCount = (uint32_t)m_EmissiveMeshes.size();
+        updatedData.TotalEmissiveTriangleCount = m_EmissiveTriangleCount;
+
+        UploadDataToBuffer(m_PathTracerUniformBuffer, &updatedData, sizeof(updatedData), offsetof(PathTracerUniform, EmissiveMeshCount), commandBuffer);
+    }
+
     m_Materials[index] = material;
 
     // Create a staging buffer to upload material data

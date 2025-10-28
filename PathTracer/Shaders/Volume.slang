@@ -147,7 +147,7 @@ public struct Volume
     float GetEffectiveAnisotropy(float rayDepth)
     {
         if (m_ApproximatedScattering != 0)
-            return pow(max(m_Anisotropy, 0.0f), 1.0f + rayDepth); // decrease anisotropy with depth for faster rendering
+            return pow(abs(m_Anisotropy), 1.0f + rayDepth) * sign(m_Anisotropy); // decrease anisotropy with depth for faster rendering
         else
             return m_Anisotropy;
     }

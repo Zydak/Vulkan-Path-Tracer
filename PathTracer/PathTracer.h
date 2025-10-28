@@ -227,7 +227,7 @@ private:
     float m_MieDensityFalloff = 1200.0f; // In meters
     float m_OzoneDensityFalloff = 5000.0f; // In meters
     float m_OzonePeak = 22000.0f; // In meters
-    float m_EmissiveMeshSamplingPDFBias = 1.000f;
+    float m_EmissiveMeshSamplingPDFBias = 0.0f;
 
     uint64_t m_TotalVertexCount = 0;
     uint64_t m_TotalIndexCount = 0;
@@ -325,6 +325,9 @@ private:
     };
     std::vector<EmissiveMeshEntry> m_EmissiveMeshes;
     VulkanHelper::Buffer m_EmissiveMeshesBuffer;
+
+    std::vector<VulkanHelper::MeshInstance> m_SceneMeshInstances;
+    uint32_t m_EmissiveTriangleCount = 0;
 
     VulkanHelper::Sampler m_TextureSampler;
     VulkanHelper::Sampler m_LookupTableSampler;

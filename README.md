@@ -43,7 +43,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - BSDF with importance sampling
 - Energy compensation implemented according to [Practical multiple scattering compensation for microfacet models](https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf).
 - HDR Environment Maps with importance sampling
-- NEE for environment map light
+- NEE+MIS for environment maps/atmosphere/emissive meshes
 - Volumetric scattering with importance sampling implemented according to [Production Volume Rendering 2017](https://graphics.pixar.com/library/ProductionVolumeRendering/paper.pdf)
 - Non uniform volumes imported from OpenVDB files.
 - Henyey-Greenstein, Draine, and approximated MIE phase functions implemented according to [An Approximate Mie Scattering Function for Fog and Cloud Rendering](https://research.nvidia.com/labs/rtr/approximate-mie/).
@@ -69,7 +69,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 <img src="./Gallery/GodRays.png"/>
 <img src="./Gallery/Cloud2.png"/>
 <img src="./Gallery/DragonHead.png"/>
-<img src="./Gallery/Cloud3.png">
+<img src="./Gallery/Cloud6.png">
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>

@@ -200,6 +200,7 @@ public float RayleighPhase(float3 V, float3 L)
     return (3.0f / (16.0f * M_PI)) * (1.0f + cosTheta * cosTheta);
 }
 
+// Approximated MIE
 public float PhaseMie(float3 V, float3 L, float g = 0.85f)
 {
     float cosTheta = dot(V, L);
