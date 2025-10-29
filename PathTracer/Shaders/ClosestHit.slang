@@ -351,7 +351,6 @@ void Main(inout Payload payload, in float2 attrib)
         // I can't imagine a scene with a light so bright that transmittance from atmosphere would matter
         // since it would have to be visible from really far away
 
-        // Ignore MIS weight, have to fix this first
         payload.Emitted += (lightDirectionEval.BxDF * transmittance * lightColorPDF.rgb / lightColorPDF.a) * PowerHeuristics(lightColorPDF.a, lightDirectionEval.PDF);
     }
     #endif
