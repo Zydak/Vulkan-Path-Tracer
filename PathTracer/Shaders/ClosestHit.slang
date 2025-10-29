@@ -155,13 +155,12 @@ void Main(inout Payload payload, in float2 attrib)
     float3 toLightDirectionTangent;
     float4 lightColorPDF;
     bool canHitLight = false;
-    float tempDistance;
     #ifdef ENABLE_MESH_MIS
     if (!isLightSource)
     {
         uint lightTriangleIndex;
         uint lightInstanceIndex;
-        tempDistance = payload.Sampler.SampleEmissiveTriangle(surface.GetWorldPos(), toLightDirectionWorld, lightColorPDF, lightTriangleIndex, lightInstanceIndex);
+        payload.Sampler.SampleEmissiveTriangle(surface.GetWorldPos(), toLightDirectionWorld, lightColorPDF, lightTriangleIndex, lightInstanceIndex);
 
         if (lightColorPDF.a > 0.0f)
         {

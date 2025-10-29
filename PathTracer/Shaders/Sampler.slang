@@ -346,7 +346,7 @@ public struct Sampler
     }
 
     [mutating]
-    public float SampleEmissiveTriangle(in float3 position, out float3 toLight, out float4 colorPDF, out uint sampledTriangleIndex, out uint sampledInstanceIndex)
+    public void SampleEmissiveTriangle(in float3 position, out float3 toLight, out float4 colorPDF, out uint sampledTriangleIndex, out uint sampledInstanceIndex)
     {
         sampledTriangleIndex = UINT_MAX;
         sampledInstanceIndex = UINT_MAX;
@@ -355,7 +355,7 @@ public struct Sampler
         {
             toLight = float3(0, 0, 0);
             colorPDF = float4(0, 0, 0, 0);
-            return -1;
+            return;
         }
 
         // Pick a random emissive mesh
@@ -408,18 +408,12 @@ public struct Sampler
         float3 edge2 = v2.Position - v0.Position;
         float area = length(cross(edge1, edge2)) * 0.5f;
 
-        // Compute PDF in solid angle measure
+        // Compute PDF
         float distanceSquared = dot(trianglePosition - position, trianglePosition - position);
-
         float cosTheta = abs(dot(normal, toLight));
-
         colorPDF.a = distanceSquared / (float(emissiveMeshCount) * float(emissiveMesh.TriangleCount) * area * cosTheta);
 
-        colorPDF.a = max(colorPDF.a, uUBO.EmissiveMeshSamplingPDFBias);
-
         colorPDF.rgb = uMaterials[emissiveMesh.MaterialIndex].EmissiveColor;
-
-        return sqrt(distanceSquared);
     }
 
     [mutating]

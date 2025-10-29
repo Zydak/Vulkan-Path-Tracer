@@ -9,15 +9,36 @@ import Bindings;
 [shader("raygeneration")]
 void Main()
 {
-    uint3 size = DispatchRaysDimensions() * uUBO.ScreenSplitCount;
+    uint2 size;
+    uImage.GetDimensions(size.x, size.y);
     uint3 LaunchID = DispatchRaysIndex();
+
+    // Render every second pixel in a grid
+    uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
+
+    LaunchID.x *= uUBO.ScreenSplitCount;
+    LaunchID.y *= uUBO.ScreenSplitCount;
+    LaunchID.x += splitScreenDispatchIndex % uUBO.ScreenSplitCount;
+    LaunchID.y += splitScreenDispatchIndex / uUBO.ScreenSplitCount;
 
     if (LaunchID.x >= size.x || LaunchID.y >= size.y) // Guard against excess threads, this can happen with screen splitting
         return;
 
-    uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
-    LaunchID.x += (splitScreenDispatchIndex % uUBO.ScreenSplitCount) * (size.x / uUBO.ScreenSplitCount);
-    LaunchID.y += (splitScreenDispatchIndex / uUBO.ScreenSplitCount) * (size.y / uUBO.ScreenSplitCount);
+    // Set pixels that aren't rendered to black
+    if (uPushConstants.FrameCount == 0 && splitScreenDispatchIndex == 0)
+    {
+        for (uint i = 0; i < uUBO.ScreenSplitCount; i++)
+        {
+            for (uint j = 0; j < uUBO.ScreenSplitCount; j++)
+            {
+                uint2 pixelCoord = uint2(LaunchID.x + i, LaunchID.y + j);
+                if (pixelCoord.x < size.x && pixelCoord.y < size.y)
+                {
+                    uImage[pixelCoord] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+                }
+            }
+        }
+    }
 
     Payload payload;
     payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uPushConstants.Seed);
@@ -84,7 +105,17 @@ void Main()
             if (!scatteredInVolume)
                 TraceRay(uTopLevelAS, RAY_FLAG_FORCE_OPAQUE, 0xff, 0u, 0u, 0u, rayDesc, payload);
 
-            pathLight += payload.Emitted * pathThroughput;
+            float3 contribution = payload.Emitted * pathThroughput;
+
+            if (payload.Depth != 1)
+            {
+                // Eliminate high luminance, but not from the first bounce to avoid biasing direct lighting
+                float lum = dot(contribution, float3(0.212671f, 0.715160f, 0.072169f));
+                float scale = uUBO.MaxLuminance / max(lum, uUBO.MaxLuminance);
+                contribution *= scale;
+            }
+
+            pathLight += contribution;
             pathThroughput *= payload.BxDF / payload.PDF;
 
             // Russian roulette
@@ -110,11 +141,6 @@ void Main()
         }
     }
     accumulatedLight /= (float)uUBO.SampleCount;
-    
-    // Eliminate high luminance
-    float lum = dot(accumulatedLight, float3(0.212671f, 0.715160f, 0.072169f));
-    float scale = uUBO.MaxLuminance / max(lum, uUBO.MaxLuminance);
-    accumulatedLight *= scale;
 
     float3 color;
     if (uPushConstants.FrameCount > 0)
