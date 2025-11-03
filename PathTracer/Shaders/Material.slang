@@ -43,9 +43,26 @@ public struct Material
     {
         Properties = materialData;
 
+        float4 textureBaseColor = uTextures[NonUniformResourceIndex(Properties.BaseColorTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0);
+
+        // Handle alpha?
+
         Properties.Roughness *= Properties.Roughness;
 
         Properties.IOR = max(Properties.IOR, 1.000001f);
+        
+        // Textures
+
+        Properties.BaseColor *= pow(textureBaseColor.rgb, 2.2f);
+
+        const float textureRoughness = uTextures[NonUniformResourceIndex(Properties.RoughnessTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
+        Properties.Roughness *= textureRoughness; // Square roughness
+        Properties.Metallic *= uTextures[NonUniformResourceIndex(Properties.MetallicTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
+        Properties.EmissiveColor *= uTextures[NonUniformResourceIndex(Properties.EmissiveTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
+
+        const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
+        Ax = max(0.00001, Properties.Roughness / aspect);
+        Ay = max(0.00001, Properties.Roughness * aspect);
 
         // Eta is relative index of refraction, so ETA = IORin / IORout. If we're in air (IOR 1) and we refract into glass (IOR 1.5)
         // ETA = 1 / 1.5 = 0.6667
@@ -57,19 +74,6 @@ public struct Material
         {
             Eta = 1.0f / Properties.IOR;
         }
-        
-        // Textures
-
-        Properties.BaseColor *= uTextures[NonUniformResourceIndex(Properties.BaseColorTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
-
-        const float textureRoughness = uTextures[NonUniformResourceIndex(Properties.RoughnessTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
-        Properties.Roughness *= textureRoughness; // Square roughness
-        Properties.Metallic *= uTextures[NonUniformResourceIndex(Properties.MetallicTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
-        Properties.EmissiveColor *= uTextures[NonUniformResourceIndex(Properties.EmissiveTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).rgb;
-
-        const float aspect = sqrt(1.0 - sqrt(Properties.Anisotropy) * 0.9);
-        Ax = max(0.00001, Properties.Roughness / aspect);
-        Ay = max(0.00001, Properties.Roughness * aspect);
 
         #ifdef FURNACE_TEST_MODE
         {

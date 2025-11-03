@@ -398,6 +398,7 @@ public struct Sampler
         float b2 = 1.0f - b0 - b1;
 
         float3 trianglePosition = b0 * v0.Position + b1 * v1.Position + b2 * v2.Position;
+        float2 uv = b0 * v0.TexCoord + b1 * v1.TexCoord + b2 * v2.TexCoord;
 
         toLight = normalize(trianglePosition - position);
 
@@ -413,7 +414,11 @@ public struct Sampler
         float cosTheta = abs(dot(normal, toLight));
         colorPDF.a = distanceSquared / (float(emissiveMeshCount) * float(emissiveMesh.TriangleCount) * area * cosTheta);
 
+        // Get material emissive color
         colorPDF.rgb = uMaterials[emissiveMesh.MaterialIndex].EmissiveColor;
+
+        // Fetch texture
+        colorPDF.rgb *= uTextures[uMaterials[emissiveMesh.MaterialIndex].EmissiveTextureIndex].SampleLevel(uTextureSampler, uv, 0).rgb;
     }
 
     [mutating]

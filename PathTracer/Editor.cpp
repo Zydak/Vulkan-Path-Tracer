@@ -431,6 +431,7 @@ void Editor::RenderInfo()
     {
         PushDeferredTask(nullptr, [this](VulkanHelper::CommandBuffer commandBuffer, std::shared_ptr<void>) {
             m_PathTracer.ReloadShaders(commandBuffer);
+            m_PostProcessor.ReloadShaders(commandBuffer);
             m_RenderTime = 0.0f;
         });
     }

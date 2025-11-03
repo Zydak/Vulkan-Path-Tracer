@@ -259,3 +259,63 @@ void PostProcessor::SetBloomData(const BloomData& data)
     m_BloomPushData.BloomStrength = data.BloomStrength;
     m_BloomPushData.FalloffRange = data.FalloffRange;
 }
+
+void PostProcessor::ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer)
+{
+    // Tonemapping
+    {
+        auto shaderRes = VulkanHelper::Shader::New({
+            m_Device,
+            "PostProcess/Tonemap.slang",
+            VulkanHelper::ShaderStages::COMPUTE_BIT
+        });
+
+        if (shaderRes.HasValue())
+        {
+            VulkanHelper::Shader shader = shaderRes.Value();
+
+            VulkanHelper::Pipeline::ComputeConfig pipelineConfig;
+            pipelineConfig.Device = m_Device;
+            pipelineConfig.ComputeShader = shader;
+            pipelineConfig.DescriptorSets = { m_TonemappingDescriptorSet };
+
+            m_TonemappingPipeline = VulkanHelper::Pipeline::New(pipelineConfig).Value();
+        }
+    }
+
+    // Bloom
+    {
+        auto downSampleShaderRes = VulkanHelper::Shader::New({
+            m_Device,
+            "PostProcess/BloomDownSample.slang",
+            VulkanHelper::ShaderStages::COMPUTE_BIT
+        });
+
+        auto upSampleShaderRes = VulkanHelper::Shader::New({
+            m_Device,
+            "PostProcess/BloomUpSample.slang",
+            VulkanHelper::ShaderStages::COMPUTE_BIT
+        });
+
+        if (downSampleShaderRes.HasValue() && upSampleShaderRes.HasValue())
+        {
+            VulkanHelper::Shader downSampleShader = downSampleShaderRes.Value();
+            VulkanHelper::Shader upSampleShader = upSampleShaderRes.Value();
+
+            VulkanHelper::Pipeline::ComputeConfig pipelineConfig;
+            pipelineConfig.Device = m_Device;
+            pipelineConfig.PushConstant = &m_BloomPushConstant;
+
+            for (uint32_t i = 0; i < MAX_BLOOM_LEVELS; i++)
+            {
+                pipelineConfig.DescriptorSets = { m_BloomDescriptorSets[i] };
+
+                pipelineConfig.ComputeShader = downSampleShader;
+                m_BloomDownSamplePipelines[i] = VulkanHelper::Pipeline::New(pipelineConfig).Value();
+
+                pipelineConfig.ComputeShader = upSampleShader;
+                m_BloomUpSamplePipelines[i] = VulkanHelper::Pipeline::New(pipelineConfig).Value();
+            }
+        }
+    }
+}

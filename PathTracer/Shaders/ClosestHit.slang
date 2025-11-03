@@ -166,16 +166,14 @@ void Main(inout Payload payload, in float2 attrib)
         {
             toLightDirectionTangent = surface.WorldToTangent(toLightDirectionWorld);
 
-            {
-                uint hitTriangleIndex;
-                uint hitInstanceIndex;
-                bool foundIntersection = DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + toLightDirectionWorld * 1e-5, toLightDirectionWorld, hitTriangleIndex, hitInstanceIndex);
+            uint hitTriangleIndex;
+            uint hitInstanceIndex;
+            bool foundIntersection = DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + toLightDirectionWorld * 1e-5, toLightDirectionWorld, hitTriangleIndex, hitInstanceIndex);
                 
-                if (foundIntersection)
-                    canHitLight = lightTriangleIndex == hitTriangleIndex && lightInstanceIndex == hitInstanceIndex;
-                else
-                    canHitLight = false;
-            }
+            if (foundIntersection)
+                canHitLight = lightTriangleIndex == hitTriangleIndex && lightInstanceIndex == hitInstanceIndex;
+            else
+                canHitLight = false;
 
             if (!canHitLight)
             {

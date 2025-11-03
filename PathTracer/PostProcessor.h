@@ -28,6 +28,7 @@ public:
     void PostProcess(VulkanHelper::CommandBuffer& commandBuffer);
     void SetTonemappingData(const TonemappingData& data, VulkanHelper::CommandBuffer& commandBuffer);
     void SetBloomData(const BloomData& data);
+    void ReloadShaders(VulkanHelper::CommandBuffer& commandBuffer);
 
     VulkanHelper::ImageView GetOutputImageView() const { return m_OutputImageView; }
 

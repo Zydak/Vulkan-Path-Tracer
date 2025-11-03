@@ -84,7 +84,7 @@ void Main()
             RayDesc rayDesc;
             rayDesc.Origin = payload.Origin;
             rayDesc.Direction = normalize(payload.Direction);
-            rayDesc.TMin = 0.00001f;
+            rayDesc.TMin = 0.01f;
             rayDesc.TMax = 100000.0f;
 
             payload.Emitted = float3(0.0f, 0.0f, 0.0f);
