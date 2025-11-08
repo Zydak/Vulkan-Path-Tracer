@@ -120,6 +120,12 @@ void Editor::Draw(VulkanHelper::CommandBuffer commandBuffer)
     }
     renderTimer = std::chrono::high_resolution_clock::now();
 
+    // Check if swapchain image is bigger than 0, if not don't try to render.
+    if (m_Renderer.GetSwapchainImageWidth() == 0 || m_Renderer.GetSwapchainImageHeight() == 0)
+    {
+        return;
+    }
+
     m_PostProcessor.PostProcess(commandBuffer);
 
     // Transition output image to shader read-only optimal layout for imgui rendering
