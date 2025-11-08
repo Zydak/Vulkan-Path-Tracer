@@ -69,6 +69,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 <img src="./Gallery/GodRays.png"/>
 <img src="./Gallery/Cloud1.png"/>
 <img src="./Gallery/DragonHead.png"/>
+<img src="./Gallery/Temple.png"/>
 <img src="./Gallery/Cloud6.png">
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/CloudSunset.png">
@@ -126,3 +127,4 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 - https://samk9632.gumroad.com/l/Freebie-Cloud - Wispy Cloud by Samuel Krug
 - https://drive.google.com/file/d/1ACBLnJBbmFzP07djNC1N15qnlqTGHmOM/view - Cloud by Samuel Krug
 - https://drive.google.com/drive/folders/17RueIORCc-Na4zjszHbShv9MbV_RUeBo - Cloud Pack by Samuel Krug
+- https://developer.nvidia.com/ue4-sun-temple - Sun Temple
