@@ -9,6 +9,15 @@
 #include <memory>
 #include <chrono>
 
+#include "ImReflect.hpp"
+
+struct ViewportSettings
+{
+    int Width = 800;
+    int Height = 600;
+};
+IMGUI_REFLECT(ViewportSettings, Width, Height)
+
 class Editor
 {
 public:

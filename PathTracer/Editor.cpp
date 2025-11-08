@@ -187,12 +187,10 @@ void Editor::RenderViewportSettings()
 {
     if (!ImGui::CollapsingHeader("Viewport Settings"))
         return;
-    
-    static int width = (int)m_PathTracer.GetOutputImageView().GetWidth();
-    static int height = (int)m_PathTracer.GetOutputImageView().GetHeight();
 
-    ImGui::InputInt("Width", &width);
-    ImGui::InputInt("Height", &height);
+    static ViewportSettings viewportSettings {(int)m_PathTracer.GetOutputImageView().GetWidth(), (int)m_PathTracer.GetOutputImageView().GetHeight()};
+
+    ImReflect::Input("Label", viewportSettings);
 
     if (ImGui::Button("Apply"))
     {
@@ -202,7 +200,7 @@ void Editor::RenderViewportSettings()
             uint32_t Height;
         };
 
-        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)width, (uint32_t)height }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
+        PushDeferredTask(std::make_shared<Data>(Data{ (uint32_t)viewportSettings.Width, (uint32_t)viewportSettings.Height }), [this](VulkanHelper::CommandBuffer cmd, std::shared_ptr<void> data) {
             Data* d = (Data*)data.get();
             ResizeImage(d->Width, d->Height);
             m_Camera.SetAspectRatio((float)d->Width / (float)d->Height);

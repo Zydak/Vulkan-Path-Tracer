@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.12)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_C_COMPILER gcc)
-set(CMAKE_CXX_COMPILER g++)
-
 add_compile_definitions(
     $<$<CONFIG:RelWithDebInfo>:INCLUDE_DEBUG_INFO>
 )

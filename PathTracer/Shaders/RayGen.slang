@@ -24,22 +24,6 @@ void Main()
     if (LaunchID.x >= size.x || LaunchID.y >= size.y) // Guard against excess threads, this can happen with screen splitting
         return;
 
-    // Set pixels that aren't rendered to black
-    if (uPushConstants.FrameCount == 0 && splitScreenDispatchIndex == 0)
-    {
-        for (uint i = 0; i < uUBO.ScreenSplitCount; i++)
-        {
-            for (uint j = 0; j < uUBO.ScreenSplitCount; j++)
-            {
-                uint2 pixelCoord = uint2(LaunchID.x + i, LaunchID.y + j);
-                if (pixelCoord.x < size.x && pixelCoord.y < size.y)
-                {
-                    uImage[pixelCoord] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-                }
-            }
-        }
-    }
-
     Payload payload;
     payload.Sampler = Sampler(LaunchID.y + size.x * LaunchID.x + uPushConstants.Seed);
 
@@ -157,6 +141,22 @@ void Main()
     // but I can't pinpoint it. So just get rid of nans if there are any.
     if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
     {
+        // Set pixels that aren't rendered to the same color
+        if (uPushConstants.FrameCount == 0 && splitScreenDispatchIndex == 0)
+        {
+            for (uint i = 0; i < uUBO.ScreenSplitCount; i++)
+            {
+                for (uint j = 0; j < uUBO.ScreenSplitCount; j++)
+                {
+                    uint2 pixelCoord = uint2(LaunchID.x + i, LaunchID.y + j);
+                    if (pixelCoord.x < size.x && pixelCoord.y < size.y)
+                    {
+                        uImage[pixelCoord] = float4(color, 1.0f);
+                    }
+                }
+            }
+        }
+
         uImage[LaunchID.xy] = float4(color, 1.0f);
     }
 }

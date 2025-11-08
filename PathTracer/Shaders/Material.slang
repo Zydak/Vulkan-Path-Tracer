@@ -47,7 +47,7 @@ public struct Material
 
         // Handle alpha?
 
-        Properties.Roughness *= Properties.Roughness;
+        // Properties.Roughness *= Properties.Roughness;
 
         Properties.IOR = max(Properties.IOR, 1.000001f);
         

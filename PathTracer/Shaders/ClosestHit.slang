@@ -168,7 +168,7 @@ void Main(inout Payload payload, in float2 attrib)
 
             uint hitTriangleIndex;
             uint hitInstanceIndex;
-            bool foundIntersection = DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + toLightDirectionWorld * 1e-5, toLightDirectionWorld, hitTriangleIndex, hitInstanceIndex);
+            bool foundIntersection = DoesRayIntersectWithAS(uTopLevelAS, surface.GetWorldPos() + toLightDirectionWorld * 1e-2, toLightDirectionWorld, hitTriangleIndex, hitInstanceIndex);
                 
             if (foundIntersection)
                 canHitLight = lightTriangleIndex == hitTriangleIndex && lightInstanceIndex == hitInstanceIndex;
@@ -200,6 +200,14 @@ void Main(inout Payload payload, in float2 attrib)
     BSDFComponent sampledComponent;
     BxDFSample scatterSample = material.SampleBSDF(payload.Sampler, V, H, sampledComponent);
     bool wasRefracted = scatterSample.L.z < 0.0f;
+
+    float3 scatterDirectionWorld = surface.TangentToWorld(scatterSample.L);
+    if (!wasRefracted && dot(scatterDirectionWorld, surface.GetGeometryNormal()) < 0.0f)
+    {
+        // If the sampled direction is below the geometry normal it has to be discarded since it would cause light leaks
+        scatterSample.PDF = 0.0f;
+        scatterSample.BxDF = float3(0.0f, 0.0f, 0.0f);
+    }
 
     if (wasRefracted && surface.WasHitFromInside())
     {
@@ -238,9 +246,6 @@ void Main(inout Payload payload, in float2 attrib)
     //
     // Write Payload
     //
-
-    // Everything is calculated in tangent space, so at the end we have to convert to world space
-    const float3 newDir = surface.TangentToWorld(scatterSample.L);
 
     #ifdef ENABLE_MESH_MIS
     {
@@ -298,7 +303,7 @@ void Main(inout Payload payload, in float2 attrib)
     
     // Offset origin slightly to avoid self-intersection on the next event
     payload.Origin = surface.GetWorldPos() + surface.GetNormal() * (-1e-3 * (float)wasRefracted + 1e-3 * (float)(!wasRefracted));
-    payload.Direction = newDir;
+    payload.Direction = scatterDirectionWorld;
 
     payload.BxDF = scatterSample.BxDF;
     payload.PDF = scatterSample.PDF;

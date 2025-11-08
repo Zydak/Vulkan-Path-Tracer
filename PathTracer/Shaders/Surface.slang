@@ -12,6 +12,10 @@ public struct Surface
     float3 m_Tangent;
     float3 m_Bitangent;
 
+    float3 m_GeometryNormal;
+    float3 m_GeometryTangent;
+    float3 m_GeometryBitangent;
+
     Vertex m_V1;
     Vertex m_V2;
     Vertex m_V3;
@@ -39,26 +43,31 @@ public struct Surface
         m_WorldPos = m_V1.Position * barycentrics.x + m_V2.Position * barycentrics.y + m_V3.Position * barycentrics.z;
         m_WorldPos = mul(ObjectToWorld3x4(), float4(m_WorldPos, 1.0f)).xyz;
 
+        m_TextureCoord = m_V1.TexCoord * barycentrics.x + m_V2.TexCoord * barycentrics.y + m_V3.TexCoord * barycentrics.z;
+
+        m_GeometryNormal = normalize(cross(m_V2.Position - m_V1.Position, m_V3.Position - m_V1.Position));
+        m_GeometryNormal = normalize(mul(m_GeometryNormal, WorldToObject()).xyz);
+
         #ifdef USE_ONLY_GEOMETRY_NORMALS
         {
-            const float3 v1World = mul(ObjectToWorld3x4(), float4(m_V1.Position, 1.0f)).xyz;
-            const float3 v2World = mul(ObjectToWorld3x4(), float4(m_V2.Position, 1.0f)).xyz;
-            const float3 v3World = mul(ObjectToWorld3x4(), float4(m_V3.Position, 1.0f)).xyz;
-            m_Normal = normalize(cross(v3World - v1World, v2World - v1World)); // Face normal
+            m_Normal = m_GeometryNormal; // Face normal
         }
         #else
         {
             // Transformed normals often cause rays to go under the geometry, the same goes for normal textures.
             // They aren't implemented properly yet so there is no compensation for that
             m_Normal = normalize(m_V1.Normal * barycentrics.x + m_V2.Normal * barycentrics.y + m_V3.Normal * barycentrics.z);
-            m_Normal = mul(m_Normal, WorldToObject()).xyz;
+            m_Normal = normalize(mul(m_Normal, WorldToObject()).xyz);
         }
         #endif
 
-        if (dot(m_Normal, WorldRayDirection()) > 0.0f)
+        float3 view = WorldRayDirection();
+
+        if (dot(m_GeometryNormal, view) > 0.0f)
         {
             // If geometry is hit from inside then invert the normal
             m_Normal = -m_Normal;
+            m_GeometryNormal = -m_GeometryNormal;
             m_HitFromInside = true;
         }
         else
@@ -66,20 +75,35 @@ public struct Surface
             m_HitFromInside = false;
         }
 
-        m_TextureCoord = m_V1.TexCoord * barycentrics.x + m_V2.TexCoord * barycentrics.y + m_V3.TexCoord * barycentrics.z;
-
         float3 up = abs(m_Normal.z) < 0.9999999 ? float3(0, 0, 1) : float3(1, 0, 0);
+        m_GeometryTangent = normalize(cross(up, m_GeometryNormal));
+        m_GeometryBitangent = cross(m_GeometryNormal, m_GeometryTangent);
+
         m_Tangent = normalize(cross(up, m_Normal));
-        m_Bitangent = cross(m_Normal, m_Tangent);
+        m_Bitangent = normalize(cross(m_Normal, m_Tangent));
 
         #ifndef USE_ONLY_GEOMETRY_NORMALS
         {
             float3 normalMapValue = normalTexture.SampleLevel(uTextureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
-
-            normalMapValue = TangentToWorld(normalMapValue);
-            m_Normal = normalize(normalMapValue);
+            
+            // Transform to world space using TBN matrix
+            m_Normal = TangentToWorld(normalMapValue);
+            m_Tangent = normalize(cross(m_Normal, up));
+            m_Bitangent = normalize(cross(m_Normal, m_Tangent));
         }
         #endif
+
+        if (dot(m_Normal, view) > 0.0f)
+        {
+            // Pull normal towards view direction to ensure they're in the same hemisphere
+            // with a small epsilon to avoid grazing angles
+            float epsilon = 0.01f;
+            float3 adjustedNormal = normalize(m_Normal - view * (dot(m_Normal, view) + epsilon));
+            
+            m_Normal = adjustedNormal;
+            m_Tangent = normalize(cross(m_Normal, up));
+            m_Bitangent = normalize(cross(m_Normal, m_Tangent));
+        }
     }
 
     public float3 TangentToWorld(in float3 vec)
@@ -90,6 +114,16 @@ public struct Surface
     public float3 WorldToTangent(in float3 vec)
     {
         return normalize(float3(dot(vec, m_Tangent), dot(vec, m_Bitangent), dot(vec, m_Normal)));
+    }
+
+    public float3 GeometryTangentToWorld(in float3 vec)
+    {
+        return normalize(vec.x * m_GeometryTangent + vec.y * m_GeometryBitangent + vec.z * m_GeometryNormal);
+    }
+
+    public float3 GeometryWorldToTangent(in float3 vec)
+    {
+        return normalize(float3(dot(vec, m_GeometryTangent), dot(vec, m_GeometryBitangent), dot(vec, m_GeometryNormal)));
     }
 
     [mutating]
@@ -103,6 +137,7 @@ public struct Surface
     }
 
     public inline float3 GetNormal() { return m_Normal; }
+    public inline float3 GetGeometryNormal() { return m_GeometryNormal; }
     public inline float3 GetTangent() { return m_Tangent; }
     public inline float3 GetBitangent() { return m_Bitangent; }
     public inline float3 GetWorldPos() { return m_WorldPos; }
