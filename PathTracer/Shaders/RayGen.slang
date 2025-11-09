@@ -113,15 +113,18 @@ void Main()
             pathThroughput /= p;
         }
 
-        if (payload.ColorChannel == -1)
+        if (all(!isinf(pathLight)) && all(!isnan(pathLight)))
         {
-            // Ray hasn't been split, so accumulate all color channels
-            accumulatedLight += pathLight;
-        }
-        else
-        {
-            // Ray has been split, so only track the relevant color channel
-            accumulatedLight[payload.ColorChannel] += pathLight[payload.ColorChannel];
+            if (payload.ColorChannel == -1)
+            {
+                // Ray hasn't been split, so accumulate all color channels
+                accumulatedLight += pathLight;
+            }
+            else
+            {
+                // Ray has been split, so only track the relevant color channel
+                accumulatedLight[payload.ColorChannel] += pathLight[payload.ColorChannel];
+            }
         }
     }
     accumulatedLight /= (float)uUBO.SampleCount;
@@ -137,28 +140,23 @@ void Main()
         color = accumulatedLight;
     }
 
-    // I'm not exactly sure where, but a NAN happens from time to time. It's somewhere in the glass equations
-    // but I can't pinpoint it. So just get rid of nans if there are any.
-    if (!isinf(color.x) && !isinf(color.y) && !isinf(color.z) && !isnan(color.x) && !isnan(color.y) && !isnan(color.z))
+    // Set pixels that aren't rendered to the same color
+    if (uPushConstants.FrameCount == 0 && splitScreenDispatchIndex == 0)
     {
-        // Set pixels that aren't rendered to the same color
-        if (uPushConstants.FrameCount == 0 && splitScreenDispatchIndex == 0)
+        for (uint i = 0; i < uUBO.ScreenSplitCount; i++)
         {
-            for (uint i = 0; i < uUBO.ScreenSplitCount; i++)
+            for (uint j = 0; j < uUBO.ScreenSplitCount; j++)
             {
-                for (uint j = 0; j < uUBO.ScreenSplitCount; j++)
+                uint2 pixelCoord = uint2(LaunchID.x + i, LaunchID.y + j);
+                if (pixelCoord.x < size.x && pixelCoord.y < size.y)
                 {
-                    uint2 pixelCoord = uint2(LaunchID.x + i, LaunchID.y + j);
-                    if (pixelCoord.x < size.x && pixelCoord.y < size.y)
-                    {
-                        uImage[pixelCoord] = float4(color, 1.0f);
-                    }
+                    uImage[pixelCoord] = float4(color, 1.0f);
                 }
             }
         }
-
-        uImage[LaunchID.xy] = float4(color, 1.0f);
     }
+
+    uImage[LaunchID.xy] = float4(color, 1.0f);
 }
 
 bool ScatteredInVolume(inout Payload payload)
@@ -195,11 +193,10 @@ bool ScatteredInVolume(inout Payload payload)
 
     float scatterDistance = -1.0f;
     int scatteredVolumeIndex = -1;
-    int tempNullCollisions = 0;
 
     for (int i = 0; i < uUBO.VolumesCount; i++)
     {
-        float scatterDistanceTemp = uVolumes[indices[i]].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, tempNullCollisions, payload.Depth, scatterDistance);
+        float scatterDistanceTemp = uVolumes[indices[i]].DoesRayScatterInVolume(payload.Origin, payload.Direction, payload.Sampler, payload.Depth, scatterDistance);
 
         // Choose the closest scatter distance
         if (scatterDistanceTemp >= 0.0f && (scatterDistanceTemp < scatterDistance || scatterDistance < 0.0f))
@@ -209,12 +206,8 @@ bool ScatteredInVolume(inout Payload payload)
         }
     }
 
-    // payload.Emitted = float(tempNullCollisions) / 1000.0f;
-    // payload.Depth = MAX_DEPTH;
-    // return true;
-
     float atmosphereScatterDistance = -1.0f;
-    int atmosphereComponentHit = -1;
+    AtmosphereComponent atmosphereComponentHit = AtmosphereComponent::None;
     int colorChannel = payload.ColorChannel;
     #ifdef ENABLE_ATMOSPHERE
     {
@@ -235,7 +228,7 @@ bool ScatteredInVolume(inout Payload payload)
         {
             // Closest scatter is in atmosphere
             scatterDistance = atmosphereScatterDistance;
-            scatteredVolumeIndex = -2; // Mark that atmosphere was hit
+            scatteredVolumeIndex = -2; // Mark that atmosphere was hit with -2
         }
     }
     #endif
@@ -330,8 +323,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
 
         // Transmittance along the ray has to be accounted for
         float3 transmittance;
-        int tempCollisionCount = 0;
-        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDir, payload.VolumeDepth, tempCollisionCount);
+        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDir, payload.VolumeDepth);
 
         #ifdef ENABLE_ATMOSPHERE
         {
@@ -366,8 +358,7 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
         float phaseLightDir = uVolumes[scatteredVolumeIndex].EvaluatePhaseFunction(payload.Direction, toLightDir, payload.VolumeDepth);
         // Transmittance along the ray has to be accounted for
         float3 transmittance;
-        int tempCollisionCount = 0;
-        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDir, payload.VolumeDepth + 1, tempCollisionCount);
+        transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDir, payload.VolumeDepth + 1);
 
         // For emissive meshes ignore the transmittance through atmosphere since the light would have to really really
         // really far away for that to matter, and then the intensity would be negligible anyway.
@@ -388,21 +379,26 @@ void EvaluateVolumeScatteringEvent(inout Payload payload, float scatterDistance,
     payload.VolumeDepth++;
 }
 
-void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDistance, int componentHit)
+void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDistance, AtmosphereComponent componentHit)
 {
     payload.Origin += scatterDistance * payload.Direction;
 
     // Stochastically choose between Rayleigh and Mie
     float3 newDir;
-    if (componentHit == 0)
+    if (componentHit == AtmosphereComponent::Rayleigh)
     {
         // Rayleigh
         newDir = payload.Sampler.SampleRayleigh(payload.Direction);
     }
-    else
+    else if (componentHit == AtmosphereComponent::Mie)
     {
         // Mie
-        newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, 0.85f); // Sample henyey since it's a pretty close match
+        newDir = payload.Sampler.SampleHenyeyGreenstein(payload.Direction, 0.85f);
+    }
+    else
+    {
+        // Ozone only absorbs, doesn't scatter
+        newDir = payload.Direction;
     }
 
     #ifdef ENABLE_SKY_MIS
@@ -422,8 +418,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             // Compute transmittance to the sun
             transmittanceToSun = CalculateTransmittanceThroughAtmosphere(payload.Sampler, payload.Origin, skyDirSampled, payload.ColorChannel);
 
-            int tempCollisionCount = 0;
-            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.VolumeDepth, tempCollisionCount);
+            transmittanceToSun *= Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, skyDirSampled, payload.VolumeDepth);
         }
         else
         {
@@ -431,7 +426,7 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         }
 
         // Stochastically choose between Rayleigh and Mie
-        if (componentHit == 0)
+        if (componentHit == AtmosphereComponent::Rayleigh)
         {
             // Rayleigh
             payload.Emitted += RayleighPhase(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
@@ -439,13 +434,20 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
             payload.BxDF = RayleighPhase(payload.Direction, newDir);
             payload.PDF = RayleighPhase(payload.Direction, newDir);
         }
-        else
+        else if (componentHit == AtmosphereComponent::Mie)
         {
             // Mie
-            payload.Emitted += PhaseMie(payload.Direction, skyDirSampled) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
+            payload.Emitted += PhaseHenyeyGreenstein(payload.Direction, skyDirSampled, 0.85f) * transmittanceToSun * (colorPdf.rgb / colorPdf.a);
 
-            payload.BxDF = PhaseMie(payload.Direction, newDir) * (1.0f - C_MIE * uUBO.MieScatteringCoefficientMultiplier.rgb * 100);
+            float3 attenuation = C_MIE_ABSORPTION / C_MIE;
+            payload.BxDF = PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f) * (1.0f - attenuation);
             payload.PDF = PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f);
+        }
+        else
+        {
+            // Ozone only absorbs, doesn't scatter
+            payload.BxDF = float3(0.0f);
+            payload.PDF = 1.0f;
         }
     }
     #else
@@ -457,7 +459,8 @@ void EvaluateAtmosphereScatteringEvent(inout Payload payload, float scatterDista
         }
         else
         {
-            payload.BxDF = PhaseMie(payload.Direction, newDir);
+            float3 attenuation = C_MIE_ABSORPTION / C_MIE;
+            payload.BxDF = PhaseMie(payload.Direction, newDir) * attenuation;
             payload.PDF = PhaseHenyeyGreenstein(payload.Direction, newDir, 0.85f);
         }
     }

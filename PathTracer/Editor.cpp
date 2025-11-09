@@ -941,12 +941,22 @@ void Editor::RenderVolumeSettings()
     if (ImGui::SliderFloat("Density", &selectedVolume.Density, 0.0f, 1.0f))
         volumeModified = true;
 
+    ImGui::BeginDisabled(selectedVolume.DensityDataIndex == -1);
+    if (ImGui::SliderFloat("Grid Sharpness", &selectedVolume.GridSharpness, 0.0f, 10.0f))
+        volumeModified = true;
+    ImGui::EndDisabled();
+
     bool useApproximatedScatteringForClouds = (bool)selectedVolume.ApproximatedScatteringForClouds;
     if (ImGui::Checkbox("Use Approximated Scattering For Clouds", &useApproximatedScatteringForClouds))
     {
         selectedVolume.ApproximatedScatteringForClouds = (int)useApproximatedScatteringForClouds;
         volumeModified = true;
     }
+
+    ImGui::BeginDisabled(!useApproximatedScatteringForClouds);
+    if (ImGui::SliderFloat("Approximated scattering falloff", &selectedVolume.ApproximatedScatteringFalloff, 0.0f, 1.0f, "%.2f"))
+        volumeModified = true;
+    ImGui::EndDisabled();
 
     if (selectedPhaseFunction == (int)PathTracer::PhaseFunction::HENYEY_GREENSTEIN || 
         selectedPhaseFunction == (int)PathTracer::PhaseFunction::DRAINE)

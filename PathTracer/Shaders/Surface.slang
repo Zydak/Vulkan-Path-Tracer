@@ -61,9 +61,9 @@ public struct Surface
         }
         #endif
 
-        float3 view = WorldRayDirection();
+        float3 view = -WorldRayDirection();
 
-        if (dot(m_GeometryNormal, view) > 0.0f)
+        if (dot(m_GeometryNormal, view) < 0.0f)
         {
             // If geometry is hit from inside then invert the normal
             m_Normal = -m_Normal;
@@ -85,25 +85,35 @@ public struct Surface
         #ifndef USE_ONLY_GEOMETRY_NORMALS
         {
             float3 normalMapValue = normalTexture.SampleLevel(uTextureSampler, m_TextureCoord, 0).xyz * 2.0f - 1.0f;
-            
-            // Transform to world space using TBN matrix
             m_Normal = TangentToWorld(normalMapValue);
-            m_Tangent = normalize(cross(m_Normal, up));
-            m_Bitangent = normalize(cross(m_Normal, m_Tangent));
         }
         #endif
 
-        if (dot(m_Normal, view) > 0.0f)
+        if (dot(m_Normal, view) < 0.0f)
         {
             // Pull normal towards view direction to ensure they're in the same hemisphere
             // with a small epsilon to avoid grazing angles
             float epsilon = 0.01f;
-            float3 adjustedNormal = normalize(m_Normal - view * (dot(m_Normal, view) + epsilon));
+            float3 adjustedNormal = normalize(m_Normal - view * (dot(m_Normal, view) - epsilon));
             
             m_Normal = adjustedNormal;
-            m_Tangent = normalize(cross(m_Normal, up));
-            m_Bitangent = normalize(cross(m_Normal, m_Tangent));
         }
+
+        float3 perfectReflect = normalize(reflect(-view, m_Normal));
+        if (dot(perfectReflect, m_GeometryNormal) < 0.0f)
+        {
+            // Adjust normal to ensure perfect reflection stays above the geometry surface
+            float epsilon = 0.1f;
+            
+            float dotProduct = dot(m_Normal, m_GeometryNormal);
+            float3 adjustedNormal = normalize(m_Normal + m_GeometryNormal * (epsilon + dotProduct));
+
+            m_Normal = adjustedNormal;
+        }
+
+        // Recalculate tangent and bitangent after normal maps and pulling
+        m_Tangent = normalize(cross(m_Normal, up));
+        m_Bitangent = normalize(cross(m_Normal, m_Tangent));
     }
 
     public float3 TangentToWorld(in float3 vec)

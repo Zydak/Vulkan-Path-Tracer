@@ -53,7 +53,7 @@ public struct Material
         
         // Textures
 
-        Properties.BaseColor *= pow(textureBaseColor.rgb, 2.2f);
+        Properties.BaseColor *= pow(textureBaseColor.rgb, 2.2f); // Gamma correct
 
         const float textureRoughness = uTextures[NonUniformResourceIndex(Properties.RoughnessTextureIndex)].SampleLevel(uTextureSampler, surface.GetTextureCoordinates(), 0).r;
         Properties.Roughness *= textureRoughness; // Square roughness

@@ -771,13 +771,16 @@ void PathTracer::SetMaterial(uint32_t index, const Material& material, VulkanHel
         }
 
         // Upload data to the GPU
-        UploadDataToBuffer(
-            m_EmissiveMeshesBuffer,
-            m_EmissiveMeshes.data(),
-            sizeof(EmissiveMeshEntry) * m_EmissiveMeshes.size(),
-            0,
-            commandBuffer
-        );
+        if (m_EmissiveMeshes.size() > 0)
+        {
+            UploadDataToBuffer(
+                m_EmissiveMeshesBuffer,
+                m_EmissiveMeshes.data(),
+                sizeof(EmissiveMeshEntry) * m_EmissiveMeshes.size(),
+                0,
+                commandBuffer
+            );
+        }
 
         // And the uniform
         struct temp {
@@ -1389,6 +1392,8 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
     // Precompute max densities for empty space skipping
     float maxDensity = openvdb::tools::minMax(floatGridDensity->tree(), true).max();
     volume.MaxDensityInTheGrid = maxDensity;
+
+    VH_LOG_DEBUG("Density range: 0.0 - {}", maxDensity);
     
     float minTemperature = 0.0f;
     float maxTemperature = 0.0f;
@@ -1429,7 +1434,7 @@ void PathTracer::AddDensityDataToVolume(uint32_t volumeIndex, const std::string&
             {
                 openvdb::math::Coord coord(min.x() + x, min.y() + (dim.y() - 1 - y), min.z() + z); // Y has to be flipped for vulkan
 
-                float density = floatGridDensity->tree().getValue(coord) / maxDensity; // Normalize to [0, 1]
+                float density = glm::clamp(floatGridDensity->tree().getValue(coord) / maxDensity, 0.0f, 1.0f); // Normalize to [0, 1]
 
                 int maxDensityGridIndex = ((x * 32) / dim.x()) + ((y * 32) / dim.y()) * 32 + ((z * 32) / dim.z()) * 1024;
                 if (volumeMaxDensities[(uint32_t)maxDensityGridIndex] < density)

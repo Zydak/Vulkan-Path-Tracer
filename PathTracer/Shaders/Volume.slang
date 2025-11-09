@@ -44,6 +44,9 @@ public struct Volume
 
     // This enables faster but biased methods for rendering volumes, especially clouds
     int m_ApproximatedScattering;
+    float m_ApproximatedScatteringFalloff;
+
+    float m_GridSharpness; // Used to adjust density sampling from NanoVDB grids
 
     // Helper structures for internal calculations
     struct VolumeTraversalContext
@@ -110,7 +113,7 @@ public struct Volume
         // Read the value
         float value = pnanovdb_read_float(gridBuffer, valueAddr);
 
-        return clamp(value / m_MaxDensityInTheGrid, 0.0f, 1.0f);
+        return clamp(value / m_MaxDensityInTheGrid * m_GridSharpness, 0.0f, 1.0f);
     }
 
     // Helper function to create traversal context
@@ -156,7 +159,7 @@ public struct Volume
     float GetEffectiveDensity(float baseDensity, float rayDepth)
     {
         if (m_ApproximatedScattering != 0)
-            return baseDensity * pow(0.8f, rayDepth); // decrease density with depth for faster rendering
+            return baseDensity * pow(m_ApproximatedScatteringFalloff, rayDepth); // decrease density with depth for faster rendering
         else
             return baseDensity;
     }
@@ -250,9 +253,8 @@ public struct Volume
     }
 
     // Returns distance from rayOrigin at which scattering occured inside the volume, or -1 if no scattering occurred
-    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth, in float ignoreIfFartherThan)
+    public float DoesRayScatterInVolume(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, in float rayDepth, in float ignoreIfFartherThan)
     {
-        tempNullCollisions = 0;
         VolumeIntersection intersection = IntersectWithRay(rayOrigin, rayDirection);
 
         if (intersection.HitPointFar < 0.0f)
@@ -267,7 +269,7 @@ public struct Volume
 
         if (m_DensityDataIndex >= 0) // If volume is heterogeneous
         {
-            return ProcessHeterogeneousVolumeScattering(rayOrigin, rayDirection, sampler, tempNullCollisions, rayDepth, intersection);
+            return ProcessHeterogeneousVolumeScattering(rayOrigin, rayDirection, sampler, rayDepth, intersection);
         }
         else // Homogeneous Volume
         {
@@ -286,7 +288,7 @@ public struct Volume
     }
 
     // Helper function for heterogeneous volume scattering
-    float ProcessHeterogeneousVolumeScattering(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, out int tempNullCollisions, in float rayDepth, VolumeIntersection intersection)
+    float ProcessHeterogeneousVolumeScattering(in float3 rayOrigin, in float3 rayDirection, inout Sampler sampler, in float rayDepth, VolumeIntersection intersection)
     {
         VolumeTraversalContext context = CreateTraversalContext(intersection);
         BlockInfo blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + context.epsilon), context);
@@ -312,7 +314,6 @@ public struct Volume
                 t += context.epsilon;
                 if (context.tEnter + t > context.tExit)
                     return -1.0f;
-                tempNullCollisions++;
                 blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + t + context.epsilon), context);
                 continue;
             }
@@ -325,7 +326,6 @@ public struct Volume
                 t += distanceToBlockExit + context.epsilon; // Add small epsilon to ensure the ray moves to the next block
                 if (context.tEnter + t > context.tExit)
                     return -1.0f; // Exited the volume, no scattering occurred
-                tempNullCollisions++;
                 blockInfo = CalculateBlockInfo(rayOrigin + rayDirection * (context.tEnter + t + context.epsilon), context);
                 continue;
             }
@@ -343,7 +343,6 @@ public struct Volume
             if (densityTextureValue / maxDensity < sampler.UniformFloat())
             {
                 // Null Collision, continue sampling
-                tempNullCollisions++;
                 continue;
             }
             else
@@ -417,10 +416,9 @@ public struct Volume
         return PhaseDraine(V, L, g, a);
     }
 
-    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth, out int tempCollisionCount)
+    static public float CalculateVolumesTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth)
     {
         float transmittance = 1.0f;
-        tempCollisionCount = 0;
         
         for (uint i = 0; i < uUBO.VolumesCount; i++)
         {
@@ -430,7 +428,7 @@ public struct Volume
             if (uVolumes[i].m_DensityDataIndex >= 0 && intersection.HitPointFar >= 0.0f)
             {
                 // Heterogeneous volume, transmittance has to be integrated numerically
-                transmittance *= uVolumes[i].ProcessHeterogeneousVolumeTransmittance(sampler, origin, direction, rayDepth, tempCollisionCount, intersection);
+                transmittance *= uVolumes[i].ProcessHeterogeneousVolumeTransmittance(sampler, origin, direction, rayDepth, intersection);
                 
                 if (transmittance <= 0.0f)
                     return 0.0f; // Early termination if transmittance becomes zero
@@ -448,7 +446,7 @@ public struct Volume
     }
 
     // Helper function for heterogeneous volume transmittance calculation
-    float ProcessHeterogeneousVolumeTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth, inout int tempCollisionCount, VolumeIntersection intersection)
+    float ProcessHeterogeneousVolumeTransmittance(inout Sampler sampler, in float3 origin, in float3 direction, in float rayDepth, VolumeIntersection intersection)
     {
         VolumeTraversalContext context = CreateTraversalContext(intersection);
         BlockInfo blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + context.epsilon), context);
@@ -457,17 +455,8 @@ public struct Volume
 
         // Max 1000 steps
         int j = 0;
-        for (j = 0; j < 10000; j++)
+        for (j = 0; j < 1000; j++)
         {
-            // Russian roulette based on transmittance
-            float p = transmittance;
-            if (sampler.UniformFloat() > p)
-            {
-                // Early termination - ray is absorbed
-                return 0.0f;
-            }
-            transmittance /= p;
-
             float3 currentPosition = origin + direction * (context.tEnter + t + context.epsilon);
 
             VolumeIntersection blockIntersection = Volume::IntersectWithRay(currentPosition, direction, blockInfo.minCorner, blockInfo.maxCorner);
@@ -485,7 +474,6 @@ public struct Volume
                 t += context.epsilon;
                 if (context.tEnter + t > context.tExit)
                     break; // Exited the volume
-                tempCollisionCount++;
                 blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + t + context.epsilon), context);
                 continue;
             }
@@ -498,7 +486,6 @@ public struct Volume
                 t += distanceToBlockExit + context.epsilon; // Add small epsilon to ensure the ray moves to the next block
                 if (context.tEnter + t > context.tExit)
                     break; // Exited the volume
-                tempCollisionCount++;
                 blockInfo = CalculateBlockInfo(origin + direction * (context.tEnter + t + context.epsilon), context);
                 continue;
             }
@@ -513,19 +500,18 @@ public struct Volume
             float3 interactionPosition = origin + direction * (context.tEnter + t);
             float densityTextureValue = GetEffectiveDensity(GetDensityAtPoint(sampler, interactionPosition), rayDepth);
 
-            if (sampler.UniformFloat() < (densityTextureValue / maxDensity))
+            // Update transmittance based on actual density vs max density
+            transmittance *= 1.0f - (densityTextureValue / maxDensity);
+
+            // Russian roulette based on transmittance
+            float p = transmittance;
+            if (sampler.UniformFloat() > p)
             {
-                // Real collision, terminate transmittance calculation
+                // Early termination - ray is absorbed
                 return 0.0f;
             }
-
-            // Update transmittance based on actual density vs max density
-            //transmittance *= 1.0f - (densityTextureValue / maxDensity);
-            tempCollisionCount++;
+            transmittance /= p;
         }
-
-        // if (j == 1000)
-        //     return 0.0f;
             
         return transmittance;
     }

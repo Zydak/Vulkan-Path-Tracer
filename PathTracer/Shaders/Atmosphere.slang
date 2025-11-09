@@ -5,7 +5,9 @@ import Bindings;
 
 // Default Scattering coefficients at sea level for red, green and blue wavelengths on earth in meters
 public static const float3 C_RAYLEIGH = float3(5.802, 13.558, 33.100) * 1e-6;
-public static const float3 C_MIE = float3(3.996,  3.996,  3.996) * 1e-6;
+public static const float3 C_MIE_SCATTERING = float3(3.996) * 1e-6;
+public static const float3 C_MIE_ABSORPTION = float3(4.40) * 1e-6;
+public static const float3 C_MIE = C_MIE_SCATTERING + C_MIE_ABSORPTION;
 public static const float3 C_OZONE = float3(0.650,  1.881,  0.085) * 1e-6;
 
 public float GetAtmosphereHeight(float3 position)
@@ -66,7 +68,7 @@ public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, flo
     float t = 0.0f;
     float3 transmittance = float3(0.0f);
     transmittance[colorChannel] = 1.0f;
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 1000; i++)
     {
         float deltaT = -log(1.0f - sampler.UniformFloat()) / majorant;
 
@@ -89,20 +91,36 @@ public float3 CalculateTransmittanceThroughAtmosphere(inout Sampler sampler, flo
         float ozoneDensity = GetOzoneDensity(height) * scatteringCoefficientOzone;
 
         transmittance[colorChannel] *= 1.0f - (rayleighDensity + mieDensity + ozoneDensity) / majorant;
+
+        // Russian roulette termination
+        float p = transmittance[colorChannel];
+        if (sampler.UniformFloat() > p)
+        {
+            transmittance[colorChannel] = 0.0f;
+            break;
+        }
+        transmittance[colorChannel] /= p;
     }
 
     return transmittance;
 }
 
-// atmosphereComponentHit: 0 = Rayleigh, 1 = Mie, -1 = no hit
-public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel, out int atmosphereComponentHit)
+public enum AtmosphereComponent
+{
+    None = -1,
+    Rayleigh = 0,
+    Mie = 1,
+    Ozone = 2
+};
+
+public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOrigin, float3 rayDirection, int colorChannel, out AtmosphereComponent atmosphereComponentHit)
 {
     float2 atmosphereIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius + uUBO.AtmosphereHeight);
 
     float tMinAtmosphere = max(atmosphereIntersection.x, 0.0f);
     float tMaxAtmosphere = atmosphereIntersection.y;
 
-    atmosphereComponentHit = -1; // Default to no hit
+    atmosphereComponentHit = AtmosphereComponent::None; // Default to no hit
 
     float2 planetIntersection = IntersectSphere(rayOrigin, rayDirection, uUBO.PlanetPosition.xyz, uUBO.PlanetRadius);
 
@@ -117,12 +135,9 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
 
     float scatteringCoefficientRayleigh = C_RAYLEIGH[colorChannel] * uUBO.RayleighScatteringCoefficientMultiplier[colorChannel];
     float scatteringCoefficientMie = C_MIE[colorChannel] * uUBO.MieScatteringCoefficientMultiplier[colorChannel];
+    float extinctionCoefficientOzone = C_OZONE[colorChannel] * uUBO.OzoneAbsorptionCoefficientMultiplier[colorChannel];
 
-    // Ozone doesn't scatter light, it only absorbs it, so it's only included in transmittance calculations
-    // No point in wasting time on an empty collision
-    // float scatteringCoefficientOzone = C_OZONE[colorChannel] * uUBO.OzoneAbsorptionCoefficientMultiplier[colorChannel];
-
-    float majorant = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh + GetMIEDensity(0.0f) * scatteringCoefficientMie; // Density at sea level
+    float majorant = GetRayleighDensity(0.0f) * scatteringCoefficientRayleigh + GetMIEDensity(0.0f) * scatteringCoefficientMie + GetOzoneDensity(uUBO.OzonePeak) * extinctionCoefficientOzone; // Density at sea level
 
     if (majorant <= 0.0f)
     {
@@ -131,7 +146,7 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
     }
 
     float t = tMinAtmosphere;
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 1000; i++)
     {
         float deltaT = -log(1.0f - sampler.UniformFloat()) / majorant;
         t += deltaT;
@@ -153,7 +168,8 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
 
         float densityRayleigh = GetRayleighDensity(height) * scatteringCoefficientRayleigh;
         float densityMie = GetMIEDensity(height) * scatteringCoefficientMie;
-        float density = densityRayleigh + densityMie;
+        float densityOzone = GetOzoneDensity(height) * extinctionCoefficientOzone;
+        float density = densityRayleigh + densityMie + densityOzone;
 
         if (density / majorant < sampler.UniformFloat())
         {
@@ -162,15 +178,21 @@ public float SampleAtmosphereScatterDistance(inout Sampler sampler, float3 rayOr
 
         float rayleighProb = densityRayleigh / density;
         float mieProb = densityMie / density;
+        float ozoneProb = densityOzone / density;
 
         // Stochastically pick which component was hit
-        if (sampler.UniformFloat() <= rayleighProb)
+        float x = sampler.UniformFloat();
+        if (x <= rayleighProb)
         {
-            atmosphereComponentHit = 0; // Rayleigh
+            atmosphereComponentHit = AtmosphereComponent::Rayleigh;
         }
-        else if (sampler.UniformFloat() <= rayleighProb + mieProb)
+        else if (x <= rayleighProb + mieProb)
         {
-            atmosphereComponentHit = 1; // Mie
+            atmosphereComponentHit = AtmosphereComponent::Mie;
+        }
+        else
+        {
+            atmosphereComponentHit = AtmosphereComponent::Ozone;
         }
 
         return t; // Real collision, t found

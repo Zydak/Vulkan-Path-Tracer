@@ -202,6 +202,21 @@ void Main(inout Payload payload, in float2 attrib)
     bool wasRefracted = scatterSample.L.z < 0.0f;
 
     float3 scatterDirectionWorld = surface.TangentToWorld(scatterSample.L);
+
+    // Debugging invalid samples
+    // if (V.z < 0.0f)
+    // {
+    //     payload.Emitted = float3(0.0f, 1.0f, 0.0f); // Debug Green
+    //     payload.Depth = MAX_DEPTH;
+    //     return;
+    // }
+    // if (dot(scatterDirectionWorld, surface.GetGeometryNormal()) < 0.0f && scatterSample.L.z > 0.0f)
+    // {
+    //     payload.Emitted = float3(1.0f, 0.0f, 0.0f); // Debug Red
+    //     payload.Depth = MAX_DEPTH;
+    //     return;
+    // }
+
     if (!wasRefracted && dot(scatterDirectionWorld, surface.GetGeometryNormal()) < 0.0f)
     {
         // If the sampled direction is below the geometry normal it has to be discarded since it would cause light leaks
@@ -315,8 +330,7 @@ void Main(inout Payload payload, in float2 attrib)
         if (canHitSky)
         {
             // Transmittance along the ray has to be accounted for so that volumes will cast shadows
-            int tempCollisionCount = 0;
-            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, 0, tempCollisionCount);
+            float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toSkyDirectionWorld, 0);
 
             #ifdef ENABLE_ATMOSPHERE
             {
@@ -347,8 +361,7 @@ void Main(inout Payload payload, in float2 attrib)
     if (!isLightSource && canHitLight && lightColorPDF.a > 0.0f && lightDirectionEval.PDF > 0.0f)
     {
         // Calculate transmittance along the light ray for shadow effects
-        int tempCollisionCount = 0;
-        float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDirectionWorld, 0, tempCollisionCount);
+        float3 transmittance = Volume::CalculateVolumesTransmittance(payload.Sampler, payload.Origin, toLightDirectionWorld, 0);
 
         // Ignore the atmosphere for emissive meshes
         // I can't imagine a scene with a light so bright that transmittance from atmosphere would matter

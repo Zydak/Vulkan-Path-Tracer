@@ -62,6 +62,9 @@ public:
 
         // This enables faster but biased methods for rendering clouds
         int ApproximatedScatteringForClouds = 0;
+        float ApproximatedScatteringFalloff = 0.8f;
+
+        float GridSharpness = 1.0f; // Used to adjust density sampling from NanoVDB grids
 
         VulkanHelper::Buffer VolumeNanoBufferDensity;
         VulkanHelper::Buffer VolumeNanoBufferTemperature;
@@ -362,6 +365,9 @@ private:
 
         // This enables faster but biased methods for rendering clouds
         int ApproximatedScatteringForClouds = 0;
+        float ApproximatedScatteringFalloff = 0.8f;
+
+        float GridSharpness = 1.0f;
 
         VolumeGPU() = default;
 
@@ -384,6 +390,8 @@ private:
             , KelvinMin(volume.KelvinMin)
             , KelvinMax(volume.KelvinMax)
             , ApproximatedScatteringForClouds(volume.ApproximatedScatteringForClouds)
+            , ApproximatedScatteringFalloff(volume.ApproximatedScatteringFalloff)
+            , GridSharpness(volume.GridSharpness)
         {
             CornerMin = volume.Position + (volume.CornerMin * volume.Scale);
             CornerMax = volume.Position + (volume.CornerMax * volume.Scale);
