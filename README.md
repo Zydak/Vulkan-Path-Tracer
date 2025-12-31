@@ -1,7 +1,7 @@
 # Vulkan-Path-Tracer
 ![Sponza](./Gallery/GodRays.png)
 
-Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSDF with Diffuse, Dielectric, Metallic and Glass lobes + volumetric scattering. Renders can also be saved as png images.
+Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSDF with Diffuse, Dielectric, Metallic and Glass lobes + volumetric scattering. Renders can also be saved as png images. There's also a small [writeup](https://zydak.github.io/Clouds/index.html) on how exactly the participating media is being rendererd if you're interested.
 
 # System Requirements
 - Windows 10 with MSVC or Linux with GCC (Only debian 12 with GCC 12.2 is tested)
