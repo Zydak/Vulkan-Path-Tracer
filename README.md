@@ -1,5 +1,5 @@
 # Vulkan-Path-Tracer
-![Sponza](./Gallery/GodRays.png)
+![Sponza](./Gallery/anvil_1000spp_924s_1.png)
 
 Physically based offline path tracer made in Vulkan with Ray Tracing Pipeline extension. It uses energy conserving BSDF with Diffuse, Dielectric, Metallic and Glass lobes + volumetric scattering. Renders can also be saved as png images. There's also a small [writeup](https://zydak.github.io/Clouds/index.html) on how exactly the participating media is being rendererd if you're interested.
 
@@ -26,6 +26,11 @@ cd build
 cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 ```
 Then open generated Visual Studio solution and build.
+
+>[!NOTE]
+> On some versions of msvc the OpenVDB library won't build. You might get an error on line 1935 inside GridBuilder.h. You can comment that line out since it doesn't do anything significant.
+>
+> // static_assert(util::is_same<ValueType, typename std::result_of<Func(const Coord&)>::type>::value, "GridBuilder: mismatched ValueType");
 
 ## Linux
 ```
@@ -66,11 +71,12 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 # Gallery
 <p align="center">
 
-<img src="./Gallery/GodRays.png"/>
+<img src="./Gallery/anvil_1000spp_924s_1.png"/>
 <img src="./Gallery/Cloud1.png"/>
 <img src="./Gallery/DragonHead.png"/>
 <img src="./Gallery/Temple.png"/>
 <img src="./Gallery/Cloud6.png">
+<img src="./Gallery/GodRays.png">
 <img src="./Gallery/EmissiveVolumes.png">
 <img src="./Gallery/CloudSunset.png">
 <img src="./Gallery/CannelleEtFromage.png"/>

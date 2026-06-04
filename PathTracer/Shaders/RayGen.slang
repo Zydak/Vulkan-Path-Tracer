@@ -13,13 +13,20 @@ void Main()
     uImage.GetDimensions(size.x, size.y);
     uint3 LaunchID = DispatchRaysIndex();
 
-    // Render every second pixel in a grid
+    // Render screen in patches
     uint splitScreenDispatchIndex = uPushConstants.ChunkIndex;
 
-    LaunchID.x *= uUBO.ScreenSplitCount;
-    LaunchID.y *= uUBO.ScreenSplitCount;
-    LaunchID.x += splitScreenDispatchIndex % uUBO.ScreenSplitCount;
-    LaunchID.y += splitScreenDispatchIndex / uUBO.ScreenSplitCount;
+    uint patchSizeX = (size.x) / uUBO.ScreenSplitCount;
+    uint patchSizeY = (size.y) / uUBO.ScreenSplitCount;
+
+    LaunchID.x += (splitScreenDispatchIndex % uUBO.ScreenSplitCount) * patchSizeX;
+    LaunchID.y += (splitScreenDispatchIndex / uUBO.ScreenSplitCount) * patchSizeY;
+
+    // Every second pixel method
+    // LaunchID.x *= uUBO.ScreenSplitCount;
+    // LaunchID.y *= uUBO.ScreenSplitCount;
+    // LaunchID.x += splitScreenDispatchIndex % uUBO.ScreenSplitCount;
+    // LaunchID.y += splitScreenDispatchIndex / uUBO.ScreenSplitCount;
 
     if (LaunchID.x >= size.x || LaunchID.y >= size.y) // Guard against excess threads, this can happen with screen splitting
         return;
