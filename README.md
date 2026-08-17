@@ -87,6 +87,7 @@ Executable will be in `build/Debug/VulkanPathTracer`.
 <img src="./Gallery/Dogs.png"/>
 <img src="./Gallery/BreakfastRoom.png"/>
 <img src="./Gallery/WispyCloudNoon.png">
+<img src="https://github.com/user-attachments/assets/01c7c494-0d44-40c9-8ac1-f1aa9cba5526" />
 <img src="./Gallery/CornellBox.png"/>
 <img src="./Gallery/Cloud5.png"/>
 <img src="./Gallery/Mustang0.png"/>
